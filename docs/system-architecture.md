@@ -88,4 +88,4 @@ ProjectionService เป็นจุดเดียวที่เขียน�
 
 - Google Sheets ไม่มี ACID ข้ามชีต: การ refresh ชื่อหรือสร้างแผนอาจค้างกลางทาง ต้องอาศัย OperationJournal + refresh/replay
 - การ refresh ชื่อมีต้นทุนตามจำนวนแถว (อ่าน/เขียนทั้งคอลัมน์) ควรทดสอบเวลาเมื่อข้อมูลหลายหมื่นแถว
-- `appsscript.json` ปัจจุบันตั้ง `timeZone` เป็น `America/New_York` ขัดกับข้อกำหนด Asia/Bangkok — ต้องแก้ในขั้น Implementation (ยังไม่แก้ในขั้นเอกสาร)
+- `appsscript.json` ตั้ง `timeZone` เป็น `Asia/Bangkok` แล้ว (2026-11-25) แต่ยังไม่ได้ push ไป Apps Script; Spreadsheet ต้องตั้ง timezone เป็น Asia/Bangkok แยกต่างหาก (File → Settings)

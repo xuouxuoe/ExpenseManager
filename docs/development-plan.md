@@ -9,9 +9,9 @@
 - [x] docs/database-schema.md, business-rules.md, system-architecture.md, development-plan.md, test-plan.md
 - [ ] ตรวจ Spreadsheet ระบบเดิมแบบ read-only และจัดทำ docs/migration-plan.md (mapping ระดับคอลัมน์)
 - [x] ผู้ใช้อนุมัติ Final Database Schema (2026-11-25)
-- [ ] ตัดสินใจเรื่อง `appsscript.json` timeZone → Asia/Bangkok
+- [x] `appsscript.json` timeZone → Asia/Bangkok (2026-11-25; ยังไม่ clasp push)
 
-**Gate:** schema อนุมัติแล้ว; ก่อนเริ่ม Phase 1 ยังต้องมี migration-plan.md และตัดสินใจเรื่อง timeZone
+**Gate:** schema อนุมัติแล้ว; ก่อนเริ่ม Phase 1 ยังต้องมี migration-plan.md
 
 ## Phase 1 — Foundation
 
