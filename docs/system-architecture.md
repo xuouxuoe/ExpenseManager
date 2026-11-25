@@ -40,10 +40,12 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | Module | หน้าที่ |
 |---|---|
 | Config.gs | ชื่อชีต, canonical headers, enum, ค่าคงที่ |
+| Util.gs | AppError, UUID, deterministic UUID, เวลา Asia/Bangkok, SHA-256 |
+| OperationService.gs | `Operation.run()` (LockService + idempotency + OperationJournal) และ `Audit.log()` |
 | Database.gs | อ่าน/เขียนแบบ batch, map header→index, ตรวจ header ตรง canonical, initializeDatabase() แบบไม่ทำลายข้อมูล |
 | AuthService.gs | ตรวจผู้ใช้ Google และสิทธิ์ |
 | ValidationService.gs | ตรวจ type, enum, YYYYMM, เงิน, FK, Formula Injection |
-| ProjectionService.gs (ใหม่) | `resolveNames(ids)`, `applyProjection(row)`, `refreshProjectionsFor(entityType, id)`, `refreshProjections()` (ซ่อมทั้งหมด) |
+| ProjectionService.gs | `Projection.loadMasters()`, `apply(sheet, row, masters, {requireActive})`, `applyPlanToSchedule()`, `refresh({dryRun, masterKeys})` |
 | AccountService.gs | Accounts/Owners/Categories; เรียก ProjectionService เมื่อชื่อเปลี่ยน |
 | TransactionService.gs | Transactions ตาม business-rules §3 |
 | InstallmentService.gs | PaymentPlans + PaymentSchedules, คัดลอกข้อมูลแผนไปงวด |

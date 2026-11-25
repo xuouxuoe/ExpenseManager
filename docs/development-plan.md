@@ -14,13 +14,15 @@
 
 **Gate:** Phase 0 ครบแล้ว; เริ่ม Phase 1 ได้เมื่อผู้ใช้สั่งเริ่ม Implementation (ต้องมี Spreadsheet ทดสอบแยกจาก Production)
 
-## Phase 1 — Foundation
+## Phase 1 — Foundation (โค้ดเสร็จ 2026-11-25; ยังไม่ clasp push / ยังไม่ทดสอบบน Spreadsheet จริง)
 
 - Config.gs (canonical headers ตาม database-schema.md §3), Database.gs, initializeDatabase() แบบ idempotent ไม่ทำลายข้อมูล และตรวจ header ไม่ตรงโดยไม่แก้เอง
 - AuthService, ValidationService (YYYYMM, Money, enum, FK, Formula Injection)
 - OperationJournal + LockService + idempotency
 - ProjectionService (resolveNames, applyProjection, refreshProjections)
 - ใช้ Spreadsheet ทดสอบที่แยกจาก Production เท่านั้น
+- Spreadsheet ทดสอบ: ผู้ใช้กำหนดแล้ว (2026-11-25) ตั้งเป็น Script Property `TEST_SPREADSHEET_ID`
+- Unit tests ในเครื่อง (`npm test`) ผ่าน 44/44 กรณี
 - Production = Google Sheets "ExpenseManager" ที่ผู้ใช้กำหนด (ปัจจุบันว่าง); ตั้ง Script Property `SPREADSHEET_ID` และรัน `initializeDatabase()` บน Production เมื่อผู้ใช้อนุญาตเท่านั้น
 
 ## Phase 2 — Master Data

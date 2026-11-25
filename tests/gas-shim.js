@@ -1,0 +1,162 @@
+'use strict';
+/**
+ * Fake Google Apps Script services สำหรับทดสอบ logic ใน Node.js (ไม่เชื่อมต่อ Google จริง)
+ * จำลองเฉพาะ API ที่โค้ดใช้; พฤติกรรมของ Sheets จริง (เช่น การแปลงชนิดข้อมูล) ต้องทดสอบบน Spreadsheet ทดสอบ
+ */
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const crypto = require('crypto');
+
+class FakeRange {
+  constructor(sheet, row, col, numRows, numCols) {
+    Object.assign(this, { sheet, row, col, numRows, numCols });
+  }
+  getValues() {
+    const out = [];
+    for (let r = 0; r < this.numRows; r++) {
+      const line = [];
+      for (let c = 0; c < this.numCols; c++) {
+        const v = (this.sheet.data[this.row - 1 + r] || [])[this.col - 1 + c];
+        line.push(v === undefined ? '' : v);
+      }
+      out.push(line);
+    }
+    return out;
+  }
+  setValues(values) {
+    if (values.length !== this.numRows || values.some((l) => l.length !== this.numCols)) {
+      throw new Error('FakeRange.setValues: dimension mismatch');
+    }
+    this.sheet.calls.setValues++;
+    for (let r = 0; r < this.numRows; r++) {
+      const rowIndex = this.row - 1 + r;
+      while (this.sheet.data.length <= rowIndex) this.sheet.data.push([]);
+      for (let c = 0; c < this.numCols; c++) this.sheet.data[rowIndex][this.col - 1 + c] = values[r][c];
+    }
+    return this;
+  }
+  setNumberFormat(f) { this.sheet.formats.push({ col: this.col, format: f }); return this; }
+  setFontWeight() { return this; }
+}
+
+class FakeSheet {
+  constructor(name) {
+    this.name = name;
+    this.data = [];
+    this.formats = [];
+    this.frozen = 0;
+    this.calls = { setValues: 0 };
+  }
+  getName() { return this.name; }
+  getLastRow() {
+    for (let i = this.data.length - 1; i >= 0; i--) {
+      if ((this.data[i] || []).some((v) => v !== '' && v !== undefined && v !== null)) return i + 1;
+    }
+    return 0;
+  }
+  getLastColumn() {
+    let max = 0;
+    this.data.forEach((row) => row.forEach((v, i) => { if (v !== '' && v !== undefined && v !== null) max = Math.max(max, i + 1); }));
+    return max;
+  }
+  getMaxRows() { return 1000; }
+  getRange(row, col, numRows, numCols) { return new FakeRange(this, row, col, numRows || 1, numCols || 1); }
+  setFrozenRows(n) { this.frozen = n; }
+}
+
+class FakeSpreadsheet {
+  constructor() { this.sheets = [new FakeSheet('ชีต1')]; }
+  getSheetByName(name) { return this.sheets.find((s) => s.name === name) || null; }
+  insertSheet(name) {
+    if (this.getSheetByName(name)) throw new Error('sheet exists');
+    const s = new FakeSheet(name);
+    this.sheets.push(s);
+    return s;
+  }
+  getSheets() { return this.sheets.slice(); }
+}
+
+function formatBangkok(date, pattern) {
+  const d = new Date(date.getTime() + 7 * 3600 * 1000);
+  const p = (n) => String(n).padStart(2, '0');
+  const ymd = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+  if (pattern === 'yyyy-MM-dd') return ymd;
+  if (pattern === "yyyy-MM-dd'T'HH:mm:ssXXX") return `${ymd}T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}+07:00`;
+  throw new Error('formatBangkok: unsupported pattern ' + pattern);
+}
+
+/**
+ * สร้าง context ที่โหลดไฟล์ .gs ทั้งหมดใน root
+ * options: { properties, activeEmail, effectiveEmail, lockAvailable }
+ */
+function createContext(options = {}) {
+  const props = Object.assign({}, options.properties || {});
+  const state = {
+    activeEmail: options.activeEmail === undefined ? 'owner@example.com' : options.activeEmail,
+    effectiveEmail: options.effectiveEmail || 'owner@example.com',
+    lockAvailable: options.lockAvailable !== false,
+    locks: 0,
+    spreadsheets: {},
+    logs: []
+  };
+  const sandbox = {
+    console,
+    PropertiesService: {
+      getScriptProperties: () => ({
+        getProperty: (k) => (k in props ? props[k] : null),
+        setProperty: (k, v) => { props[k] = v; }
+      })
+    },
+    SpreadsheetApp: {
+      openById: (id) => {
+        if (!state.spreadsheets[id]) state.spreadsheets[id] = new FakeSpreadsheet();
+        return state.spreadsheets[id];
+      }
+    },
+    LockService: {
+      getScriptLock: () => ({
+        tryLock: () => { if (!state.lockAvailable) return false; state.locks++; return true; },
+        releaseLock: () => { state.locks--; }
+      })
+    },
+    Session: {
+      getActiveUser: () => ({ getEmail: () => state.activeEmail }),
+      getEffectiveUser: () => ({ getEmail: () => state.effectiveEmail })
+    },
+    Utilities: {
+      DigestAlgorithm: { SHA_256: 'SHA_256' },
+      Charset: { UTF_8: 'UTF_8' },
+      getUuid: () => crypto.randomUUID(),
+      computeDigest: (_alg, text) => Array.from(crypto.createHash('sha256').update(text, 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
+      formatDate: (date, tz, pattern) => {
+        if (tz !== 'Asia/Bangkok') throw new Error('unexpected timezone ' + tz);
+        return formatBangkok(date, pattern);
+      }
+    },
+    HtmlService: {
+      createHtmlOutput: (html) => ({ html, setTitle(t) { this.title = t; return this; } })
+    },
+    Logger: { log: (m) => state.logs.push(String(m)) }
+  };
+  const context = vm.createContext(sandbox);
+  const root = path.join(__dirname, '..');
+  fs.readdirSync(root).filter((f) => f.endsWith('.gs')).sort().forEach((f) => {
+    vm.runInContext(fs.readFileSync(path.join(root, f), 'utf8'), context, { filename: f });
+  });
+  context.__state = state;
+  context.__props = props;
+  return context;
+}
+
+/** context ที่ Database ชี้ไป FakeSpreadsheet ใหม่ และ initialize แล้ว */
+function createDbContext(options = {}) {
+  const ctx = createContext(Object.assign({ properties: { ALLOWED_EMAILS: 'owner@example.com' } }, options));
+  const ss = new FakeSpreadsheet();
+  ctx.Database.setSpreadsheetForTesting(ss);
+  if (options.initialize !== false) ctx.Database.initialize();
+  ctx.__ss = ss;
+  return ctx;
+}
+
+module.exports = { createContext, createDbContext, FakeSpreadsheet };

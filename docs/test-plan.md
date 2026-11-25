@@ -1,9 +1,24 @@
 # Test Plan — Expense Manager V2
 
-สถานะ: **ร่างเพื่อขออนุมัติ** — ยังไม่มีการทดสอบจริง (ยังไม่มี Source Code)
+สถานะ: Phase 1 — unit tests ในเครื่องผ่านแล้ว; ยังไม่ทดสอบบน Google Sheets จริง
 ปรับปรุงล่าสุด: 2026-11-25
 
 ใช้ข้อมูลจำลองใน Spreadsheet ทดสอบเท่านั้น ห้ามใช้หรือสร้างข้อมูลทดสอบใน Production
+
+## 0. ผลการทดสอบ Phase 1 (2026-11-25)
+
+ระดับ: **Unit test ใน Node.js** (`npm test`, `tests/*.test.js`) ด้วย fake Apps Script services (`tests/gas-shim.js`) — **44/44 ผ่าน**
+
+| กลุ่ม | ครอบคลุม |
+|---|---|
+| Validation | YYYYMM (ปฏิเสธ 202613/202600/20261), addMonths ข้ามปี, ตาราง 6 งวด AGENTS §6.3, due_date สิ้นเดือน/ปีอธิกสุรทิน, วันที่ ค.ศ. (ปฏิเสธปี พ.ศ.), เงิน satang, แบ่งงวด 600/6 และ 1000/3, ข้อความ, formula injection |
+| Schema | TC-SC-01..04 (header ตรง AGENTS.md และ database-schema.md, initialize ซ้ำไม่ทำลาย, header ไม่ตรงถูกรายงานและปฏิเสธการอ่าน/เขียน) |
+| Database | batch write ครั้งเดียว, updateRows รวมแถวติดกัน, appendRowsIfAbsent, แยก TEST/PRODUCTION |
+| Auth | allowlist, fail closed, requireOwner, doGet ปฏิเสธผู้ไม่มีสิทธิ์ |
+| Operation | COMMITTED + audit, retry key เดิม (TC-TX-07, TC-PP-16), payload ต่าง (TC-PP-17), ล้มเหลวกลางทาง → NEEDS_RECOVERY → replay ไม่ซ้ำ, FAILED, BUSY |
+| Projection | TC-DM-01..05, TC-PP-04, TC-PP-05, TC-PP-07, refresh idempotent, FK กำพร้า |
+
+**ยังไม่ได้ทดสอบ (ต้องทำบน Spreadsheet ทดสอบหลัง clasp push ที่ได้รับอนุญาต):** การแปลงชนิดข้อมูลของ Sheets จริงกับรูปแบบ `@`, apostrophe prefix (TC-DM-08), LockService พร้อมกันจริง, Session.getActiveUser ใน Web App, เวลา refresh กับข้อมูลจำนวนมาก
 
 ## 1. Schema
 

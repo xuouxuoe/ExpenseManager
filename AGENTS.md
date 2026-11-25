@@ -74,9 +74,11 @@
 - appsscript.json
 - Code.gs
 - Config.gs
+- Util.gs (AppError, UUID, เวลา Asia/Bangkok, hash)
 - Database.gs
 - AuthService.gs
 - ValidationService.gs
+- OperationService.gs (LockService, idempotency, OperationJournal, AuditLogs)
 - TransactionService.gs
 - InstallmentService.gs (จัดการ PaymentPlans และ PaymentSchedules)
 - ReservationService.gs

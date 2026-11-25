@@ -1,0 +1,11 @@
+{
+  "name": "expense-manager-v2",
+  "private": true,
+  "description": "Expense Manager V2 (Google Apps Script) — local unit tests only; runtime code is pushed with clasp",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

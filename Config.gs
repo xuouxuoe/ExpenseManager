@@ -1,0 +1,124 @@
+/**
+ * Config.gs — ค่าคงที่ของระบบ Expense Manager V2
+ * Canonical headers ต้องตรงกับ docs/database-schema.md §3 และ AGENTS.md §7.1 เสมอ
+ */
+var Config = {
+  APP_NAME: 'Expense Manager',
+  TIMEZONE: 'Asia/Bangkok',
+
+  PROPERTY_KEYS: {
+    SPREADSHEET_ID: 'SPREADSHEET_ID',
+    TEST_SPREADSHEET_ID: 'TEST_SPREADSHEET_ID',
+    ALLOWED_EMAILS: 'ALLOWED_EMAILS'
+  },
+
+  LOCK_TIMEOUT_MS: 30000,
+  MAX_RESULT_REF_LENGTH: 45000,
+
+  SHEETS: {
+    ACCOUNTS: 'Accounts',
+    OWNERS: 'Owners',
+    CATEGORIES: 'Categories',
+    TRANSACTIONS: 'Transactions',
+    PAYMENT_PLANS: 'PaymentPlans',
+    PAYMENT_SCHEDULES: 'PaymentSchedules',
+    RESERVATIONS: 'Reservations',
+    PAYMENT_ALLOCATIONS: 'PaymentAllocations',
+    SETTINGS: 'Settings',
+    AUDIT_LOGS: 'AuditLogs',
+    OPERATION_JOURNAL: 'OperationJournal'
+  },
+
+  HEADERS: {
+    Accounts: ['account_id', 'account_name', 'account_type', 'account_subtype', 'owner_id', 'institution', 'opening_balance', 'opening_date', 'credit_limit', 'statement_day', 'due_day', 'is_active', 'note', 'created_at', 'updated_at'],
+    Owners: ['owner_id', 'owner_name', 'is_active', 'created_at', 'updated_at'],
+    Categories: ['category_id', 'category_name', 'category_type', 'icon', 'color', 'is_active', 'created_at', 'updated_at'],
+    Transactions: ['transaction_id', 'transaction_date', 'transaction_type', 'from_account_id', 'from_account_name', 'to_account_id', 'to_account_name', 'owner_id', 'owner_name', 'category_id', 'category_name', 'item_name', 'description', 'amount', 'plan_id', 'external_ref', 'source', 'reversal_of', 'note', 'created_at', 'updated_at'],
+    PaymentPlans: ['plan_id', 'purchase_date', 'plan_type', 'account_id', 'account_name', 'owner_id', 'owner_name', 'category_id', 'category_name', 'item_name', 'description', 'principal_amount', 'interest_amount', 'fee_amount', 'total_amount', 'installment_count', 'first_saving_month', 'first_payment_month', 'due_day', 'external_ref', 'plan_status', 'note', 'created_at', 'updated_at'],
+    PaymentSchedules: ['schedule_id', 'plan_id', 'purchase_date', 'plan_type', 'account_id', 'account_name', 'owner_id', 'owner_name', 'category_id', 'category_name', 'item_name', 'description', 'installment_no', 'installment_count', 'saving_month', 'payment_month', 'due_date', 'amount_due', 'amount_saved', 'amount_reserved', 'amount_paid', 'remaining_to_save', 'remaining_to_pay', 'saving_status', 'payment_status', 'is_overdue', 'is_cancelled', 'is_month_different', 'saving_year', 'saving_month_no', 'payment_year', 'payment_month_no', 'remaining_installments', 'saving_completed_date', 'paid_date', 'note', 'created_at', 'updated_at'],
+    Reservations: ['reservation_id', 'reservation_date', 'schedule_id', 'account_id', 'action_type', 'amount', 'transaction_id', 'note', 'created_at'],
+    PaymentAllocations: ['allocation_id', 'transaction_id', 'schedule_id', 'allocated_amount', 'created_at'],
+    Settings: ['setting_key', 'setting_value', 'description', 'updated_at'],
+    AuditLogs: ['audit_id', 'event_at', 'actor_id', 'action', 'entity_type', 'entity_id', 'operation_id', 'result'],
+    OperationJournal: ['operation_id', 'idempotency_key', 'request_hash', 'actor_id', 'operation_type', 'status', 'recovery_data', 'result_ref', 'created_at', 'updated_at']
+  },
+
+  /** Primary key ของแต่ละตาราง */
+  PRIMARY_KEYS: {
+    Accounts: 'account_id',
+    Owners: 'owner_id',
+    Categories: 'category_id',
+    Transactions: 'transaction_id',
+    PaymentPlans: 'plan_id',
+    PaymentSchedules: 'schedule_id',
+    Reservations: 'reservation_id',
+    PaymentAllocations: 'allocation_id',
+    Settings: 'setting_key',
+    AuditLogs: 'audit_id',
+    OperationJournal: 'operation_id'
+  },
+
+  ENUMS: {
+    ACCOUNT_TYPE: ['CASH', 'BANK', 'E_WALLET', 'CREDIT_CARD', 'CASH_CARD', 'LOAN'],
+    ACCOUNT_SUBTYPE: ['SAVINGS'],
+    CATEGORY_TYPE: ['INCOME', 'EXPENSE'],
+    TRANSACTION_TYPE: ['INCOME', 'EXPENSE', 'TRANSFER', 'CREDIT_PURCHASE', 'CREDIT_PAYMENT', 'CASH_ADVANCE', 'INTEREST', 'FEE', 'REFUND', 'ADJUSTMENT'],
+    TRANSACTION_SOURCE: ['MANUAL', 'QUICK_ENTRY', 'PLAN', 'MIGRATION', 'AI'],
+    PLAN_TYPE: ['INSTALLMENT', 'ONE_TIME', 'RECURRING'],
+    PLAN_STATUS: ['ACTIVE', 'COMPLETED', 'CANCELLED'],
+    SAVING_STATUS: ['NOT_SAVED', 'PARTIAL', 'SAVED', 'NOT_REQUIRED', 'CANCELLED'],
+    PAYMENT_STATUS: ['UNPAID', 'PARTIAL', 'PAID', 'CANCELLED'],
+    RESERVATION_ACTION: ['RESERVE', 'RELEASE', 'CONSUME'],
+    OPERATION_STATUS: ['PENDING', 'COMMITTED', 'FAILED', 'NEEDS_RECOVERY'],
+    AUDIT_RESULT: ['SUCCESS', 'FAILED']
+  },
+
+  /** ความยาวสูงสุดของข้อความ (docs/database-schema.md §1.3) */
+  TEXT_LIMITS: {
+    NAME: 100,
+    ITEM_NAME: 200,
+    DESCRIPTION: 1000,
+    NOTE: 1000,
+    EXTERNAL_REF: 100
+  },
+
+  /** คอลัมน์ *_name ที่เป็น projection จาก Master: [id column, name column, master] */
+  NAME_PROJECTIONS: {
+    Transactions: [
+      ['from_account_id', 'from_account_name', 'accounts'],
+      ['to_account_id', 'to_account_name', 'accounts'],
+      ['owner_id', 'owner_name', 'owners'],
+      ['category_id', 'category_name', 'categories']
+    ],
+    PaymentPlans: [
+      ['account_id', 'account_name', 'accounts'],
+      ['owner_id', 'owner_name', 'owners'],
+      ['category_id', 'category_name', 'categories']
+    ],
+    PaymentSchedules: [
+      ['account_id', 'account_name', 'accounts'],
+      ['owner_id', 'owner_name', 'owners'],
+      ['category_id', 'category_name', 'categories']
+    ]
+  },
+
+  /** คอลัมน์ที่ PaymentSchedules คัดลอกจาก PaymentPlans (ไม่รวม note) */
+  PLAN_TO_SCHEDULE_FIELDS: ['purchase_date', 'plan_type', 'account_id', 'owner_id', 'category_id', 'item_name', 'description', 'installment_count'],
+
+  /**
+   * ชนิดข้อมูลของคอลัมน์สำหรับจัดรูปแบบชีตและแปลงค่า: 'money' | 'int' | 'bool' | 'text'
+   * text ทั้งหมดถูกตั้งรูปแบบ '@' เพื่อไม่ให้ Sheets แปลงวันที่/ID เป็นค่าอื่น
+   */
+  columnKind: function (name) {
+    if (name.indexOf('is_') === 0) return 'bool';
+    if (name === 'amount' || name.indexOf('amount_') === 0 || /_amount$/.test(name) ||
+        name.indexOf('remaining_to_') === 0 || name === 'opening_balance' || name === 'credit_limit') {
+      return 'money';
+    }
+    if (/_month$/.test(name) || /_month_no$/.test(name) || /_year$/.test(name) || /_day$/.test(name) ||
+        name === 'installment_no' || name === 'installment_count' || name === 'remaining_installments') {
+      return 'int';
+    }
+    return 'text';
+  }
+};

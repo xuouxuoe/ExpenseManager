@@ -1,0 +1,5 @@
+# Push ขึ้น Apps Script เฉพาะไฟล์ runtime ที่ root เท่านั้น
+**/**
+!appsscript.json
+!*.gs
+!*.html
