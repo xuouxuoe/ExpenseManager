@@ -39,9 +39,25 @@ var Database = (function () {
     cachedSpreadsheet = null;
   }
 
+  /** ใช้ Spreadsheet Production (SPREADSHEET_ID) สำหรับ execution นี้ โดยไม่สนใจ DB_TARGET */
+  function useProductionSpreadsheet() {
+    spreadsheetOverride = openTarget('PRODUCTION');
+    cachedSpreadsheet = null;
+  }
+
+  /** ไฟล์ที่ Web App/API ใช้: ตาม Script Property DB_TARGET ('TEST' หรือค่าเริ่มต้น 'PRODUCTION') */
+  function currentTarget() {
+    var raw = PropertiesService.getScriptProperties().getProperty(Config.PROPERTY_KEYS.DB_TARGET);
+    var target = String(raw || 'PRODUCTION').trim().toUpperCase();
+    if (target !== 'TEST' && target !== 'PRODUCTION') {
+      throw Util.AppError('CONFIG_INVALID', 'DB_TARGET ต้องเป็น TEST หรือ PRODUCTION');
+    }
+    return target;
+  }
+
   function getSpreadsheet() {
     if (spreadsheetOverride) return spreadsheetOverride;
-    if (!cachedSpreadsheet) cachedSpreadsheet = openTarget('PRODUCTION');
+    if (!cachedSpreadsheet) cachedSpreadsheet = openTarget(currentTarget());
     return cachedSpreadsheet;
   }
 
@@ -249,6 +265,8 @@ var Database = (function () {
   return {
     setSpreadsheetForTesting: setSpreadsheetForTesting,
     useTestSpreadsheet: useTestSpreadsheet,
+    useProductionSpreadsheet: useProductionSpreadsheet,
+    currentTarget: currentTarget,
     getSpreadsheet: getSpreadsheet,
     checkSchema: checkSchema,
     initialize: initialize,

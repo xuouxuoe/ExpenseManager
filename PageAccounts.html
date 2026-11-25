@@ -1,0 +1,454 @@
+<section aria-labelledby="master-title">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 id="master-title" class="text-xl font-semibold">บัญชีและข้อมูลหลัก</h1>
+      <p class="text-sm text-slate-500">จัดการบัญชี บัตร เจ้าของรายการ และหมวดหมู่</p>
+    </div>
+    <button type="button" id="master-add" class="btn btn-primary">
+      <span aria-hidden="true">+</span><span id="master-add-label">เพิ่มบัญชี/บัตร</span>
+    </button>
+  </div>
+
+  <div role="tablist" aria-label="ประเภทข้อมูลหลัก" class="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 text-sm">
+    <button type="button" role="tab" id="tab-account" data-type="account" aria-controls="master-panel" aria-selected="true" tabindex="0" class="master-tab">บัญชี/บัตร</button>
+    <button type="button" role="tab" id="tab-owner" data-type="owner" aria-controls="master-panel" aria-selected="false" tabindex="-1" class="master-tab">เจ้าของ</button>
+    <button type="button" role="tab" id="tab-category" data-type="category" aria-controls="master-panel" aria-selected="false" tabindex="-1" class="master-tab">หมวดหมู่</button>
+  </div>
+
+  <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+    <div class="flex-1">
+      <label for="master-search" class="sr-only">ค้นหาตามชื่อ</label>
+      <input id="master-search" type="search" class="field-input" placeholder="ค้นหาตามชื่อ…" autocomplete="off">
+    </div>
+    <label for="master-show-inactive" class="inline-flex min-h-[2.75rem] items-center gap-2 text-sm text-slate-600">
+      <input id="master-show-inactive" type="checkbox" class="h-5 w-5 rounded border-slate-300 text-indigo-600">
+      แสดงรายการที่ปิดใช้งาน
+    </label>
+  </div>
+
+  <div id="master-panel" role="tabpanel" aria-labelledby="tab-account" aria-busy="true" class="mt-4"></div>
+</section>
+
+<dialog id="master-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="master-form-title">
+  <form id="master-form" novalidate class="flex max-h-[85vh] flex-col">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 id="master-form-title" class="text-base font-semibold">เพิ่มข้อมูล</h2>
+      <button type="button" id="master-form-close" class="btn btn-ghost" aria-label="ปิดหน้าต่าง">✕</button>
+    </div>
+    <div id="master-form-fields" class="flex-1 space-y-4 overflow-y-auto px-5 py-4"></div>
+    <p id="master-form-error" role="alert" class="hidden mx-5 mb-2 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+      <button type="button" id="master-form-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="master-form-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .master-tab { min-height: 2.5rem; border-radius: .625rem; color: #475569; font-weight: 500; }
+  .master-tab[aria-selected="true"] { background: #fff; color: #4338ca; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+</style>
+
+<script>
+  (function () {
+    var el = App.el;
+
+    var ACCOUNT_TYPES = [
+      ['CASH', 'เงินสด'], ['BANK', 'บัญชีธนาคาร'], ['E_WALLET', 'อี-วอลเล็ต'],
+      ['CREDIT_CARD', 'บัตรเครดิต'], ['CASH_CARD', 'บัตรกดเงินสด'], ['LOAN', 'สินเชื่อ']
+    ];
+    var LIABILITY = ['CREDIT_CARD', 'CASH_CARD', 'LOAN'];
+    var ACCOUNT_ICONS = { CASH: '💵', BANK: '🏦', E_WALLET: '📱', CREDIT_CARD: '💳', CASH_CARD: '🏧', LOAN: '📄' };
+    var CATEGORY_TYPES = [['EXPENSE', 'รายจ่าย'], ['INCOME', 'รายรับ']];
+
+    var TYPE_META = {
+      account: { list: 'accounts', pk: 'account_id', name: 'account_name', label: 'บัญชี/บัตร', empty: 'ยังไม่มีบัญชีหรือบัตร' },
+      owner: { list: 'owners', pk: 'owner_id', name: 'owner_name', label: 'เจ้าของ', empty: 'ยังไม่มีเจ้าของรายการ' },
+      category: { list: 'categories', pk: 'category_id', name: 'category_name', label: 'หมวดหมู่', empty: 'ยังไม่มีหมวดหมู่' }
+    };
+
+    var state = {
+      type: 'account',
+      data: { accounts: [], owners: [], categories: [] },
+      status: 'loading', // loading | ready | error
+      errorMessage: '',
+      search: '',
+      showInactive: false,
+      editing: null,
+      submitForm: null,
+      rowSubmitters: {}
+    };
+
+    var panel = document.getElementById('master-panel');
+    var dialog = document.getElementById('master-dialog');
+    var form = document.getElementById('master-form');
+    var fieldsBox = document.getElementById('master-form-fields');
+    var formError = document.getElementById('master-form-error');
+    var saveBtn = document.getElementById('master-form-save');
+
+    function labelOf(pairs, value) {
+      for (var i = 0; i < pairs.length; i++) if (pairs[i][0] === value) return pairs[i][1];
+      return value || '';
+    }
+
+    function ownerName(id) {
+      var o = state.data.owners.filter(function (r) { return r.owner_id === id; })[0];
+      return o ? o.owner_name : '';
+    }
+
+    // ---------- โหลดข้อมูล ----------
+
+    function load() {
+      state.status = 'loading';
+      render();
+      App.call('api_listMasters', { includeInactive: true }).then(function (data) {
+        state.data = data;
+        state.status = 'ready';
+        render();
+      }, function (err) {
+        state.status = 'error';
+        state.errorMessage = err.message;
+        render();
+      });
+    }
+
+    // ---------- แสดงผลรายการ ----------
+
+    function visibleRows() {
+      var meta = TYPE_META[state.type];
+      var q = state.search.trim().toLowerCase();
+      return state.data[meta.list].filter(function (r) {
+        if (!state.showInactive && r.is_active !== true) return false;
+        if (!q) return true;
+        var hay = [r[meta.name], r.institution, r.note].join(' ').toLowerCase();
+        return hay.indexOf(q) >= 0;
+      }).sort(function (a, b) {
+        if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+        return String(a[meta.name]).localeCompare(String(b[meta.name]), 'th');
+      });
+    }
+
+    function badge(text, tone) {
+      var tones = {
+        slate: 'bg-slate-100 text-slate-600',
+        indigo: 'bg-indigo-50 text-indigo-700',
+        rose: 'bg-rose-50 text-rose-700',
+        emerald: 'bg-emerald-50 text-emerald-700',
+        amber: 'bg-amber-50 text-amber-700'
+      };
+      return el('span', { class: 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ' + (tones[tone] || tones.slate), text: text });
+    }
+
+    function rowDetails(row) {
+      var parts = [];
+      if (state.type === 'account') {
+        var liability = LIABILITY.indexOf(row.account_type) >= 0;
+        parts.push(badge(labelOf(ACCOUNT_TYPES, row.account_type) + (row.account_subtype === 'SAVINGS' ? ' · ออมทรัพย์' : ''), liability ? 'amber' : 'indigo'));
+        var info = [];
+        if (row.owner_id) info.push('เจ้าของ: ' + (ownerName(row.owner_id) || '-'));
+        if (row.institution) info.push(row.institution);
+        if (liability && row.credit_limit !== '') info.push('วงเงิน ' + App.formatMoney(row.credit_limit));
+        if (liability && row.due_day !== '') info.push('ครบกำหนดวันที่ ' + row.due_day);
+        if (info.length) parts.push(el('span', { class: 'text-xs text-slate-500', text: info.join(' · ') }));
+      } else if (state.type === 'category') {
+        parts.push(badge(labelOf(CATEGORY_TYPES, row.category_type), row.category_type === 'INCOME' ? 'emerald' : 'rose'));
+      }
+      if (row.is_active !== true) parts.push(badge('ปิดใช้งาน', 'slate'));
+      return parts;
+    }
+
+    function renderRow(row) {
+      var meta = TYPE_META[state.type];
+      var leading = null;
+      if (state.type === 'category') {
+        leading = el('span', { class: 'grid h-10 w-10 shrink-0 place-items-center rounded-xl text-lg', 'aria-hidden': 'true' }, row.icon || '•');
+        leading.style.background = row.color || '#e2e8f0';
+      } else {
+        var icon = state.type === 'owner' ? '👤' : (ACCOUNT_ICONS[row.account_type] || '•');
+        leading = el('span', { class: 'grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-indigo-50 text-lg', 'aria-hidden': 'true' }, icon);
+      }
+      var details = el('div', { class: 'mt-1 flex flex-wrap items-center gap-1.5' });
+      rowDetails(row).forEach(function (n) { details.appendChild(n); });
+
+      var toggleLabel = row.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน';
+      return el('li', { class: 'flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 ' + (row.is_active ? '' : 'opacity-70') },
+        leading,
+        el('div', { class: 'min-w-0 flex-1' },
+          el('p', { class: 'truncate font-medium', text: row[meta.name] }),
+          details),
+        el('div', { class: 'flex shrink-0 flex-col gap-1 sm:flex-row' },
+          el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'แก้ไข ' + row[meta.name], onclick: function () { openForm(row); } }, 'แก้ไข'),
+          el('button', { type: 'button', class: 'btn btn-ghost ' + (row.is_active ? 'text-rose-600' : ''), 'aria-label': toggleLabel + ' ' + row[meta.name],
+            onclick: function (e) { toggleActive(row, e.currentTarget); } }, toggleLabel)));
+    }
+
+    function render() {
+      var meta = TYPE_META[state.type];
+      document.getElementById('master-add-label').textContent = 'เพิ่ม' + meta.label;
+      panel.setAttribute('aria-labelledby', 'tab-' + state.type);
+      panel.setAttribute('aria-busy', state.status === 'loading' ? 'true' : 'false');
+      panel.textContent = '';
+
+      if (state.status === 'loading') {
+        var skel = el('ul', { class: 'space-y-2', 'aria-label': 'กำลังโหลด' });
+        for (var i = 0; i < 3; i++) skel.appendChild(el('li', { class: 'h-16 animate-pulse rounded-2xl bg-slate-200/70' }));
+        panel.appendChild(el('p', { class: 'sr-only', text: 'กำลังโหลดข้อมูล…' }));
+        panel.appendChild(skel);
+        return;
+      }
+      if (state.status === 'error') {
+        panel.appendChild(el('div', { class: 'rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center', role: 'alert' },
+          el('p', { class: 'font-medium text-rose-700', text: 'โหลดข้อมูลไม่สำเร็จ' }),
+          el('p', { class: 'mt-1 text-sm text-rose-600', text: state.errorMessage }),
+          el('button', { type: 'button', class: 'btn btn-secondary mt-3', onclick: load }, 'ลองใหม่')));
+        return;
+      }
+      var rows = visibleRows();
+      if (!rows.length) {
+        var searching = state.search.trim() !== '';
+        panel.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center' },
+          el('p', { class: 'font-medium text-slate-700', text: searching ? 'ไม่พบรายการที่ค้นหา' : meta.empty }),
+          el('p', { class: 'mt-1 text-sm text-slate-500', text: searching ? 'ลองเปลี่ยนคำค้นหา' : 'เริ่มต้นด้วยการเพิ่ม' + meta.label }),
+          searching ? null : el('button', { type: 'button', class: 'btn btn-primary mt-4', onclick: function () { openForm(null); } }, 'เพิ่ม' + meta.label)));
+        return;
+      }
+      var list = el('ul', { class: 'space-y-2' });
+      rows.forEach(function (r) { list.appendChild(renderRow(r)); });
+      panel.appendChild(el('p', { class: 'mb-2 text-xs text-slate-500', text: 'ทั้งหมด ' + rows.length + ' รายการ' }));
+      panel.appendChild(list);
+    }
+
+    // ---------- ฟอร์ม ----------
+
+    function field(id, label, input, hint) {
+      return el('div', { 'data-field': id },
+        el('label', { class: 'field-label', for: 'mf-' + id, text: label }),
+        input,
+        hint ? el('p', { class: 'field-hint', id: 'mf-' + id + '-hint', text: hint }) : null,
+        el('p', { class: 'field-error hidden', id: 'mf-' + id + '-error' }));
+    }
+
+    function textInput(id, value, attrs) {
+      var a = Object.assign({ id: 'mf-' + id, name: id, type: 'text', class: 'field-input', value: value === undefined ? '' : value,
+        'aria-describedby': 'mf-' + id + '-error' }, attrs || {});
+      return el('input', a);
+    }
+
+    function selectInput(id, options, value, attrs) {
+      var s = el('select', Object.assign({ id: 'mf-' + id, name: id, class: 'field-input', 'aria-describedby': 'mf-' + id + '-error' }, attrs || {}));
+      options.forEach(function (o) {
+        var opt = el('option', { value: o[0], text: o[1] });
+        if (String(o[0]) === String(value === undefined ? '' : value)) opt.selected = true;
+        s.appendChild(opt);
+      });
+      return s;
+    }
+
+    function buildFields(row) {
+      var r = row || {};
+      fieldsBox.textContent = '';
+      if (state.type === 'owner') {
+        fieldsBox.appendChild(field('owner_name', 'ชื่อเจ้าของรายการ *', textInput('owner_name', r.owner_name, { required: true, maxlength: 100, autocomplete: 'off' })));
+        return;
+      }
+      if (state.type === 'category') {
+        fieldsBox.appendChild(field('category_name', 'ชื่อหมวดหมู่ *', textInput('category_name', r.category_name, { required: true, maxlength: 100, autocomplete: 'off' })));
+        fieldsBox.appendChild(field('category_type', 'ประเภท *', selectInput('category_type', CATEGORY_TYPES, r.category_type || 'EXPENSE')));
+        var row2 = el('div', { class: 'grid grid-cols-2 gap-3' },
+          field('icon', 'ไอคอน', textInput('icon', r.icon, { maxlength: 50, placeholder: 'เช่น 🍜' })),
+          field('color', 'สี', textInput('color', r.color || '#E0E7FF', { type: 'color', class: 'field-input h-11 p-1' })));
+        fieldsBox.appendChild(row2);
+        return;
+      }
+      // account
+      var owners = [['', '— ไม่ระบุ —']].concat(state.data.owners.filter(function (o) {
+        return o.is_active === true || o.owner_id === r.owner_id;
+      }).map(function (o) { return [o.owner_id, o.owner_name + (o.is_active ? '' : ' (ปิดใช้งาน)')]; }));
+      fieldsBox.appendChild(field('account_name', 'ชื่อบัญชี/บัตร *', textInput('account_name', r.account_name, { required: true, maxlength: 100, autocomplete: 'off', placeholder: 'เช่น KBank *1234' }),
+        'ห้ามใส่เลขบัตรเต็ม ใช้ 4 หลักท้ายได้'));
+      fieldsBox.appendChild(field('account_type', 'ประเภท *', selectInput('account_type', ACCOUNT_TYPES, r.account_type || 'BANK')));
+      fieldsBox.appendChild(field('account_subtype', 'ชนิดบัญชีธนาคาร', selectInput('account_subtype', [['', 'ทั่วไป'], ['SAVINGS', 'ออมทรัพย์']], r.account_subtype)));
+      fieldsBox.appendChild(field('owner_id', 'เจ้าของ', selectInput('owner_id', owners, r.owner_id)));
+      fieldsBox.appendChild(field('institution', 'ธนาคาร/ผู้ให้บริการ', textInput('institution', r.institution, { maxlength: 100 })));
+      fieldsBox.appendChild(el('div', { class: 'grid grid-cols-2 gap-3' },
+        field('opening_balance', 'ยอดยกมา (บาท)', textInput('opening_balance', r.opening_balance === undefined ? '0' : r.opening_balance, { inputmode: 'decimal' }),
+          'บัตร/สินเชื่อ: ยอดหนี้คงค้าง'),
+        field('opening_date', 'วันที่ยอดยกมา', textInput('opening_date', r.opening_date, { type: 'date' }))));
+      fieldsBox.appendChild(el('div', { class: 'grid grid-cols-3 gap-3', 'data-liability': 'true' },
+        field('credit_limit', 'วงเงิน', textInput('credit_limit', r.credit_limit, { inputmode: 'decimal' })),
+        field('statement_day', 'วันตัดรอบ', textInput('statement_day', r.statement_day, { type: 'number', min: 1, max: 31, inputmode: 'numeric' })),
+        field('due_day', 'วันครบกำหนด', textInput('due_day', r.due_day, { type: 'number', min: 1, max: 31, inputmode: 'numeric' }))));
+      fieldsBox.appendChild(field('note', 'หมายเหตุ', el('textarea', { id: 'mf-note', name: 'note', class: 'field-input', rows: 2, maxlength: 1000, 'aria-describedby': 'mf-note-error' }, r.note || '')));
+      var typeSelect = document.getElementById('mf-account_type');
+      typeSelect.addEventListener('change', syncAccountFields);
+      syncAccountFields();
+    }
+
+    function syncAccountFields() {
+      var type = document.getElementById('mf-account_type').value;
+      var isBank = type === 'BANK';
+      var isLiability = LIABILITY.indexOf(type) >= 0;
+      var subtypeBox = fieldsBox.querySelector('[data-field="account_subtype"]');
+      subtypeBox.classList.toggle('hidden', !isBank);
+      if (!isBank) document.getElementById('mf-account_subtype').value = '';
+      var liabilityBox = fieldsBox.querySelector('[data-liability]');
+      liabilityBox.classList.toggle('hidden', !isLiability);
+      if (!isLiability) ['credit_limit', 'statement_day', 'due_day'].forEach(function (id) { document.getElementById('mf-' + id).value = ''; });
+    }
+
+    function collect() {
+      var data = {};
+      Array.prototype.forEach.call(form.querySelectorAll('[name]'), function (input) {
+        data[input.name] = input.value.trim();
+      });
+      return data;
+    }
+
+    function clearErrors() {
+      formError.classList.add('hidden');
+      formError.textContent = '';
+      Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid="true"]'), function (n) { n.removeAttribute('aria-invalid'); });
+      Array.prototype.forEach.call(form.querySelectorAll('.field-error'), function (n) { n.textContent = ''; n.classList.add('hidden'); });
+    }
+
+    function showError(err) {
+      var fieldName = err && err.details && err.details.field;
+      var input = fieldName && document.getElementById('mf-' + fieldName);
+      if (input) {
+        input.setAttribute('aria-invalid', 'true');
+        var msg = document.getElementById('mf-' + fieldName + '-error');
+        var labelNode = form.querySelector('label[for="mf-' + fieldName + '"]');
+        var label = labelNode ? labelNode.textContent.replace(/\s*\*\s*$/, '') : fieldName;
+        msg.textContent = String(err.message || '').split(fieldName).join(label);
+        msg.classList.remove('hidden');
+        input.focus();
+      } else {
+        formError.textContent = (err && err.message) || 'บันทึกไม่สำเร็จ';
+        formError.classList.remove('hidden');
+      }
+    }
+
+    function openForm(row) {
+      var meta = TYPE_META[state.type];
+      state.editing = row;
+      state.submitForm = App.createSubmitter();
+      document.getElementById('master-form-title').textContent = (row ? 'แก้ไข' : 'เพิ่ม') + meta.label;
+      buildFields(row);
+      clearErrors();
+      saveBtn.disabled = false;
+      dialog.showModal();
+      var first = fieldsBox.querySelector('input, select, textarea');
+      if (first) first.focus();
+    }
+
+    function closeForm() {
+      if (saveBtn.disabled) return; // กำลังบันทึก: ไม่ปิดระหว่างรอผล
+      dialog.close();
+    }
+
+    function upsert(row) {
+      var meta = TYPE_META[state.type];
+      var list = state.data[meta.list];
+      var idx = -1;
+      list.forEach(function (r, i) { if (r[meta.pk] === row[meta.pk]) idx = i; });
+      if (idx >= 0) list[idx] = row; else list.push(row);
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (saveBtn.disabled) return;
+      clearErrors();
+      var meta = TYPE_META[state.type];
+      var payload = collect();
+      if (!payload[meta.name]) {
+        showError({ message: 'กรุณากรอกชื่อ', details: { field: meta.name } });
+        return;
+      }
+      var editing = state.editing;
+      var type = state.type;
+      App.setBusy(saveBtn, true);
+      state.submitForm(payload, function (key) {
+        return editing
+          ? App.call('api_updateMaster', type, editing[meta.pk], payload, key)
+          : App.call('api_createMaster', type, payload, key);
+      }).then(function (data) {
+        var row = editing ? data.row : data;
+        App.setBusy(saveBtn, false);
+        upsert(row);
+        dialog.close();
+        render();
+        var renamed = editing && editing[meta.name] !== row[meta.name];
+        App.toast(renamed ? 'บันทึกแล้ว และอัปเดตชื่อในรายการที่เกี่ยวข้องแล้ว' : 'บันทึกแล้ว', 'success');
+      }, function (err) {
+        App.setBusy(saveBtn, false);
+        showError(err);
+      });
+    });
+
+    function toggleActive(row, button) {
+      var meta = TYPE_META[state.type];
+      var type = state.type;
+      var next = row.is_active !== true;
+      var go = next ? Promise.resolve(true)
+        : App.confirm('ปิดใช้งาน "' + row[meta.name] + '"? รายการเดิมยังแสดงชื่อนี้ได้ แต่จะเลือกใช้กับรายการใหม่ไม่ได้', 'ปิดใช้งาน');
+      go.then(function (ok) {
+        if (!ok) return;
+        var id = row[meta.pk];
+        var submit = state.rowSubmitters[id] || (state.rowSubmitters[id] = App.createSubmitter());
+        App.setBusy(button, true, 'กำลังบันทึก…');
+        submit({ id: id, active: next }, function (key) {
+          return App.call('api_setMasterActive', type, id, next, key);
+        }).then(function (updated) {
+          upsert(updated);
+          render();
+          App.toast(next ? 'เปิดใช้งานแล้ว' : 'ปิดใช้งานแล้ว', 'success');
+        }, function (err) {
+          App.setBusy(button, false);
+          App.toast(err.message || 'บันทึกไม่สำเร็จ', 'error');
+        });
+      });
+    }
+
+    // ---------- แท็บ / ค้นหา ----------
+
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('.master-tab'));
+
+    function selectTab(tab, focus) {
+      tabs.forEach(function (t) {
+        var selected = t === tab;
+        t.setAttribute('aria-selected', selected ? 'true' : 'false');
+        t.tabIndex = selected ? 0 : -1;
+      });
+      if (focus) tab.focus();
+      state.type = tab.getAttribute('data-type');
+      render();
+    }
+
+    tabs.forEach(function (tab, i) {
+      tab.addEventListener('click', function () { selectTab(tab, false); });
+      tab.addEventListener('keydown', function (e) {
+        var next = null;
+        if (e.key === 'ArrowRight') next = tabs[(i + 1) % tabs.length];
+        else if (e.key === 'ArrowLeft') next = tabs[(i - 1 + tabs.length) % tabs.length];
+        else if (e.key === 'Home') next = tabs[0];
+        else if (e.key === 'End') next = tabs[tabs.length - 1];
+        if (next) { e.preventDefault(); selectTab(next, true); }
+      });
+    });
+
+    document.getElementById('master-search').addEventListener('input', App.debounce(function (e) {
+      state.search = e.target.value;
+      render();
+    }, 250));
+    document.getElementById('master-show-inactive').addEventListener('change', function (e) {
+      state.showInactive = e.target.checked;
+      render();
+    });
+    document.getElementById('master-add').addEventListener('click', function () { openForm(null); });
+    document.getElementById('master-form-cancel').addEventListener('click', closeForm);
+    document.getElementById('master-form-close').addEventListener('click', closeForm);
+    dialog.addEventListener('cancel', function (e) { if (saveBtn.disabled) e.preventDefault(); });
+
+    load();
+  })();
+</script>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Expense Manager</title>
+    <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+    <?!= include('Styles'); ?>
+  </head>
+  <body class="min-h-screen bg-slate-50 text-slate-800 antialiased">
+    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:shadow">ข้ามไปเนื้อหา</a>
+
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+        <div class="flex items-center gap-2">
+          <span class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 text-lg font-bold text-white" aria-hidden="true">฿</span>
+          <div>
+            <p class="text-base font-semibold leading-tight">Expense Manager</p>
+            <p class="text-xs text-slate-500">บันทึกรายรับรายจ่าย</p>
+          </div>
+        </div>
+      </div>
+      <nav aria-label="เมนูหลัก" class="mx-auto max-w-5xl overflow-x-auto px-2">
+        <ul class="flex gap-1 whitespace-nowrap pb-2 text-sm">
+          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">ภาพรวม</span></li>
+          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">รายการ</span></li>
+          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">แผนชำระ</span></li>
+          <li><a href="#" class="nav-item nav-active" aria-current="page">บัญชีและข้อมูลหลัก</a></li>
+          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">รายงาน</span></li>
+        </ul>
+      </nav>
+    </header>
+
+    <main id="main" class="mx-auto max-w-5xl px-4 pb-24 pt-4">
+      <?!= include('Scripts'); ?>
+      <?!= include('PageAccounts'); ?>
+    </main>
+
+    <div id="toast-region" class="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite" aria-atomic="false"></div>
+
+    <dialog id="confirm-dialog" class="w-[min(26rem,calc(100vw-2rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="confirm-title">
+      <form method="dialog" class="p-5">
+        <h2 id="confirm-title" class="text-base font-semibold">ยืนยันการทำรายการ</h2>
+        <p id="confirm-message" class="mt-2 text-sm text-slate-600"></p>
+        <div class="mt-5 flex justify-end gap-2">
+          <button value="cancel" class="btn btn-secondary">ยกเลิก</button>
+          <button value="ok" id="confirm-ok" class="btn btn-danger">ยืนยัน</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

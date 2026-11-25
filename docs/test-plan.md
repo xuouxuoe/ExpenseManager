@@ -18,6 +18,43 @@
 | Operation | COMMITTED + audit, retry key เดิม (TC-TX-07, TC-PP-16), payload ต่าง (TC-PP-17), ล้มเหลวกลางทาง → NEEDS_RECOVERY → replay ไม่ซ้ำ, FAILED, BUSY |
 | Projection | TC-DM-01..05, TC-PP-04, TC-PP-05, TC-PP-07, refresh idempotent, FK กำพร้า |
 
+### 0.0 ผลการทดสอบ Phase 2 — Master Data (2026-11-25)
+
+Unit test ใน Node.js (`tests/masterdata.test.js`) — รวมทั้งชุด **57/57 ผ่าน**
+
+| ครอบคลุม |
+|---|
+| สร้าง Owner/Category/Account, list เฉพาะ active, ไม่รับ id/is_active/created_at จาก client |
+| TC-DM-07 ชื่อซ้ำ (ไม่สนตัวพิมพ์/ช่องว่าง, Categories แยกตาม type), ชื่อซ้ำกับรายการที่ปิดใช้งาน |
+| กฎประเภทบัญชี (SAVINGS เฉพาะ BANK, วงเงิน/วันครบกำหนดเฉพาะหนี้สิน, ยอดยกมาไม่ติดลบ, ปี พ.ศ.) |
+| ห้ามเลขบัตรเต็ม 13–19 หลักในชื่อ/สถาบัน/หมายเหตุ (4 หลักท้ายได้) |
+| FK owner ไม่มีอยู่/ปิดใช้งาน; บัญชีเดิมที่ owner ถูกปิดภายหลังยังแก้ไขได้ |
+| TC-DM-04/05 เปลี่ยนชื่อบัญชี/หมวด/เจ้าของ → refresh ทุกตาราง, ID/updated_at/note ไม่เปลี่ยน, audit RENAME_MASTER |
+| เปลี่ยน account_type/category_type ไม่ได้เมื่อถูกอ้างอิง; เปลี่ยนได้เมื่อยังไม่ถูกใช้ |
+| Idempotency create/conflict; TC-DM-06 ล้มเหลวกลางทางแล้ว retry ซ่อมชื่อในตารางอ้างอิง |
+| ไม่มีการลบ Master; API ปฏิเสธผู้ไม่มีสิทธิ์ (FORBIDDEN) และคืน error code โดยไม่รั่วรายละเอียด |
+
+ยังไม่ได้ทดสอบบน Spreadsheet ทดสอบ (ต้อง clasp push ก่อน)
+
+### 0.0.1 ทดสอบหน้าจอ Master Data ผ่าน dev preview (2026-11-25)
+
+ทดสอบใน browser ของแอปที่ `http://localhost:5178` (`tests/dev-server.js`: โค้ด .gs จริง + FakeSpreadsheet + mock google.script.run) — **ไม่ใช่ Apps Script จริง**
+
+| กรณี | ผล |
+|---|---|
+| โหลดรายการ, แท็บ บัญชี/เจ้าของ/หมวดหมู่, ปุ่มเพิ่มเปลี่ยนตามแท็บ | ผ่าน |
+| เพิ่มบัตรเครดิต: ฟิลด์วงเงิน/วันตัดรอบ/ครบกำหนดแสดงเฉพาะหนี้สิน, SAVINGS เฉพาะ BANK | ผ่าน |
+| ใส่เลขบัตรเต็ม → error ใต้ฟิลด์พร้อมชื่อฟิลด์ภาษาไทย; แก้แล้วบันทึกได้ (key ใหม่หลัง validation error) | ผ่าน |
+| ปุ่มบันทึกแสดง "กำลังบันทึก…" และ disabled ระหว่างรอ; ไม่แสดงสำเร็จก่อน backend ตอบ | ผ่าน |
+| เปลี่ยนชื่อ → toast "อัปเดตชื่อในรายการที่เกี่ยวข้องแล้ว" | ผ่าน |
+| ชื่อซ้ำ → error ใต้ฟิลด์ | ผ่าน |
+| เครือข่ายล้มเหลว → error ในฟอร์ม, กดบันทึกซ้ำใช้ idempotency key เดิม, บันทึกครั้งเดียว | ผ่าน |
+| ปิดใช้งาน → confirm dialog → toast; แสดงรายการที่ปิดใช้งานเมื่อเลือก checkbox | ผ่าน |
+| ชื่อ `<img src=x onerror=…>` แสดงเป็นข้อความ ไม่รันสคริปต์ (XSS) | ผ่าน |
+| มือถือ 375px: ไม่มี horizontal scroll, dialog พอดีจอ, ปุ่มสูง ≥ 44px | ผ่าน |
+
+ยังไม่ได้ทดสอบ: Apps Script HtmlService จริง (sandbox iframe, Tailwind CDN, google.script.run จริง), screen reader จริง
+
 ### 0.1 ผลบน Google Sheets จริง (2026-11-25)
 
 - `clasp push --force` (ผู้ใช้อนุญาต) — โค้ดบน Apps Script ตรงกับ repo ทุกไฟล์ (ตรวจด้วย clasp pull ลงโฟลเดอร์แยก)
@@ -97,6 +134,10 @@
 | TC-TX-05 | amount ≤ 0 / ไม่ใช่ตัวเลข / ทศนิยม 3 ตำแหน่ง | ปฏิเสธ |
 | TC-TX-06 | CREDIT_PURCHASE + CREDIT_PAYMENT | รายจ่ายรับรู้ครั้งเดียว |
 | TC-TX-07 | บันทึกซ้ำ (double submit) | บันทึกครั้งเดียว |
+| TC-TX-08 | CASH_ADVANCE จากบัญชี LOAN → เงินสด 20,000 | หนี้ LOAN +20,000, เงินสด +20,000, รายรับเดือนนั้นไม่เปลี่ยน |
+| TC-TX-09 | CREDIT_PAYMENT เงินสด → LOAN 5,000 + INTEREST 200 จากเงินสด | หนี้ LOAN −5,000, เงินสด −5,200, รายจ่ายรับรู้เฉพาะ 200 |
+| TC-TX-10 | CASH_ADVANCE จากบัญชีสินทรัพย์ (BANK/CASH) หรือไปยังบัญชีหนี้สิน | ปฏิเสธ |
+| TC-TX-11 | ยอดหนี้คงเหลือบัญชี LOAN = opening_balance + CASH_ADVANCE + INTEREST ที่ทบ − CREDIT_PAYMENT | คำนวณถูกต้อง |
 
 ## 6. Pivot / Reports
 

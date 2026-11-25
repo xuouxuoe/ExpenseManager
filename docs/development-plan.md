@@ -26,7 +26,12 @@
 - 2026-11-25: clasp push แล้ว; Script Properties ตั้งแล้ว; รัน `initializeDatabase()` บน Production สำเร็จ (สร้าง 11 ชีต, ไม่มีข้อมูลธุรกิจ); รัน `initializeTestDatabase()` สำเร็จ (11 ชีต)
 - Production = Google Sheets "ExpenseManager" ที่ผู้ใช้กำหนด (ปัจจุบันว่าง); ตั้ง Script Property `SPREADSHEET_ID` และรัน `initializeDatabase()` บน Production เมื่อผู้ใช้อนุญาตเท่านั้น
 
-## Phase 2 — Master Data
+## Phase 2 — Master Data (Backend + API + หน้าจอเสร็จ 2026-11-25; ยังไม่ clasp push)
+
+- `AccountService.gs` (`MasterData.listAll/create/update/setActive`) และ API `api_listMasters`, `api_createMaster`, `api_updateMaster`, `api_setMasterActive` ใน Code.gs
+- หน้าจอ: `Index.html` (shell + nav), `Styles.html`, `Scripts.html` (App.call / submitter / toast / confirm), `PageAccounts.html`
+- Dev preview ในเครื่อง: `npm run dev` (`tests/dev-server.js`, ข้อมูลจำลองในหน่วยความจำ)
+- ยังเหลือ: integration test บน Spreadsheet ทดสอบหลัง clasp push; IndexedDB queue ยังไม่ทำ (จะทำพร้อม Transactions/Quick Entry)
 
 - Accounts, Owners, Categories: เพิ่ม แก้ไข ปิดใช้งาน (is_active)
 - เปลี่ยนชื่อ Master → refresh ชื่อใน Transactions/PaymentPlans/PaymentSchedules (RENAME_MASTER)

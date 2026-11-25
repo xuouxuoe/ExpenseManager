@@ -131,3 +131,23 @@ test('Database ต้องมี SPREADSHEET_ID และ TEST ต้องไ�
   ok.Database.useTestSpreadsheet();
   assert.equal(ok.Database.getSpreadsheet(), ok.__state.spreadsheets.B);
 });
+
+test('DB_TARGET: Web App ใช้ไฟล์ตาม DB_TARGET; ฟังก์ชันผู้ดูแล Production ไม่สนใจ DB_TARGET', () => {
+  const props = { SPREADSHEET_ID: 'PROD', TEST_SPREADSHEET_ID: 'TEST', ALLOWED_EMAILS: 'owner@example.com' };
+  const def = createContext({ properties: props });
+  assert.equal(def.Database.getSpreadsheet(), def.__state.spreadsheets.PROD);
+
+  const t = createContext({ properties: Object.assign({}, props, { DB_TARGET: 'test' }) });
+  assert.equal(t.Database.currentTarget(), 'TEST');
+  assert.equal(t.Database.getSpreadsheet(), t.__state.spreadsheets.TEST);
+  t.Database.useProductionSpreadsheet();
+  assert.equal(t.Database.getSpreadsheet(), t.__state.spreadsheets.PROD);
+
+  const admin = createContext({ properties: Object.assign({}, props, { DB_TARGET: 'TEST' }) });
+  admin.initializeDatabase();
+  assert.ok(admin.__state.spreadsheets.PROD.getSheetByName('Accounts'), 'initializeDatabase ต้องเขียน Production');
+  assert.equal(admin.__state.spreadsheets.TEST, undefined, 'ต้องไม่เปิดไฟล์ทดสอบ');
+
+  const bad = createContext({ properties: Object.assign({}, props, { DB_TARGET: 'STAGING' }) });
+  assert.throws(() => bad.Database.getSpreadsheet(), (e) => e.code === 'CONFIG_INVALID');
+});

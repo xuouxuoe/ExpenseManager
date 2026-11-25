@@ -4,7 +4,7 @@
 
 - ข้อกำหนดโครงการ: [AGENTS.md](AGENTS.md)
 - เอกสารออกแบบ: [docs/](docs/) — database-schema, business-rules, system-architecture, development-plan, test-plan
-- สถานะ: Phase 1 (Foundation) — ยังไม่มีหน้าจอใช้งาน
+- สถานะ: Phase 2 (Master Data) — Backend/API/หน้าจอ บัญชีและข้อมูลหลัก เสร็จ
 
 ## โครงสร้างไฟล์ runtime (Phase 1)
 
@@ -17,7 +17,8 @@
 | `AuthService.gs` | ตรวจผู้ใช้จาก `ALLOWED_EMAILS` (fail closed), ตรวจเจ้าของสคริปต์ |
 | `OperationService.gs` | LockService + idempotency + OperationJournal + AuditLogs |
 | `ProjectionService.gs` | เติม/refresh คอลัมน์ `*_name` และข้อมูลแผนใน PaymentSchedules |
-| `Code.gs` | `doGet` และฟังก์ชันผู้ดูแล |
+| `AccountService.gs` | Master Data (Accounts, Owners, Categories) |
+| `Code.gs` | `doGet`, Client API (`api_*`) และฟังก์ชันผู้ดูแล |
 
 ## ตั้งค่า (ครั้งแรก)
 
@@ -28,6 +29,7 @@
 | `SPREADSHEET_ID` | ID ของ Google Sheets Production ("ExpenseManager") |
 | `TEST_SPREADSHEET_ID` | ID ของ Google Sheets สำหรับทดสอบ (ต้องไม่ใช่ไฟล์เดียวกับ Production) |
 | `ALLOWED_EMAILS` | อีเมล Google ที่ใช้งานได้ คั่นด้วยจุลภาค |
+| `DB_TARGET` | (ไม่บังคับ) `TEST` = Web App/API ใช้ไฟล์ทดสอบ; `PRODUCTION` หรือว่าง = ใช้ไฟล์ Production — ฟังก์ชันผู้ดูแล `checkDatabase`/`initializeDatabase`/`refreshProjections` ใช้ Production เสมอ |
 
 ตั้ง timezone ของ Spreadsheet ทั้งสองไฟล์เป็น `(GMT+07:00) Bangkok` (ไฟล์ → การตั้งค่า)
 
@@ -38,6 +40,14 @@
 3. `initializeDatabase()` — สร้างชีต/header ใน Production (**เมื่อพร้อมใช้งานจริงเท่านั้น**)
 
 `initialize` สร้างเฉพาะชีตที่ขาดและเขียน header ให้ชีตว่าง ไม่ลบชีต (รวม `ชีต1`) ไม่เปลี่ยน header เดิม และไม่แตะแถวข้อมูล ชีตที่ header ไม่ตรงจะถูกรายงานเท่านั้น
+
+## Preview หน้าจอในเครื่อง
+
+```powershell
+npm run dev
+```
+
+เปิด http://localhost:5178 — ใช้โค้ด .gs จริงกับ Spreadsheet จำลองในหน่วยความจำ (ไม่เชื่อมต่อ Google); `DEV_DELAY_MS` ปรับเวลาตอบกลับ, `DEV_FAIL_RATE` จำลองเครือข่ายล้มเหลว
 
 ## ทดสอบในเครื่อง
 

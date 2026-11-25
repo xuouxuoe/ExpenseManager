@@ -46,7 +46,7 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | AuthService.gs | ตรวจผู้ใช้ Google และสิทธิ์ |
 | ValidationService.gs | ตรวจ type, enum, YYYYMM, เงิน, FK, Formula Injection |
 | ProjectionService.gs | `Projection.loadMasters()`, `apply(sheet, row, masters, {requireActive})`, `applyPlanToSchedule()`, `refresh({dryRun, masterKeys})` |
-| AccountService.gs | Accounts/Owners/Categories; เรียก ProjectionService เมื่อชื่อเปลี่ยน |
+| AccountService.gs | `MasterData.listAll/create/update/setActive` สำหรับ Accounts/Owners/Categories; refresh projection ทุกครั้งที่แก้ไข (idempotent) |
 | TransactionService.gs | Transactions ตาม business-rules §3 |
 | InstallmentService.gs | PaymentPlans + PaymentSchedules, คัดลอกข้อมูลแผนไปงวด |
 | ReservationService.gs | RESERVE/RELEASE/CONSUME |

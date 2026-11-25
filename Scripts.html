@@ -1,0 +1,139 @@
+<script>
+  /**
+   * Scripts.html — ฟังก์ชันฝั่ง client ที่ใช้ร่วมกันทุกหน้า
+   * - เรียก Backend ผ่าน google.script.run แบบ Promise
+   * - idempotency key: ใช้ key เดิมเมื่อ retry ข้อมูลชุดเดิม, key ใหม่เมื่อข้อมูลเปลี่ยนหรือได้ผลยืนยันแล้ว
+   * - สร้าง DOM ด้วย textContent เท่านั้น (ป้องกัน XSS)
+   */
+  var App = (function () {
+    function call(fnName) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      return new Promise(function (resolve, reject) {
+        if (!window.google || !google.script || !google.script.run) {
+          reject({ ok: false, code: 'NETWORK', message: 'ไม่สามารถเชื่อมต่อระบบได้' });
+          return;
+        }
+        var runner = google.script.run
+          .withSuccessHandler(function (res) {
+            if (res && res.ok) resolve(res.data);
+            else reject(res || { ok: false, code: 'INTERNAL_ERROR', message: 'เกิดข้อผิดพลาด กรุณาลองใหม่' });
+          })
+          .withFailureHandler(function () {
+            reject({ ok: false, code: 'NETWORK', message: 'เชื่อมต่อระบบไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่' });
+          });
+        runner[fnName].apply(runner, args);
+      });
+    }
+
+    function newKey() {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+      var bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.prototype.map.call(bytes, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+    }
+
+    /**
+     * ตัวช่วยส่งคำขอเขียนข้อมูลแบบ retry ได้
+     * submit(payloadSignature, fn(key)) — ใช้ key เดิมถ้าข้อมูลเหมือนครั้งที่ล้มเหลวจากเครือข่าย/ระบบไม่ว่าง
+     */
+    function createSubmitter() {
+      var state = { key: null, signature: null };
+      return function submit(payload, sender) {
+        var signature = JSON.stringify(payload);
+        if (!state.key || state.signature !== signature) {
+          state.key = newKey();
+          state.signature = signature;
+        }
+        return sender(state.key).then(function (data) {
+          state.key = null;
+          return data;
+        }, function (err) {
+          var retryable = err && (err.code === 'NETWORK' || err.code === 'BUSY' || err.code === 'INTERNAL_ERROR');
+          if (!retryable) state.key = null;
+          throw err;
+        });
+      };
+    }
+
+    /** el('div', {class: 'x', onclick: fn, 'aria-label': 'y'}, child1, 'text') */
+    function el(tag, props) {
+      var node = document.createElement(tag);
+      var p = props || {};
+      Object.keys(p).forEach(function (k) {
+        var v = p[k];
+        if (v === null || v === undefined || v === false) return;
+        if (k === 'class') node.className = v;
+        else if (k === 'text') node.textContent = v;
+        else if (k.indexOf('on') === 0 && typeof v === 'function') node.addEventListener(k.slice(2), v);
+        else if (v === true) node.setAttribute(k, '');
+        else node.setAttribute(k, String(v));
+      });
+      for (var i = 2; i < arguments.length; i++) {
+        var child = arguments[i];
+        if (child === null || child === undefined || child === false) continue;
+        node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+      }
+      return node;
+    }
+
+    function toast(message, type) {
+      var region = document.getElementById('toast-region');
+      var node = el('div', { class: 'toast toast-' + (type || 'info'), role: type === 'error' ? 'alert' : 'status', text: message });
+      region.appendChild(node);
+      setTimeout(function () { node.remove(); }, type === 'error' ? 6000 : 3500);
+    }
+
+    function confirmAction(message, okLabel) {
+      var dialog = document.getElementById('confirm-dialog');
+      document.getElementById('confirm-message').textContent = message;
+      document.getElementById('confirm-ok').textContent = okLabel || 'ยืนยัน';
+      return new Promise(function (resolve) {
+        dialog.addEventListener('close', function onClose() {
+          dialog.removeEventListener('close', onClose);
+          resolve(dialog.returnValue === 'ok');
+        });
+        dialog.returnValue = '';
+        dialog.showModal();
+      });
+    }
+
+    function debounce(fn, ms) {
+      var t;
+      return function () {
+        var args = arguments;
+        clearTimeout(t);
+        t = setTimeout(function () { fn.apply(null, args); }, ms);
+      };
+    }
+
+    function formatMoney(n) {
+      if (n === '' || n === null || n === undefined) return '';
+      return Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function setBusy(button, busy, busyLabel) {
+      if (busy) {
+        button.dataset.label = button.textContent;
+        button.disabled = true;
+        button.textContent = '';
+        button.appendChild(el('span', { class: 'spinner', 'aria-hidden': 'true' }));
+        button.appendChild(document.createTextNode(busyLabel || 'กำลังบันทึก…'));
+      } else {
+        button.disabled = false;
+        button.textContent = button.dataset.label || button.textContent;
+      }
+    }
+
+    return {
+      call: call,
+      newKey: newKey,
+      createSubmitter: createSubmitter,
+      el: el,
+      toast: toast,
+      confirm: confirmAction,
+      debounce: debounce,
+      formatMoney: formatMoney,
+      setBusy: setBusy
+    };
+  })();
+</script>
