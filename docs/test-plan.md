@@ -18,7 +18,17 @@
 | Operation | COMMITTED + audit, retry key เดิม (TC-TX-07, TC-PP-16), payload ต่าง (TC-PP-17), ล้มเหลวกลางทาง → NEEDS_RECOVERY → replay ไม่ซ้ำ, FAILED, BUSY |
 | Projection | TC-DM-01..05, TC-PP-04, TC-PP-05, TC-PP-07, refresh idempotent, FK กำพร้า |
 
-**ยังไม่ได้ทดสอบ (ต้องทำบน Spreadsheet ทดสอบหลัง clasp push ที่ได้รับอนุญาต):** การแปลงชนิดข้อมูลของ Sheets จริงกับรูปแบบ `@`, apostrophe prefix (TC-DM-08), LockService พร้อมกันจริง, Session.getActiveUser ใน Web App, เวลา refresh กับข้อมูลจำนวนมาก
+### 0.1 ผลบน Google Sheets จริง (2026-11-25)
+
+- `clasp push --force` (ผู้ใช้อนุญาต) — โค้ดบน Apps Script ตรงกับ repo ทุกไฟล์ (ตรวจด้วย clasp pull ลงโฟลเดอร์แยก)
+- ผู้ใช้รัน **`initializeDatabase()` บน Production** (ไม่ใช่ `initializeTestDatabase()`) เวลา 22:59:46, 9.91 วินาที, สถานะเสร็จสมบูรณ์
+- ผลที่ตรวจด้วยตา (read-only): Production มีครบ 11 ชีต + `ชีต1` เดิม; header ของ AuditLogs ตรง canonical; AuditLogs มี 1 แถว `INITIALIZE_DATABASE` / `SUCCESS`; `event_at` แสดงเป็นข้อความ ISO (ไม่ถูกแปลงเป็นวันที่) — สอดคล้องกับรูปแบบคอลัมน์ `@`
+- Production ยังไม่มีข้อมูลธุรกิจ; ไม่มีข้อมูลทดสอบถูกเขียนลง Production
+- ผู้ใช้รัน `initializeTestDatabase()` (23:0x) — Spreadsheet ทดสอบมีครบ 11 ชีต + `ชีต1` เดิม; AuditLogs มี 1 แถว `INITIALIZE_DATABASE` / `SUCCESS`
+- ยืนยันการแยกไฟล์: Production AuditLogs ยังมีแถวเดียวเดิม (audit_id ไม่เปลี่ยน) — การรันฝั่ง TEST ไม่เขียนลง Production
+- ข้อจำกัดการตรวจ: header ตรวจด้วยตาเฉพาะ AuditLogs; ชีตอื่นยืนยันจากชื่อแท็บ + unit test ที่เทียบ Config.HEADERS กับเอกสาร (ยังไม่ได้รัน `checkTestDatabase()` เพื่อให้โค้ดยืนยันทุกชีตเป็น OK)
+
+**ยังไม่ได้ทดสอบ (ต้องทำบน Spreadsheet ทดสอบ):** การแปลงชนิดข้อมูลของ Sheets จริงกับรูปแบบ `@`, apostrophe prefix (TC-DM-08), LockService พร้อมกันจริง, Session.getActiveUser ใน Web App, เวลา refresh กับข้อมูลจำนวนมาก
 
 ## 1. Schema
 
