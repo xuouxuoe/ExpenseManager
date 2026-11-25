@@ -91,6 +91,23 @@
 - มือถือ: ฟอร์มสร้างแผนและรายการใช้งานได้ที่ 375px
 - เวลา refresh ชื่อเมื่อข้อมูล 10,000+ แถว ต่ำกว่าขีดจำกัดเวลา Apps Script
 
+### 7.1 Migration (อ้างอิง [migration-plan.md](migration-plan.md))
+
+**เลื่อนออกไป** — ไม่มีข้อมูลระบบเดิม (2026-11-25); ใช้เมื่อมีการนำเข้าข้อมูลในอนาคตเท่านั้น ใช้ไฟล์จำลองเท่านั้น
+
+| ID | กรณี | ผลที่คาดหวัง |
+|---|---|---|
+| TC-MG-01 | Dry run | ไม่มีการเขียนลง V1 หรือ V2; มีเฉพาะ Migration Report |
+| TC-MG-02 | runMigration โดย target = source | ปฏิเสธ |
+| TC-MG-03 | งวด V1 รูปแบบ "1/6" | installment_no = 1, installment_count = 6 แยกคอลัมน์ |
+| TC-MG-04 | เดือน "12/2026" → "01/2027" และค่า 202613 | 202612, 202701; 202613 เข้า Review INVALID_MONTH |
+| TC-MG-05 | วันที่ปี พ.ศ. 2569 | 2026-xx-xx |
+| TC-MG-06 | งวดสถานะ "จ่ายแล้ว" ไม่มีวันที่/ยอดจ่าย | ไม่สร้าง Transaction; Review STATUS_ONLY; payment_status = UNPAID |
+| TC-MG-07 | ผลรวมงวด ≠ ยอดรวมแผน | Review SUM_MISMATCH |
+| TC-MG-08 | note มีเลข 16 หลัก | ไม่ถูก migrate; Review SENSITIVE_DATA |
+| TC-MG-09 | รัน migrate ซ้ำ | ไม่เพิ่มแถว (ID deterministic) |
+| TC-MG-10 | Reconciliation RC-01 ถึง RC-11 | ผ่านทั้งหมดบนชุดข้อมูลจำลองที่ถูกต้อง |
+
 ## 8. สถานะ
 
 ยังไม่ได้ดำเนินการทดสอบใด ๆ — ห้ามรายงานว่าผ่านจนกว่าจะรันจริง

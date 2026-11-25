@@ -340,6 +340,6 @@ Reservations และ PaymentAllocations ใช้ derived report view (เช�
 
 ## 8. ข้อจำกัดของเอกสารนี้
 
-- ยังไม่ได้ตรวจ Spreadsheet ระบบเดิม (Installments, InstallmentSchedule, Cards, InstallmentPayments) แบบ read-only จึงยังไม่มี mapping ระดับคอลัมน์สำหรับ Migration — ต้องทำใน `docs/migration-plan.md`
+- ไม่มีข้อมูลระบบเดิม (ยืนยัน 2026-11-25) — V2 เริ่มจาก Spreadsheet ว่าง; [migration-plan.md](migration-plan.md) เก็บไว้เป็นแนวทางนำเข้าข้อมูลในอนาคต
 - ความยาวสูงสุดของ Text เป็นค่าที่เสนอ ปรับได้ก่อน Implementation
 - Budgets ยังไม่กำหนด schema

@@ -26,6 +26,15 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 - Google Sheets: จัดเก็บข้อมูล
 - GitHub: Source of Truth ของ Source Code; Clasp เชื่อม Local กับ Apps Script
 
+### 1.1 Spreadsheet เป้าหมาย
+
+| รายการ | ค่า |
+|---|---|
+| Production database V2 | Google Sheets ชื่อ "ExpenseManager" (ผู้ใช้กำหนด 2026-11-25) — ตรวจแล้ว (read-only): มีเพียงชีตว่าง `ชีต1` ไม่มีข้อมูลเดิม |
+| การอ้างอิงจากโค้ด | Apps Script เป็น standalone project จึงเปิดด้วย `SpreadsheetApp.openById()` โดยอ่าน ID จาก Script Properties key `SPREADSHEET_ID` — ไม่ hardcode ID ใน source code หรือเอกสาร |
+| Spreadsheet ทดสอบ | แยกไฟล์ต่างหาก (Script Property `TEST_SPREADSHEET_ID` หรือ Script Properties ของ project ทดสอบ); ห้ามเขียนข้อมูลทดสอบลงไฟล์ Production |
+| การสร้างชีต/header | ทำโดย `initializeDatabase()` เมื่อผู้ใช้อนุญาตเท่านั้น; ชีตว่าง `ชีต1` ไม่ถูกลบหรือเปลี่ยนชื่ออัตโนมัติ |
+
 ## 2. Module responsibilities
 
 | Module | หน้าที่ |
@@ -41,7 +50,7 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | ReservationService.gs | RESERVE/RELEASE/CONSUME |
 | PaymentAllocationService.gs | จัดสรรธุรกรรมให้งวด |
 | DashboardService.gs / ReportService.gs | อ่านข้อมูล/summary, Export CSV |
-| MigrationService.gs | dry run, backup, migrate ระบบเดิม |
+| MigrationService.gs | เลื่อนออกไป — ไม่มีข้อมูลระบบเดิม; สร้างเมื่อมีความต้องการนำเข้าข้อมูล |
 | SettingService.gs | Settings |
 
 ProjectionService เป็นจุดเดียวที่เขียนคอลัมน์ `*_name` และคอลัมน์ PROJ ของ PaymentSchedules เพื่อไม่ให้มีหลายเส้นทางเขียนค่าที่ขัดกัน

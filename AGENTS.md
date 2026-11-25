@@ -309,6 +309,7 @@ PaymentPlans และ PaymentSchedules มีชุดคอลัมน์เ�
 - ใช้ LockService และ OperationJournal สถานะ PENDING / COMMITTED / FAILED / NEEDS_RECOVERY; บันทึกแผนกู้คืนก่อนเขียนหลาย Sheet; ใช้ ID ที่กำหนดไว้ล่วงหน้าเพื่อ replay โดยไม่ซ้ำ; ยืนยันสำเร็จเมื่อทุกส่วนตรวจสอบครบเท่านั้น
 - Google Sheets ไม่มี ACID transaction ข้าม Sheet; ห้ามอ้าง atomicity; ตรวจและกู้คืนงานค้างก่อนการเขียนที่เกี่ยวข้อง; ไม่เปิดเผย recovery_data ฝั่ง client
 - ห้ามเปลี่ยน header หรือลบข้อมูลเดิมโดยไม่ได้รับอนุญาต; migration ต้องสำรองและ dry run; mapping Installments → PaymentPlans, InstallmentSchedule → PaymentSchedules, Cards → Accounts, InstallmentPayments → Transactions/PaymentAllocations ตามข้อมูลจริง; ไม่สร้างยอดหรือวันที่ย้อนหลังจากสถานะเพียงอย่างเดียว ให้แยกรายการที่ต้องตรวจสอบ
+- สถานะ 2026-11-25: ไม่มีข้อมูลระบบเดิม V2 เริ่มจาก Spreadsheet ว่าง จึงไม่ต้อง Migration; ข้อกำหนด migration ข้างต้นใช้เมื่อมีการนำเข้าข้อมูลในอนาคตเท่านั้น
 
 ## 8. UI/UX Guidelines
 

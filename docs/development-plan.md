@@ -7,11 +7,12 @@
 
 - [x] AGENTS.md ปรับ canonical headers และ Data Management Rules
 - [x] docs/database-schema.md, business-rules.md, system-architecture.md, development-plan.md, test-plan.md
-- [ ] ตรวจ Spreadsheet ระบบเดิมแบบ read-only และจัดทำ docs/migration-plan.md (mapping ระดับคอลัมน์)
+- [x] จัดทำ docs/migration-plan.md (ร่าง: mapping ตามความหมาย, 2026-11-25)
+- [x] ยืนยันว่าไม่มีข้อมูลระบบเดิม — เริ่ม V2 ใหม่ ไม่ต้อง Migration (2026-11-25)
 - [x] ผู้ใช้อนุมัติ Final Database Schema (2026-11-25)
 - [x] `appsscript.json` timeZone → Asia/Bangkok (2026-11-25; ยังไม่ clasp push)
 
-**Gate:** schema อนุมัติแล้ว; ก่อนเริ่ม Phase 1 ยังต้องมี migration-plan.md
+**Gate:** Phase 0 ครบแล้ว; เริ่ม Phase 1 ได้เมื่อผู้ใช้สั่งเริ่ม Implementation (ต้องมี Spreadsheet ทดสอบแยกจาก Production)
 
 ## Phase 1 — Foundation
 
@@ -20,6 +21,7 @@
 - OperationJournal + LockService + idempotency
 - ProjectionService (resolveNames, applyProjection, refreshProjections)
 - ใช้ Spreadsheet ทดสอบที่แยกจาก Production เท่านั้น
+- Production = Google Sheets "ExpenseManager" ที่ผู้ใช้กำหนด (ปัจจุบันว่าง); ตั้ง Script Property `SPREADSHEET_ID` และรัน `initializeDatabase()` บน Production เมื่อผู้ใช้อนุญาตเท่านั้น
 
 ## Phase 2 — Master Data
 
@@ -46,10 +48,10 @@
 - Pivot_Saving / Pivot_Payment / Pivot_Transactions จาก name columns และ derived report view
 - Export CSV
 
-## Phase 6 — Reliability & Migration
+## Phase 6 — Reliability
 
 - ทดสอบล้มเหลวกลางทาง/กู้คืน/retry, เขียนพร้อมกัน
-- Migration จากระบบเดิม: backup → dry run → ตรวจผล → migrate (ต้องได้รับอนุญาต)
+- ไม่มี Migration (ไม่มีข้อมูลระบบเดิม); การตั้งยอดยกมาทำผ่าน Accounts.opening_balance
 
 ## Phase 7 — Optional AI
 
