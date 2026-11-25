@@ -1,0 +1,119 @@
+# Business Rules — Expense Manager V2
+
+สถานะ: **ร่างเพื่อขออนุมัติ**
+ปรับปรุงล่าสุด: 2026-11-25
+อ้างอิง schema: [database-schema.md](database-schema.md)
+
+## 1. ID และ Name (Data Management Rules)
+
+| รหัส | กฎ |
+|---|---|
+| BR-DM-01 | ใช้ `*_id` (UUID) เป็นรหัสอ้างอิงหลักระหว่างตารางเสมอ ห้ามอ้างอิงด้วยชื่อหรือเลขแถว |
+| BR-DM-02 | ใช้ `*_name` สำหรับแสดงผล ค้นหา กรองข้อมูล และ Pivot Table เท่านั้น |
+| BR-DM-03 | Backend ดึงชื่อจาก Master Data (Accounts, Owners, Categories) อัตโนมัติทุกครั้งที่สร้างหรือแก้ไขรายการ |
+| BR-DM-04 | ผู้ใช้เลือกจากรายการ (UI ส่งเฉพาะ ID) ไม่ต้องกรอกชื่อและรหัสซ้ำ; API ไม่รับคอลัมน์ `*_name` จาก Client — หากส่งมาให้ละเลยและใช้ค่าจาก Master |
+| BR-DM-05 | เมื่อแก้ชื่อบัญชี เจ้าของ หรือหมวดหมู่ ID ต้องไม่เปลี่ยน และ Backend refresh ชื่อใน Transactions, PaymentPlans, PaymentSchedules ทุกแถวที่อ้างอิง ID นั้น (รวมรายการในอดีต) ภายใน operation เดียว |
+| BR-DM-06 | การ refresh ชื่อเป็นการปรับ Projection ไม่ใช่การแก้ไขธุรกิจ: ไม่เปลี่ยน `updated_at` ของแถวที่ถูก refresh, ไม่คำนวณยอดใหม่, บันทึก AuditLogs หนึ่งเหตุการณ์ (`RENAME_MASTER`) ต่อการเปลี่ยนชื่อ |
+| BR-DM-07 | ต้องมีฟังก์ชันตรวจและซ่อม Projection (`refreshProjections`) ที่คำนวณชื่อใหม่จาก ID ได้ทุกเมื่อแบบ idempotent สำหรับกู้คืนเมื่อ refresh ล้มเหลวกลางทาง |
+| BR-DM-08 | Master ที่ `is_active = FALSE` ยังแสดงชื่อในรายการเดิมได้ แต่ห้ามเลือกใช้ในรายการใหม่; ห้ามลบ Master ที่ถูกอ้างอิง |
+| BR-DM-09 | ชื่อ Master ต้องไม่ว่าง ตัดช่องว่างหัวท้าย และไม่ซ้ำในกลุ่มเดียวกันที่ active (Accounts/Owners ทั้งตาราง, Categories ภายใน category_type) เพื่อไม่ให้ Pivot รวมคนละรายการเข้าด้วยกัน |
+| BR-DM-10 | ข้อความทุกคอลัมน์ที่ผู้ใช้กรอก (item_name, description, note, ชื่อ Master) ต้องผ่านการป้องกัน Formula Injection (ค่าขึ้นต้นด้วย `=`, `+`, `-`, `@`, Tab, CR ให้เก็บเป็นข้อความ) และ escape ตอนแสดงผลเพื่อป้องกัน XSS |
+
+## 2. description และ note
+
+| รหัส | กฎ |
+|---|---|
+| BR-NT-01 | `description` เก็บรายละเอียดของรายการหลัก (สินค้า/บริการ/ธุรกรรม) |
+| BR-NT-02 | `note` เก็บหมายเหตุเพิ่มเติม แต่ละแถวเป็นอิสระ ไม่ใช่ Projection |
+| BR-NT-03 | `PaymentSchedules.description` คัดลอกจาก `PaymentPlans.description` และแก้ได้ที่แผนเท่านั้น |
+| BR-NT-04 | `PaymentSchedules.note` แก้แยกรายงวดได้ เริ่มต้นว่าง ไม่คัดลอกจาก `PaymentPlans.note` และไม่ถูกเขียนทับเมื่อแก้แผนหรือ refresh projection |
+| BR-NT-05 | การแก้ `note` เพียงอย่างเดียวไม่กระทบยอดหรือสถานะ และแก้ได้แม้งวดชำระแล้วหรือยกเลิกแล้ว (มี audit) |
+| BR-NT-06 | ห้ามใช้ `note` หรือ `description` แทนสถานะเก็บเงิน/สถานะชำระ หรือเป็นข้อมูลที่ระบบใช้คำนวณ; สถานะต้องมาจาก `saving_status`, `payment_status`, `is_overdue`, `is_cancelled` เท่านั้น |
+
+## 3. Transactions
+
+### 3.1 ทั่วไป
+
+- amount > 0 เสมอ ทิศทางกำหนดโดย Backend จาก transaction_type และประเภทบัญชี
+- item_name บังคับ; description, note ไม่บังคับ
+- ห้ามลบธุรกรรมจริง ใช้การกลับรายการ (`reversal_of`)
+- ป้องกันรายการซ้ำด้วย idempotency_key และแจ้งเตือนรายการที่อาจซ้ำ (วันที่ + ยอด + บัญชี + item_name เดียวกัน)
+
+### 3.2 บัญชีต้นทาง/ปลายทางตามประเภท
+
+ความหมาย: `from_account` = บัญชีที่มูลค่าไหลออกหรือหนี้เพิ่ม, `to_account` = บัญชีที่มูลค่าไหลเข้าหรือหนี้ลด
+
+| transaction_type | from_account_id | to_account_id | category_id |
+|---|---|---|---|
+| INCOME | ว่าง | บังคับ (สินทรัพย์) | บังคับ (INCOME) |
+| EXPENSE | บังคับ (สินทรัพย์) | ว่าง | บังคับ (EXPENSE) |
+| TRANSFER | บังคับ (สินทรัพย์) | บังคับ (สินทรัพย์, ต่างจาก from) | ไม่ใช้ |
+| CREDIT_PURCHASE | บังคับ (CREDIT_CARD / CASH_CARD / LOAN) | ว่าง | บังคับ (EXPENSE) |
+| CREDIT_PAYMENT | บังคับ (สินทรัพย์) | บังคับ (หนี้สิน) | ไม่ใช้ |
+| CASH_ADVANCE | บังคับ (CREDIT_CARD / CASH_CARD) | บังคับ (สินทรัพย์) | ไม่ใช้ |
+| INTEREST / FEE | บังคับ (บัญชีที่ถูกเรียกเก็บ) | ว่าง | บังคับ (EXPENSE) |
+| REFUND | ว่าง | บังคับ (บัญชีที่รับคืน) | บังคับ (หมวดของรายการต้นฉบับ) |
+| ADJUSTMENT | ระบุอย่างใดอย่างหนึ่ง | ระบุอย่างใดอย่างหนึ่ง | ไม่ใช้; note บังคับ (เหตุผล) |
+
+`from_account_name` / `to_account_name` / `category_name` ว่างเมื่อ ID ที่คู่กันว่าง
+
+ผลทางบัญชีของแต่ละประเภทเป็นไปตาม AGENTS.md §7.3
+
+## 4. Payment Planner
+
+### 4.1 การสร้างแผน
+
+- ผู้ใช้กรอกครั้งเดียวที่ PaymentPlans: purchase_date, item_name, description, owner_id, category_id, account_id, principal/interest/fee, installment_count, first_saving_month, first_payment_month, due_day (ถ้าทราบ), note
+- Backend เติม account_name, owner_name, category_name จาก Master และคำนวณ total_amount
+- Backend สร้าง PaymentSchedules หนึ่งแถวต่อหนึ่งงวดด้วย Batch Write โดย **คัดลอกทุกงวด**: purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, installment_count
+- ONE_TIME: installment_count = 1, installment_no = 1
+- แสดงตัวอย่างงวดก่อนยืนยันเสมอ
+
+### 4.2 งวดและเดือน
+
+- installment_no และ installment_count แยกคอลัมน์ เป็น Integer; ห้ามเก็บรูปแบบ `1/6` (UI แสดงได้)
+- saving_month, payment_month เป็น Integer YYYYMM; งวดที่ n = first_*_month + (n−1) เดือนด้วย calendar arithmetic (202612 → 202701); ปฏิเสธค่าเช่น 202613, 202600, 20261
+- due_date = payment_month + due_day; ถ้า due_day เกินวันสุดท้ายของเดือนใช้วันสุดท้าย; ไม่ทราบ due_day ให้ว่าง
+- amount_due = total_amount ÷ installment_count ปัดเป็นสตางค์ เศษปรับที่งวดสุดท้าย; แก้รายงวดได้แต่ผลรวมงวดที่ไม่ยกเลิกต้องเท่ากับ total_amount
+- หนึ่งงวด = หนึ่งแถว
+
+### 4.3 การแก้ไขแผน
+
+| ฟิลด์ที่แก้ที่แผน | ผลต่อ PaymentSchedules |
+|---|---|
+| item_name, description, owner_id, category_id | Propagate ไปทุกงวด (รวมงวดที่ชำระแล้ว เพราะเป็นข้อมูลอธิบาย ไม่มีผลทางการเงิน) และ refresh ชื่อ |
+| account_id | อนุญาตเฉพาะเมื่อแผนยังไม่มี Reservations และ PaymentAllocations; มิฉะนั้นต้องยกเลิกแผนและสร้างใหม่ |
+| ยอดเงิน, installment_count, เดือนเริ่ม, due_day | สร้างงวดใหม่ได้เฉพาะงวดที่ยังไม่มีการกันเงินหรือชำระ; ห้ามแก้งวดที่ชำระแล้วอัตโนมัติ |
+| note ของแผน | ไม่กระทบ note ของงวด |
+
+- Transactions ที่เชื่อมกับแผน (plan_id) ไม่ถูกแก้ item_name/category อัตโนมัติ เพราะเป็นบันทึกธุรกรรมจริง
+- ห้ามแก้คอลัมน์ PROJ ของ PaymentSchedules โดยตรง (ทั้งผ่าน API และในชีต)
+
+### 4.4 สถานะและยอด (Derived)
+
+ตาม AGENTS.md §6.3 และ §7.3:
+
+- amount_saved = SUM(RESERVE) − SUM(RELEASE)
+- amount_reserved = amount_saved − SUM(CONSUME)
+- amount_paid = ผลรวม allocated_amount ของธุรกรรมที่มีผล (ไม่ถูกกลับรายการ)
+- remaining_to_pay = MAX(0, amount_due − amount_paid)
+- remaining_to_save = MAX(0, remaining_to_pay − amount_reserved)
+- saving_status: CANCELLED ถ้า is_cancelled; NOT_REQUIRED ถ้า remaining_to_pay = 0; SAVED ถ้า remaining_to_save = 0; PARTIAL ถ้า amount_reserved > 0; มิฉะนั้น NOT_SAVED
+- payment_status: CANCELLED ถ้า is_cancelled; PAID ถ้า remaining_to_pay = 0; PARTIAL ถ้า amount_paid > 0; มิฉะนั้น UNPAID
+- is_overdue = ไม่ยกเลิก AND remaining_to_pay > 0 AND due_date < วันนี้ (Asia/Bangkok)
+- remaining_installments = จำนวนงวดในแผนเดียวกันที่ไม่ยกเลิกและ remaining_to_pay > 0 (ค่าเดียวกันทุกงวดของแผน; ห้าม SUM)
+- plan_status: CANCELLED เมื่อแผนถูกยกเลิก; COMPLETED เมื่อทุกงวดที่ไม่ยกเลิก PAID; มิฉะนั้น ACTIVE
+
+### 4.5 Reservations และ Allocations
+
+- RESERVE ไม่เกินเงินที่ใช้ได้ของบัญชี; RELEASE/CONSUME ไม่เกินยอดที่กันไว้ในบัญชีนั้นของงวดนั้น; CONSUME ต้องมี transaction_id
+- ผลรวม allocation ต่อธุรกรรม ≤ amount ของธุรกรรม; ต่องวด ≤ amount_due; ยอดที่ยังไม่จัดสรรแสดงแยก
+- การกันเงินไม่ใช่รายจ่าย; การชำระจริงสร้าง Transactions + PaymentAllocations + CONSUME เฉพาะเงินกันไว้ที่ใช้จริง
+
+## 5. Pivot
+
+- Pivot แยกได้ตาม account_name, owner_name, category_name, item_name, saving_month, payment_month โดยตรงจาก PaymentSchedules
+- กรองงวดที่ `is_cancelled = TRUE` ออกจากรายงานแผน
+- รายงานประวัติจริงใช้วันที่จริง (transaction_date, reservation_date) ไม่ใช้เดือนแผน
+- ห้าม SUM installment_count, remaining_installments, total_amount ข้ามงวด
+- Pivot ไม่อยู่ในเส้นทางบันทึกหลัก
