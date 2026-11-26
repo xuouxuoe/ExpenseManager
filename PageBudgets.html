@@ -82,19 +82,21 @@
   .bg-table tr > :first-child { min-width: 9rem; }
   .bg-table tfoot th, .bg-table tfoot td { background: #eef2ff; font-weight: 600; }
   /* สรุปยอดเหลือใช้ได้ของเดือน/สัปดาห์ */
-  .bg-hero { position: relative; overflow: hidden; border-radius: 1.25rem; padding: 1.125rem; color: #fff;
-    background: linear-gradient(135deg, #4338ca 0%, #4f46e5 55%, #6366f1 100%); box-shadow: 0 10px 24px -12px #4338ca99; }
+  .bg-hero { position: relative; overflow: hidden; border-radius: 1.25rem; padding: 1.125rem; color: #1e293b;
+    background: linear-gradient(135deg, #eef2ff 0%, #f5f7ff 55%, #ffffff 100%); border: 1px solid #e0e7ff; box-shadow: 0 6px 18px -12px #4f46e566; }
   .bg-hero::after { content: ''; position: absolute; right: -3rem; top: -3rem; width: 11rem; height: 11rem; border-radius: 9999px;
-    background: radial-gradient(circle, #ffffff26 0%, #ffffff00 70%); pointer-events: none; }
-  .bg-hero-tile { position: relative; z-index: 1; border-radius: 1rem; background: #ffffff1a; border: 1px solid #ffffff2e; padding: .875rem 1rem; }
-  .bg-hero-label { font-size: .8125rem; color: #e0e7ff; }
-  .bg-hero-value { margin-top: .125rem; font-size: 1.75rem; line-height: 2.125rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
-  .bg-hero-sub { font-size: .8125rem; color: #e0e7ff; }
-  .bg-hero-meter { margin-top: .625rem; height: .5rem; border-radius: 9999px; background: #ffffff33; overflow: hidden; }
+    background: radial-gradient(circle, #c7d2fe66 0%, #c7d2fe00 70%); pointer-events: none; }
+  .bg-hero-tile { position: relative; z-index: 1; border-radius: 1rem; background: #fff; border: 1px solid #e0e7ff; padding: .875rem 1rem; box-shadow: 0 1px 2px #0f172a0a; }
+  .bg-hero-label { font-size: .8125rem; color: #64748b; }
+  .bg-hero-value { margin-top: .125rem; font-size: 1.75rem; line-height: 2.125rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.01em; color: #312e81; }
+  .bg-hero-value.bg-neg { color: #e11d48; }
+  .bg-hero-sub { font-size: .8125rem; color: #475569; }
+  .bg-pct { color: #e11d48; font-weight: 600; }
+  .bg-hero-meter { margin-top: .625rem; height: .5rem; border-radius: 9999px; background: #e2e8f0; overflow: hidden; }
   .bg-hero-meter > span { display: block; height: 100%; border-radius: 9999px; }
   .bg-hero-foot { margin-top: .625rem; display: flex; flex-wrap: wrap; gap: .375rem; }
   .bg-pill { display: inline-flex; align-items: center; gap: .25rem; border-radius: 9999px; padding: .125rem .625rem; font-size: .75rem; font-weight: 500; }
-  .bg-pill-light { background: #ffffff26; color: #fff; }
+  .bg-pill-light { background: #eef2ff; color: #3730a3; }
   .bg-pill-over { background: #ffe4e6; color: #9f1239; }
   .bg-pill-warn { background: #fef3c7; color: #92400e; }
   .bg-pill-ok { background: #d1fae5; color: #065f46; }
@@ -169,11 +171,16 @@
       return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, day).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
     }
 
+    /** ข้อความ "ใช้ไป X (Y%)" โดยตัวเลข % เป็นสีแดง */
+    function usedText(prefix, spent, pct) {
+      return el('span', {}, prefix + 'ใช้ไป ' + money(spent) + ' (', el('span', { class: 'bg-pct', text: pct + '%' }), ')');
+    }
+
     function heroMeter(used, total) {
       var pct = total > 0 ? Math.round(used / total * 100) : 0;
       var fill = el('span');
       fill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-      fill.style.background = pct > 100 ? '#fda4af' : pct >= 80 ? '#fcd34d' : '#ffffff';
+      fill.style.background = pct > 100 ? '#e11d48' : pct >= 80 ? '#f59e0b' : '#4f46e5';
       return el('div', { class: 'bg-hero-meter', role: 'progressbar', 'aria-label': 'ใช้ไปแล้ว ' + pct + '%',
         'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': Math.max(0, Math.min(100, pct)) }, fill);
     }
@@ -185,8 +192,8 @@
       pills.forEach(function (t) { foot.appendChild(el('span', { class: 'bg-pill bg-pill-light', text: t })); });
       return el('div', { class: 'bg-hero-tile' },
         el('p', { class: 'bg-hero-label', text: label }),
-        el('p', { class: 'bg-hero-value', text: (negative ? '−' : '') + money(Math.abs(value)) + ' ฿' }),
-        el('p', { class: 'bg-hero-sub', text: sub }),
+        el('p', { class: 'bg-hero-value' + (negative ? ' bg-neg' : ''), text: (negative ? '−' : '') + money(Math.abs(value)) + ' ฿' }),
+        el('p', { class: 'bg-hero-sub' }, sub),
         heroMeter(used, total), foot);
     }
 
@@ -203,7 +210,7 @@
       if (phase === 'CURRENT') {
         var first = bs[0];
         tiles.appendChild(heroTile('เดือนนี้เหลือใช้ได้', remaining,
-          'จากงบ ' + money(amount) + ' · ใช้ไป ' + money(spent) + ' (' + pct + '%)', spent, amount,
+          usedText('จากงบ ' + money(amount) + ' · ', spent, pct), spent, amount,
           ['อีก ' + first.month_days_left + ' วัน', 'ใช้ได้วันละ ' + money(perDay(remaining, first.month_days_left)) + ' บาท']));
         var weeks = bs.map(currentWeekOf).filter(Boolean);
         var wAvail = sum(weeks, function (w) { return w.available; });
@@ -216,7 +223,7 @@
           ['อีก ' + first.week_days_left + ' วัน', 'ใช้ได้วันละ ' + money(perDay(wRemaining, first.week_days_left)) + ' บาท']));
       } else {
         tiles.appendChild(heroTile(phase === 'PAST' ? 'ทั้งเดือนเหลือ' : 'งบทั้งเดือน', phase === 'PAST' ? remaining : amount,
-          phase === 'PAST' ? 'จากงบ ' + money(amount) + ' · ใช้ไป ' + money(spent) + ' (' + pct + '%)' : 'ยังไม่ถึงเดือนนี้ ยอดจะเริ่มนับเมื่อมีรายจ่ายจริง',
+          phase === 'PAST' ? usedText('จากงบ ' + money(amount) + ' · ', spent, pct) : 'ยังไม่ถึงเดือนนี้ ยอดจะเริ่มนับเมื่อมีรายจ่ายจริง',
           spent, amount, [phase === 'PAST' ? 'จบเดือนแล้ว' : 'ยังไม่เริ่ม']));
         tiles.appendChild(el('div', { class: 'bg-hero-tile' },
           el('p', { class: 'bg-hero-label', text: 'จำนวนงบ' }),
@@ -243,8 +250,8 @@
       var over = b.remaining < 0;
       var pct = b.amount > 0 ? Math.round(b.spent / b.amount * 100) : 0;
       var level = b.phase === 'FUTURE' ? 'idle' : over ? 'over' : pct >= 80 ? 'warn' : 'ok';
-      var chip = { idle: ['bg-pill-muted', 'ยังไม่เริ่ม'], over: ['bg-pill-over', 'ใช้เกินงบ'], warn: ['bg-pill-warn', 'ใกล้เต็ม ' + pct + '%'],
-        ok: ['bg-pill-ok', 'ใช้ไป ' + pct + '%'] }[level];
+      var chip = { idle: ['bg-pill-muted', 'ยังไม่เริ่ม'], over: ['bg-pill-over', 'ใช้เกินงบ'], warn: ['bg-pill-warn', 'ใกล้เต็มงบ'],
+        ok: ['bg-pill-ok', 'อยู่ในงบ'] }[level];
       var cats = el('div', { class: 'mt-1.5 flex flex-wrap gap-1' });
       b.categories.forEach(function (c) { cats.appendChild(el('span', { class: 'bg-chip [overflow-wrap:anywhere]', text: c.category_name })); });
       var head = el('div', { class: 'flex flex-wrap items-start justify-between gap-2' },
@@ -286,7 +293,9 @@
           el('td', { class: w.remaining < 0 ? 'font-semibold text-rose-600' : '', text: money(w.remaining) })));
       });
       table.appendChild(body);
-      return el('section', { class: 'bg-card bg-' + level, 'aria-label': b.budget_name }, head, meter(b.spent, b.amount, over), summary, perDay,
+      return el('section', { class: 'bg-card bg-' + level, 'aria-label': b.budget_name }, head, meter(b.spent, b.amount, over),
+        el('p', { class: 'mt-1 text-right text-xs text-slate-500' }, 'ใช้ไป ', el('span', { class: 'bg-pct', text: pct + '%' }), ' ของงบเดือน'),
+        summary, perDay,
         el('details', { class: 'mt-3 group', open: b.phase === 'CURRENT' ? true : null },
           el('summary', { class: 'cursor-pointer select-none text-sm font-medium text-indigo-700 hover:text-indigo-900', text: 'งบรายสัปดาห์' }),
           el('div', { class: 'overflow-x-auto' }, table)));
@@ -305,7 +314,7 @@
       fill.style.background = pct > 100 ? '#e11d48' : pct >= 80 ? '#f59e0b' : '#4f46e5';
       return el('div', { class: 'flex items-center gap-2' },
         el('div', { class: 'fr-meter w-20 shrink-0', 'aria-hidden': 'true' }, fill),
-        el('span', { class: pct > 100 ? 'text-rose-600 font-semibold' : '', text: pct + '%' }));
+        el('span', { class: 'bg-pct', text: pct + '%' }));
     }
 
     function summaryTable() {
