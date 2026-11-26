@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="th">
   <head>
+    <!-- base target _top: ลิงก์ภายนอกเปิดนอก iframe ของ Apps Script; ลิงก์ภายในหน้า (#...) ต้องใส่ target="_self" -->
     <base target="_top">
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,7 +10,7 @@
     <?!= include('Styles'); ?>
   </head>
   <body class="min-h-screen bg-slate-50 text-slate-800 antialiased">
-    <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:shadow">ข้ามไปเนื้อหา</a>
+    <a href="#main" target="_self" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:shadow">ข้ามไปเนื้อหา</a>
 
     <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
@@ -23,18 +24,28 @@
       </div>
       <nav aria-label="เมนูหลัก" class="mx-auto max-w-5xl overflow-x-auto px-2">
         <ul class="flex gap-1 whitespace-nowrap pb-2 text-sm">
-          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">ภาพรวม</span></li>
-          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">รายการ</span></li>
-          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">แผนชำระ</span></li>
-          <li><a href="#" class="nav-item nav-active" aria-current="page">บัญชีและข้อมูลหลัก</a></li>
-          <li><span class="nav-item nav-disabled" aria-disabled="true" title="เร็ว ๆ นี้">รายงาน</span></li>
+          <li><a href="#reports" target="_self" class="nav-item" data-nav="reports">ภาพรวมและรายงาน</a></li>
+          <li><a href="#transactions" target="_self" class="nav-item" data-nav="transactions">รายการ</a></li>
+          <li><a href="#installments" target="_self" class="nav-item" data-nav="installments">แผนชำระ</a></li>
+          <li><a href="#accounts" target="_self" class="nav-item" data-nav="accounts">บัญชีและข้อมูลหลัก</a></li>
         </ul>
       </nav>
     </header>
 
     <main id="main" class="mx-auto max-w-5xl px-4 pb-24 pt-4">
       <?!= include('Scripts'); ?>
-      <?!= include('PageAccounts'); ?>
+      <div data-page="transactions" hidden>
+        <?!= include('PageTransactions'); ?>
+      </div>
+      <div data-page="accounts" hidden>
+        <?!= include('PageAccounts'); ?>
+      </div>
+      <div data-page="installments" hidden>
+        <?!= include('PageInstallments'); ?>
+      </div>
+      <div data-page="reports" hidden>
+        <?!= include('PageReports'); ?>
+      </div>
     </main>
 
     <div id="toast-region" class="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4" aria-live="polite" aria-atomic="false"></div>
@@ -49,5 +60,7 @@
         </div>
       </form>
     </dialog>
+
+    <script>App.startRouter('transactions');</script>
   </body>
 </html>

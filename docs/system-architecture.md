@@ -47,8 +47,8 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | ValidationService.gs | ตรวจ type, enum, YYYYMM, เงิน, FK, Formula Injection |
 | ProjectionService.gs | `Projection.loadMasters()`, `apply(sheet, row, masters, {requireActive})`, `applyPlanToSchedule()`, `refresh({dryRun, masterKeys})` |
 | AccountService.gs | `MasterData.listAll/create/update/setActive` สำหรับ Accounts/Owners/Categories; refresh projection ทุกครั้งที่แก้ไข (idempotent) |
-| TransactionService.gs | Transactions ตาม business-rules §3 |
-| InstallmentService.gs | PaymentPlans + PaymentSchedules, คัดลอกข้อมูลแผนไปงวด |
+| TransactionService.gs | `Transactions.create/update/reverse/list/accountBalances` และ `Ledger.effectsOf/balances` ตาม business-rules §3 |
+| InstallmentService.gs | ตัวอย่างและสร้างแผนรายจ่ายในอนาคตใน PaymentPlans และ PaymentSchedules |
 | ReservationService.gs | RESERVE/RELEASE/CONSUME |
 | PaymentAllocationService.gs | จัดสรรธุรกรรมให้งวด |
 | DashboardService.gs / ReportService.gs | อ่านข้อมูล/summary, Export CSV |
@@ -77,10 +77,30 @@ ProjectionService เป็นจุดเดียวที่เขียน�
 ### 3.3 สร้างแผน (operation_type `CREATE_PLAN`)
 
 1. สร้าง plan_id และ schedule_id ทั้งหมดล่วงหน้า, บันทึก OperationJournal `PENDING`
-2. เขียน PaymentPlans 1 แถว
-3. เขียน PaymentSchedules N แถวด้วย batch เดียว โดยคัดลอก Business Information จากแผน
-4. ตรวจจำนวนแถวและผลรวม amount_due = total_amount แล้ว `COMMITTED`
-5. retry ด้วย idempotency_key เดิมจะใช้ ID เดิม จึงไม่สร้างงวดซ้ำ
+2. บันทึกแผนที่ตรวจแล้ว ยอดรายงวด และวันอ้างอิงใน recovery_data ก่อนเขียนข้อมูลธุรกิจ
+3. เขียน PaymentPlans 1 แถว แล้วเขียน PaymentSchedules ด้วย batch เดียว คัดลอกข้อมูลธุรกิจด้วย ProjectionService
+4. ตรวจจำนวนงวด รหัส และยอดรายงวดเทียบกับแผนที่ตรวจผลรวมแล้วก่อนตั้ง `COMMITTED`
+5. การลองใหม่ด้วย idempotency_key เดิมใช้ข้อมูลจาก checkpoint และ ID เดิม เติมเฉพาะแถวที่ขาด หน้ารายการแสดงแผนเมื่อมีจำนวนงวดครบ
+
+## 3.4 Performance (2026-11-26)
+
+- **Cache ภายใน execution** (`Database`): ตรวจ header ครั้งเดียวต่อชีต; อ่านทั้งตารางด้วย `getDataRange().getValues()` ครั้งเดียว (รวม header); การเขียน (append/update/writeColumn/writeRowAt) อัปเดต cache ทันทีจึงไม่ต้องอ่านซ้ำ
+- `Operation.run` เรียก `Database.resetExecutionCache()` หลังได้ lock เพื่อไม่ใช้ข้อมูลที่อ่านก่อน lock; `handleApi_` reset ทุกคำขอ
+- ตาราง append-only ที่โตเรื่อย ๆ (OperationJournal, AuditLogs) ไม่ถูกอ่านทั้งตาราง: append ใช้ `getLastRow()`, ค้น journal ด้วย `TextFinder` (`Database.findRowsByValue`)
+- `MasterData.update` refresh projection เฉพาะเมื่อชื่อเปลี่ยนหรือเป็นการ replay (`ctx.replay`)
+- `api_transactionPage` โหลดรายการ + ตัวช่วยกรอก (+ Master) ในคำขอเดียว
+- เมื่อหน้ารายการสร้าง แก้ไข หรือกลับรายการ จะส่งตัวกรองปัจจุบันไปกับคำขอเขียน หลังยืนยันการเขียนแล้ว API ส่งแถวที่บันทึก รายการตามตัวกรอง ยอดสรุป และตัวช่วยกรอกกลับมาโดยใช้ cache ของ execution เดียวกัน ถ้าตัวกรองเปลี่ยนระหว่างรอหรืออ่านผลอัปเดตไม่สำเร็จ หน้าจอจะโหลดรายการแยกอีกครั้งตามตัวกรองล่าสุด
+- การสร้างรายการใหม่เข้าคิวทันทีและแสดง “กำลังบันทึก…” แยกจากยอดสรุป เรียกเขียนตามลำดับ การส่งซ้ำหลังเครือข่ายล้มเหลวหรือระบบไม่ว่างใช้ payload และ idempotency key เดิม โดยลองอัตโนมัติอีกหนึ่งครั้งหลังหน่วง 1 วินาที จากนั้นผู้ใช้กดลองใหม่ได้
+- คิวเก็บเฉพาะข้อมูลที่ต้องส่งและ idempotency key ใน IndexedDB แยกตามบัญชี Google และไฟล์ข้อมูล เมื่อเปิดหน้าใหม่จะให้ผู้ใช้ลองส่งคิวค้างเอง หาก IndexedDB ใช้ไม่ได้ คิวจะอยู่บนหน้าที่เปิดอยู่พร้อมข้อความแจ้งข้อจำกัด
+- งบการเรียก Sheets ต่อคำขอถูกตรวจใน `tests/performance.test.js`; เครื่องมือวัด `node tests/perf-probe.js`
+
+| คำขอ | ก่อน (fake calls) | หลัง |
+|---|---:|---:|
+| createTransaction | 107 | 38 (getValues 6, setValues 4) |
+| updateMaster (ไม่เปลี่ยนชื่อ) | 156 | 33 |
+| โหลดหน้ารายการ | 3 คำขอ ≈ 81 | 1 คำขอ, getValues 4 |
+
+เวลาจริงบน `/dev` ก่อนรวมคำขอหลังเขียน: createTransaction 8.5 → 6.0 s, reverse 5.2 → 3.0 s, โหลดหน้า 3 คำขอ → 1 คำขอ 3.1–3.3 s (ดู test-plan)
 
 ## 4. Read path
 
@@ -99,4 +119,5 @@ ProjectionService เป็นจุดเดียวที่เขียน�
 
 - Google Sheets ไม่มี ACID ข้ามชีต: การ refresh ชื่อหรือสร้างแผนอาจค้างกลางทาง ต้องอาศัย OperationJournal + refresh/replay
 - การ refresh ชื่อมีต้นทุนตามจำนวนแถว (อ่าน/เขียนทั้งคอลัมน์) ควรทดสอบเวลาเมื่อข้อมูลหลายหมื่นแถว
+- ยังอ่าน Transactions ทั้งตารางในทุกคำขอที่ต้องใช้ (list/suggestions/create) — ถ้าข้อมูลโตมากต้องพิจารณา summary cache/แบ่งชีตตามปีในภายหลัง
 - `appsscript.json` ตั้ง `timeZone` เป็น `Asia/Bangkok` แล้ว (2026-11-25) แต่ยังไม่ได้ push ไป Apps Script; Spreadsheet ต้องตั้ง timezone เป็น Asia/Bangkok แยกต่างหาก (File → Settings)

@@ -1,9 +1,9 @@
 # Development Plan — Expense Manager V2
 
-สถานะ: **ร่างเพื่อขออนุมัติ** — ยังไม่เริ่ม Implementation, ยังไม่แก้ฐานข้อมูลจริง, ยังไม่ Deploy
-ปรับปรุงล่าสุด: 2026-11-25
+สถานะ: **Phase 4 และ 5 มีโค้ดและผลทดสอบในเครื่อง** · Phase 3 ผ่านการทดสอบเส้นทางหลักบน `/dev` ด้วยฐาน TEST
+ปรับปรุงล่าสุด: 2026-11-26
 
-## Phase 0 — เอกสารและการอนุมัติ (ขั้นปัจจุบัน)
+## Phase 0 — เอกสารและการอนุมัติ
 
 - [x] AGENTS.md ปรับ canonical headers และ Data Management Rules
 - [x] docs/database-schema.md, business-rules.md, system-architecture.md, development-plan.md, test-plan.md
@@ -14,7 +14,7 @@
 
 **Gate:** Phase 0 ครบแล้ว; เริ่ม Phase 1 ได้เมื่อผู้ใช้สั่งเริ่ม Implementation (ต้องมี Spreadsheet ทดสอบแยกจาก Production)
 
-## Phase 1 — Foundation (โค้ดเสร็จและ push แล้ว 2026-11-25; integration test บน Spreadsheet ทดสอบยังไม่ได้ทำ)
+## Phase 1 — Foundation (โค้ดและการตั้งฐานทดสอบเสร็จแล้ว)
 
 - Config.gs (canonical headers ตาม database-schema.md §3), Database.gs, initializeDatabase() แบบ idempotent ไม่ทำลายข้อมูล และตรวจ header ไม่ตรงโดยไม่แก้เอง
 - AuthService, ValidationService (YYYYMM, Money, enum, FK, Formula Injection)
@@ -26,18 +26,25 @@
 - 2026-11-25: clasp push แล้ว; Script Properties ตั้งแล้ว; รัน `initializeDatabase()` บน Production สำเร็จ (สร้าง 11 ชีต, ไม่มีข้อมูลธุรกิจ); รัน `initializeTestDatabase()` สำเร็จ (11 ชีต)
 - Production = Google Sheets "ExpenseManager" ที่ผู้ใช้กำหนด (ปัจจุบันว่าง); ตั้ง Script Property `SPREADSHEET_ID` และรัน `initializeDatabase()` บน Production เมื่อผู้ใช้อนุญาตเท่านั้น
 
-## Phase 2 — Master Data (Backend + API + หน้าจอเสร็จ 2026-11-25; ยังไม่ clasp push)
+## Phase 2 — Master Data (ผ่านการสร้างข้อมูลหลักบน /dev)
 
 - `AccountService.gs` (`MasterData.listAll/create/update/setActive`) และ API `api_listMasters`, `api_createMaster`, `api_updateMaster`, `api_setMasterActive` ใน Code.gs
 - หน้าจอ: `Index.html` (shell + nav), `Styles.html`, `Scripts.html` (App.call / submitter / toast / confirm), `PageAccounts.html`
 - Dev preview ในเครื่อง: `npm run dev` (`tests/dev-server.js`, ข้อมูลจำลองในหน่วยความจำ)
-- ยังเหลือ: integration test บน Spreadsheet ทดสอบหลัง clasp push; IndexedDB queue ยังไม่ทำ (จะทำพร้อม Transactions/Quick Entry)
+- ยืนยันการสร้างบัญชี เจ้าของ และหมวดหมู่บน Spreadsheet ทดสอบ รวมการเก็บข้อความที่ขึ้นต้นด้วยเครื่องหมายสูตร ดู [แผนทดสอบ](test-plan.md)
 
 - Accounts, Owners, Categories: เพิ่ม แก้ไข ปิดใช้งาน (is_active)
 - เปลี่ยนชื่อ Master → refresh ชื่อใน Transactions/PaymentPlans/PaymentSchedules (RENAME_MASTER)
 - ตรวจชื่อซ้ำตาม BR-DM-09
 
-## Phase 3 — Transactions
+## Phase 3 — Transactions (ผ่านเส้นทางหลักบน /dev)
+
+- `TransactionService.gs`: `Ledger.effectsOf/balances`, `Transactions.create/update/reverse/list/accountBalances`
+- API: `api_listTransactions`, `api_createTransaction`, `api_updateTransaction`, `api_reverseTransaction`, `api_accountBalances`
+- หน้าจอ `PageTransactions.html` + router (#transactions, #accounts) ใน Scripts.html; หน้าบัญชีแสดงยอดคงเหลือ/หนี้คงค้าง
+- ตัวช่วยกรอก (ใช้ประจำ/รายการล่าสุด) จากประวัติจริง — `Transactions.suggestions`
+- คิว IndexedDB สำหรับรายการที่รอผล และการอัปเดตหน้าหลังบันทึกในคำขอเดียวมีโค้ดและผลทดสอบแล้ว บันทึกจนเห็นผล 3.97 วินาทีบน `/dev` ในการวัดหนึ่งครั้ง การทดสอบเครือข่ายหลุดและเปิดหน้าใหม่เพื่อกู้คิวบน `/dev` ยังอยู่ในแผนทดสอบ
+- งานภายหลัง: การนำเข้า/Export CSV (Phase 5), ปักหมุดแม่แบบเอง (ต้องอนุมัติ schema)
 
 - CRUD ตาม business-rules §3 (from/to account ตามประเภท), กลับรายการแทนการลบ
 - Backend เติม from_account_name, to_account_name, owner_name, category_name
@@ -45,16 +52,18 @@
 
 ## Phase 4 — Payment Planner
 
-- PaymentPlans + PaymentSchedules (คัดลอก Business Information ทุกงวด, note รายงวดแยก)
-- ตัวอย่างงวดก่อนยืนยัน, แก้ยอดรายงวด, ปรับเศษงวดสุดท้าย
-- Reservations, PaymentAllocations, ยกเลิกแผน/งวดโดยรักษาประวัติ
-- Derived status/ยอด คำนวณใหม่หลังทุกเหตุการณ์
+- [x] สร้างแผนรายจ่ายในอนาคตแบบผ่อน รอชำระครั้งเดียว และรายจ่ายประจำแบบกำหนดช่วงเวลา ดูตัวอย่างก่อนยืนยัน ปรับยอดรายงวด และปรับเศษสตางค์งวดสุดท้าย
+- [x] เขียน PaymentPlans และ PaymentSchedules ด้วย schema ที่อนุมัติ คัดลอกข้อมูลจากแผนทุกงวดและเริ่มหมายเหตุรายงวดเป็นค่าว่าง กู้คืนการสร้างด้วยรหัสคำขอเดิมเมื่อเขียนค้าง
+- [x] แก้รายละเอียดแผนและหมายเหตุรายงวด ต่ออายุรายจ่ายประจำแบบเพิ่มงวดต่อจากงวดเดิม
+- [x] กันและปลดเงินหลายบัญชี บันทึกชำระบางส่วนหรือหลายงวด กลับรายการชำระ และยกเลิกภาระโดยเก็บประวัติ
+- [ ] เชื่อมแผนผ่อนจากรายการซื้อด้วยบัตรและชำระหนี้พร้อมดอกเบี้ย/ค่าธรรมเนียมจริง ปรับตารางงวดเดิมและปิดยอดก่อนกำหนดกรณียอดจริงต่างจากแผน
+- [ ] ทดสอบ Phase 4 บน `/dev` ด้วยฐาน TEST หลังอัปเดต Apps Script
 
 ## Phase 5 — Dashboard, Reports, Pivot
 
-- Dashboard ตาม AGENTS.md §6.1
-- Pivot_Saving / Pivot_Payment / Pivot_Transactions จาก name columns และ derived report view
-- Export CSV
+- [x] ภาพรวมรายรับ รายจ่าย กระแสเงินสด ยอดบัญชีและหนี้ ยอดตามแผนและผลจริง และตัวกรองช่วงเวลา เจ้าของ หมวด และบัญชี
+- [x] Export CSV และฟังก์ชัน `refreshTestFinancePivots()` สำหรับสร้าง Pivot_Saving / Pivot_Payment / Pivot_Transactions จาก derived view ในฐาน TEST
+- [ ] ตรวจหน้าจอ รายงาน และ Pivot บน Apps Script/Google Sheets จริง รวมกรณีปริมาณข้อมูลมาก
 
 ## Phase 6 — Reliability
 

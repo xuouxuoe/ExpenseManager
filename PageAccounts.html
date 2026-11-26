@@ -76,7 +76,8 @@
       showInactive: false,
       editing: null,
       submitForm: null,
-      rowSubmitters: {}
+      rowSubmitters: {},
+      balances: {}
     };
 
     var panel = document.getElementById('master-panel');
@@ -101,7 +102,12 @@
     function load() {
       state.status = 'loading';
       render();
-      App.call('api_listMasters', { includeInactive: true }).then(function (data) {
+      Promise.all([
+        App.call('api_listMasters', { includeInactive: true }),
+        App.call('api_accountBalances').catch(function () { return {}; })
+      ]).then(function (results) {
+        var data = results[0];
+        state.balances = results[1] || {};
         state.data = data;
         state.status = 'ready';
         render();
@@ -145,6 +151,9 @@
         var liability = LIABILITY.indexOf(row.account_type) >= 0;
         parts.push(badge(labelOf(ACCOUNT_TYPES, row.account_type) + (row.account_subtype === 'SAVINGS' ? ' · ออมทรัพย์' : ''), liability ? 'amber' : 'indigo'));
         var info = [];
+        if (state.balances && state.balances[row.account_id] !== undefined) {
+          info.push((liability ? 'หนี้คงค้าง ' : 'คงเหลือ ') + App.formatMoney(state.balances[row.account_id]));
+        }
         if (row.owner_id) info.push('เจ้าของ: ' + (ownerName(row.owner_id) || '-'));
         if (row.institution) info.push(row.institution);
         if (liability && row.credit_limit !== '') info.push('วงเงิน ' + App.formatMoney(row.credit_limit));
@@ -377,6 +386,9 @@
         upsert(row);
         dialog.close();
         render();
+        if (type === 'account') {
+          App.call('api_accountBalances').then(function (b) { state.balances = b || {}; render(); }, function () {});
+        }
         var renamed = editing && editing[meta.name] !== row[meta.name];
         App.toast(renamed ? 'บันทึกแล้ว และอัปเดตชื่อในรายการที่เกี่ยวข้องแล้ว' : 'บันทึกแล้ว', 'success');
       }, function (err) {
@@ -449,6 +461,6 @@
     document.getElementById('master-form-close').addEventListener('click', closeForm);
     dialog.addEventListener('cancel', function (e) { if (saveBtn.disabled) e.preventDefault(); });
 
-    load();
+    App.onShow('accounts', load);
   })();
 </script>

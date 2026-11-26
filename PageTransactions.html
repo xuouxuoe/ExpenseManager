@@ -1,0 +1,909 @@
+<section aria-labelledby="tx-title">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 id="tx-title" class="text-xl font-semibold">รายการรับ-จ่าย</h1>
+      <p class="text-sm text-slate-500">บันทึก ค้นหา และกลับรายการธุรกรรมจริง</p>
+    </div>
+    <button type="button" id="tx-add" class="btn btn-primary" disabled><span aria-hidden="true">+</span>บันทึกรายการ</button>
+  </div>
+
+  <div class="mt-4 grid grid-cols-3 gap-2" aria-live="polite">
+    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+      <p class="text-xs text-slate-500">รายรับ</p>
+      <p id="tx-sum-income" class="mt-1 truncate text-base font-semibold text-emerald-600 sm:text-lg">–</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+      <p class="text-xs text-slate-500">รายจ่าย</p>
+      <p id="tx-sum-expense" class="mt-1 truncate text-base font-semibold text-rose-600 sm:text-lg">–</p>
+    </div>
+    <div class="rounded-2xl border border-slate-200 bg-white p-3">
+      <p class="text-xs text-slate-500">สุทธิ</p>
+      <p id="tx-sum-net" class="mt-1 truncate text-base font-semibold sm:text-lg">–</p>
+    </div>
+  </div>
+
+  <form id="tx-filters" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" role="search" aria-label="กรองรายการ">
+    <div>
+      <label for="tx-f-month" class="field-label">เดือน</label>
+      <input id="tx-f-month" type="month" class="field-input">
+    </div>
+    <div>
+      <label for="tx-f-type" class="field-label">ประเภท</label>
+      <select id="tx-f-type" class="field-input"></select>
+    </div>
+    <div>
+      <label for="tx-f-account" class="field-label">บัญชี</label>
+      <select id="tx-f-account" class="field-input"></select>
+    </div>
+    <div>
+      <label for="tx-f-q" class="field-label">ค้นหา</label>
+      <input id="tx-f-q" type="search" class="field-input" placeholder="ชื่อรายการ, หมายเหตุ…" autocomplete="off">
+    </div>
+  </form>
+
+  <p id="tx-queue-warning" class="mt-3 hidden text-sm text-amber-800" role="status"></p>
+  <ul id="tx-queue" class="mt-3 space-y-2 empty:hidden" aria-label="รายการรอยืนยัน" aria-live="polite"></ul>
+  <div id="tx-panel" class="mt-4" aria-busy="true"></div>
+</section>
+
+<dialog id="tx-dialog" class="w-[min(34rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="tx-form-title">
+  <form id="tx-form" novalidate class="flex max-h-[88vh] flex-col">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 id="tx-form-title" class="text-base font-semibold">บันทึกรายการ</h2>
+      <button type="button" id="tx-form-close" class="btn btn-ghost" aria-label="ปิดหน้าต่าง">✕</button>
+    </div>
+    <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <section id="tx-helpers" aria-labelledby="tx-helpers-title" class="hidden space-y-2 rounded-xl bg-slate-50 p-3">
+        <h3 id="tx-helpers-title" class="text-sm font-semibold text-slate-700">ตัวช่วยกรอก <span class="font-normal text-slate-500">— แตะเพื่อใช้ข้อมูลเดิม แล้วแก้ยอดได้</span></h3>
+        <div data-helper="frequent">
+          <p class="mb-1 text-xs font-medium text-slate-500">ใช้ประจำ</p>
+          <ul class="tx-helper-row" aria-label="รายการที่ใช้ประจำ"></ul>
+        </div>
+        <div data-helper="recent">
+          <p class="mb-1 text-xs font-medium text-slate-500">รายการล่าสุด</p>
+          <ul class="tx-helper-row" aria-label="รายการล่าสุด"></ul>
+        </div>
+      </section>
+
+      <fieldset>
+        <legend class="field-label">ประเภทรายการ *</legend>
+        <div class="grid grid-cols-3 gap-2" id="tx-quick-types">
+          <button type="button" class="tx-chip" data-type="EXPENSE">รายจ่าย</button>
+          <button type="button" class="tx-chip" data-type="INCOME">รายรับ</button>
+          <button type="button" class="tx-chip" data-type="TRANSFER">โอน</button>
+        </div>
+        <label for="tf-transaction_type" class="sr-only">ประเภทรายการทั้งหมด</label>
+        <select id="tf-transaction_type" name="transaction_type" class="field-input mt-2" aria-describedby="tf-transaction_type-error"></select>
+        <p class="field-hint" id="tf-type-hint"></p>
+        <p class="field-error hidden" id="tf-transaction_type-error"></p>
+      </fieldset>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="tf-amount" class="field-label">จำนวนเงิน (บาท) *</label>
+          <input id="tf-amount" name="amount" type="text" inputmode="decimal" class="field-input text-lg font-semibold" autocomplete="off" aria-describedby="tf-amount-error">
+          <p class="field-error hidden" id="tf-amount-error"></p>
+        </div>
+        <div>
+          <label for="tf-transaction_date" class="field-label">วันที่ทำรายการ *</label>
+          <input id="tf-transaction_date" name="transaction_date" type="date" class="field-input" aria-describedby="tf-transaction_date-error">
+          <p class="field-error hidden" id="tf-transaction_date-error"></p>
+        </div>
+      </div>
+
+      <div data-side="from">
+        <label for="tf-from_account_id" class="field-label" id="tf-from-label">จากบัญชี</label>
+        <select id="tf-from_account_id" name="from_account_id" class="field-input" aria-describedby="tf-from_account_id-error"></select>
+        <p class="field-error hidden" id="tf-from_account_id-error"></p>
+      </div>
+      <div data-side="to">
+        <label for="tf-to_account_id" class="field-label" id="tf-to-label">เข้าบัญชี</label>
+        <select id="tf-to_account_id" name="to_account_id" class="field-input" aria-describedby="tf-to_account_id-error"></select>
+        <p class="field-error hidden" id="tf-to_account_id-error"></p>
+      </div>
+      <div data-side="category">
+        <label for="tf-category_id" class="field-label">หมวดหมู่ *</label>
+        <select id="tf-category_id" name="category_id" class="field-input" aria-describedby="tf-category_id-error"></select>
+        <p class="field-error hidden" id="tf-category_id-error"></p>
+      </div>
+
+      <div>
+        <label for="tf-item_name" class="field-label">ชื่อรายการ *</label>
+        <input id="tf-item_name" name="item_name" type="text" maxlength="200" class="field-input" autocomplete="off" list="tx-item-suggestions" aria-describedby="tf-item_name-error">
+        <datalist id="tx-item-suggestions"></datalist>
+        <p class="field-error hidden" id="tf-item_name-error"></p>
+      </div>
+      <div>
+        <label for="tf-owner_id" class="field-label">เจ้าของรายการ *</label>
+        <select id="tf-owner_id" name="owner_id" class="field-input" aria-describedby="tf-owner_id-error"></select>
+        <p class="field-error hidden" id="tf-owner_id-error"></p>
+      </div>
+
+      <details id="tx-more" class="rounded-xl border border-slate-200 px-3 py-2">
+        <summary class="cursor-pointer py-1 text-sm font-medium text-slate-600">รายละเอียดเพิ่มเติม</summary>
+        <div class="mt-3 space-y-4">
+          <div>
+            <label for="tf-description" class="field-label">รายละเอียด</label>
+            <textarea id="tf-description" name="description" rows="2" maxlength="1000" class="field-input" aria-describedby="tf-description-error"></textarea>
+            <p class="field-error hidden" id="tf-description-error"></p>
+          </div>
+          <div>
+            <label for="tf-note" class="field-label" id="tf-note-label">หมายเหตุ</label>
+            <textarea id="tf-note" name="note" rows="2" maxlength="1000" class="field-input" aria-describedby="tf-note-error"></textarea>
+            <p class="field-error hidden" id="tf-note-error"></p>
+          </div>
+          <div>
+            <label for="tf-external_ref" class="field-label">เลขอ้างอิง</label>
+            <input id="tf-external_ref" name="external_ref" type="text" maxlength="100" class="field-input" autocomplete="off" aria-describedby="tf-external_ref-error">
+            <p class="field-error hidden" id="tf-external_ref-error"></p>
+          </div>
+        </div>
+      </details>
+    </div>
+    <p id="tx-form-error" role="alert" class="mx-5 mb-2 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+    <p id="tx-form-queue-status" role="status" class="mx-5 mb-2 text-sm text-amber-800 empty:hidden"></p>
+    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">
+      <button type="button" id="tx-form-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="tx-form-save-next" data-next="true" class="btn btn-secondary">บันทึกและเพิ่มต่อ</button>
+      <button type="submit" id="tx-form-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tx-reverse-dialog" class="w-[min(28rem,calc(100vw-2rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="tx-rev-title">
+  <form id="tx-reverse-form" novalidate class="p-5">
+    <h2 id="tx-rev-title" class="text-base font-semibold">กลับรายการ</h2>
+    <p id="tx-rev-desc" class="mt-1 text-sm text-slate-600"></p>
+    <p class="mt-1 text-xs text-slate-500">ระบบจะสร้างรายการใหม่ที่มีผลตรงข้าม รายการเดิมยังอยู่ในประวัติ</p>
+    <div class="mt-4 space-y-3">
+      <div>
+        <label for="tr-reason" class="field-label">เหตุผล *</label>
+        <textarea id="tr-reason" rows="2" maxlength="1000" class="field-input" aria-describedby="tr-reason-error"></textarea>
+        <p class="field-error hidden" id="tr-reason-error"></p>
+      </div>
+      <div>
+        <label for="tr-date" class="field-label">วันที่กลับรายการ</label>
+        <input id="tr-date" type="date" class="field-input" aria-describedby="tr-date-error">
+        <p class="field-error hidden" id="tr-date-error"></p>
+      </div>
+    </div>
+    <p id="tr-error" role="alert" class="mt-3 hidden rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700"></p>
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" id="tr-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="tr-save" class="btn btn-danger">กลับรายการ</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .tx-chip { min-height: 2.75rem; border-radius: .75rem; border: 1px solid #cbd5e1; background: #fff; font-size: .875rem; font-weight: 600; color: #475569; }
+  .tx-chip[aria-pressed="true"] { border-color: #4f46e5; background: #eef2ff; color: #4338ca; }
+  .tx-helper-row { display: flex; gap: .5rem; overflow-x: auto; padding-bottom: .25rem; scrollbar-width: thin; }
+  .tx-helper { display: flex; flex-direction: column; align-items: flex-start; min-height: 2.75rem; max-width: 12rem; padding: .375rem .75rem;
+    border: 1px solid #cbd5e1; border-radius: .75rem; background: #fff; text-align: left; white-space: nowrap; }
+  .tx-helper:hover { border-color: #6366f1; background: #eef2ff; }
+  .tx-helper-name { max-width: 10.5rem; overflow: hidden; text-overflow: ellipsis; font-size: .875rem; font-weight: 600; color: #1e293b; }
+  .tx-helper-meta { max-width: 10.5rem; overflow: hidden; text-overflow: ellipsis; font-size: .75rem; color: #64748b; }
+</style>
+
+<script>
+  (function () {
+    var el = App.el;
+
+    // ประเภทธุรกรรม: ข้อความหน้าจอ + ฝั่งบัญชี (ต้องตรงกับ TransactionService RULES)
+    var TYPES = {
+      EXPENSE: { label: 'รายจ่าย', from: ['ASSET'], to: null, category: 'EXPENSE', fromLabel: 'จ่ายจากบัญชี', sign: -1, icon: '🧾' },
+      INCOME: { label: 'รายรับ', from: null, to: ['ASSET'], category: 'INCOME', toLabel: 'รับเข้าบัญชี', sign: 1, icon: '💰' },
+      TRANSFER: { label: 'โอนระหว่างบัญชี', from: ['ASSET'], to: ['ASSET'], category: null, fromLabel: 'โอนจากบัญชี', toLabel: 'ไปยังบัญชี', sign: 0, icon: '🔁' },
+      CREDIT_PURCHASE: { label: 'ซื้อด้วยบัตร/สินเชื่อ', from: ['LIABILITY'], to: null, category: 'EXPENSE', fromLabel: 'บัตร/สินเชื่อที่ใช้', sign: -1, icon: '💳',
+        hint: 'รับรู้รายจ่ายตอนซื้อ หนี้บัตรเพิ่มขึ้น' },
+      CREDIT_PAYMENT: { label: 'ชำระหนี้/บัตร', from: ['ASSET'], to: ['LIABILITY'], category: null, fromLabel: 'จ่ายจากบัญชี', toLabel: 'ชำระให้บัตร/สินเชื่อ', sign: 0, icon: '✅',
+        hint: 'ลดหนี้ ไม่นับเป็นรายจ่ายซ้ำ (ดอกเบี้ยให้บันทึกแยกเป็น "ดอกเบี้ย")' },
+      CASH_ADVANCE: { label: 'รับเงินกู้/เบิกเงินสด', from: ['LIABILITY'], to: ['ASSET'], category: null, fromLabel: 'จากบัตร/สินเชื่อ', toLabel: 'รับเข้าบัญชี', sign: 0, icon: '🏧',
+        hint: 'หนี้เพิ่มขึ้นและเงินเข้าบัญชี ไม่นับเป็นรายรับ' },
+      INTEREST: { label: 'ดอกเบี้ย', from: ['ASSET', 'LIABILITY'], to: null, category: 'EXPENSE', fromLabel: 'เรียกเก็บจากบัญชี', sign: -1, icon: '📈' },
+      FEE: { label: 'ค่าธรรมเนียม', from: ['ASSET', 'LIABILITY'], to: null, category: 'EXPENSE', fromLabel: 'เรียกเก็บจากบัญชี', sign: -1, icon: '🏷️' },
+      REFUND: { label: 'ได้รับเงินคืน', from: null, to: ['ASSET', 'LIABILITY'], category: 'EXPENSE', toLabel: 'คืนเข้าบัญชี', sign: 1, icon: '↩️',
+        hint: 'ลดรายจ่ายในหมวดที่เลือก' },
+      ADJUSTMENT: { label: 'ปรับยอด', from: 'OPTIONAL', to: 'OPTIONAL', category: null, fromLabel: 'ลดยอดบัญชี', toLabel: 'เพิ่มยอดบัญชี', sign: 0, icon: '⚖️',
+        hint: 'ระบุบัญชีฝั่งใดฝั่งหนึ่ง และต้องใส่เหตุผลในหมายเหตุ', noteRequired: true }
+    };
+    var ASSET = ['CASH', 'BANK', 'E_WALLET'];
+    var FIELD_LABELS = {
+      transaction_type: 'ประเภทรายการ', amount: 'จำนวนเงิน', transaction_date: 'วันที่ทำรายการ', from_account_id: 'บัญชีต้นทาง',
+      to_account_id: 'บัญชีปลายทาง', category_id: 'หมวดหมู่', item_name: 'ชื่อรายการ', owner_id: 'เจ้าของรายการ',
+      description: 'รายละเอียด', note: 'หมายเหตุ', external_ref: 'เลขอ้างอิง'
+    };
+
+    var state = {
+      masters: { accounts: [], owners: [], categories: [] },
+      filters: { month: '', type: '', account: '', q: '' },
+      rows: [], total: 0, page: 1, hasMore: false, summary: null,
+      status: 'idle', errorMessage: '', loadingMore: false,
+      editing: null, submit: null, reversing: null, reverseSubmit: null,
+      suggestions: { recent: [], frequent: [] },
+      requestSeq: 0, queue: [], queueScope: null, queueDb: null, correcting: null
+    };
+
+    var panel = document.getElementById('tx-panel');
+    var dialog = document.getElementById('tx-dialog');
+    var form = document.getElementById('tx-form');
+    var typeSelect = document.getElementById('tf-transaction_type');
+    var saveBtn = document.getElementById('tx-form-save');
+    var saveNextBtn = document.getElementById('tx-form-save-next');
+    var formError = document.getElementById('tx-form-error');
+
+    function classOf(accountType) { return ASSET.indexOf(accountType) >= 0 ? 'ASSET' : 'LIABILITY'; }
+    function byId(list, key, id) { return list.filter(function (r) { return r[key] === id; })[0]; }
+    function money(n) { return App.formatMoney(n); }
+
+    // ---------- ตัวกรอง ----------
+
+    function monthRange(ym) {
+      if (!ym) return { from: '', to: '' };
+      var p = ym.split('-');
+      var last = new Date(Number(p[0]), Number(p[1]), 0).getDate();
+      return { from: ym + '-01', to: ym + '-' + ('0' + last).slice(-2) };
+    }
+
+    function fillSelect(select, options, value) {
+      select.textContent = '';
+      options.forEach(function (o) {
+        var opt = el('option', { value: o[0], text: o[1] });
+        if (String(o[0]) === String(value || '')) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderFilterOptions() {
+      fillSelect(document.getElementById('tx-f-type'), [['', 'ทุกประเภท']].concat(Object.keys(TYPES).map(function (k) { return [k, TYPES[k].label]; })), state.filters.type);
+      fillSelect(document.getElementById('tx-f-account'), [['', 'ทุกบัญชี']].concat(state.masters.accounts.map(function (a) {
+        return [a.account_id, a.account_name + (a.is_active ? '' : ' (ปิดใช้งาน)')];
+      })), state.filters.account);
+    }
+
+    // ---------- โหลดข้อมูล ----------
+
+    function loadList(append) {
+      var seq = ++state.requestSeq;
+      var page = append ? state.page + 1 : 1;
+      if (append) state.loadingMore = true; else state.status = 'loading';
+      render();
+      return App.call('api_listTransactions', currentFilters(page)).then(function (data) {
+        if (seq !== state.requestSeq) return; // ผลเก่าจากตัวกรองก่อนหน้า
+        applyList(data, append);
+        render();
+      }, function (err) {
+        if (seq !== state.requestSeq) return;
+        state.loadingMore = false;
+        if (append) { App.toast(err.message, 'error'); render(); return; }
+        state.status = 'error';
+        state.errorMessage = err.message;
+        render();
+      });
+    }
+
+    // ---------- ตัวช่วยกรอก ----------
+
+    function helperLabel(s) {
+      var meta = TYPES[s.transaction_type] || {};
+      return (meta.icon ? meta.icon + ' ' : '') + s.item_name;
+    }
+
+    function renderHelpers() {
+      var box = document.getElementById('tx-helpers');
+      var any = false;
+      ['frequent', 'recent'].forEach(function (kind) {
+        var wrap = box.querySelector('[data-helper="' + kind + '"]');
+        var row = wrap.querySelector('ul');
+        row.textContent = '';
+        var items = state.suggestions[kind] || [];
+        if (kind === 'recent') {
+          // ไม่แสดงซ้ำกับ "ใช้ประจำ"
+          var keys = (state.suggestions.frequent || []).map(function (f) { return f.transaction_type + '|' + f.item_name + '|' + f.from_account_id + '|' + f.to_account_id; });
+          items = items.filter(function (r) { return keys.indexOf(r.transaction_type + '|' + r.item_name + '|' + r.from_account_id + '|' + r.to_account_id) < 0; });
+        }
+        wrap.hidden = !items.length;
+        any = any || items.length > 0;
+        items.forEach(function (sug) {
+          var account = sug.from_account_name || sug.to_account_name;
+          var meta = [money(sug.amount), account].filter(Boolean).join(' · ');
+          var aria = 'ใช้ข้อมูล ' + sug.item_name + ' ' + money(sug.amount) + ' บาท' + (account ? ' บัญชี ' + account : '') +
+            (kind === 'frequent' ? ' ใช้แล้ว ' + sug.count + ' ครั้ง' : '');
+          row.appendChild(el('li', null,
+            el('button', { type: 'button', class: 'tx-helper', 'aria-label': aria, title: aria, onclick: function () { applySuggestion(sug); } },
+              el('span', { class: 'tx-helper-name', text: helperLabel(sug) }),
+              el('span', { class: 'tx-helper-meta', text: meta }))));
+        });
+      });
+      box.classList.toggle('hidden', !any || !!state.editing);
+      var list = document.getElementById('tx-item-suggestions');
+      list.textContent = '';
+      var seen = {};
+      (state.suggestions.frequent || []).concat(state.suggestions.recent || []).forEach(function (sug) {
+        if (seen[sug.item_name]) return;
+        seen[sug.item_name] = true;
+        list.appendChild(el('option', { value: sug.item_name }));
+      });
+    }
+
+    function applySuggestion(sug) {
+      clearErrors();
+      applyType(sug.transaction_type, sug);
+      document.getElementById('tf-owner_id').value = sug.owner_id;
+      document.getElementById('tf-item_name').value = sug.item_name;
+      var amount = document.getElementById('tf-amount');
+      amount.value = sug.amount;
+      amount.focus();
+      amount.select();
+      App.toast('ใช้ข้อมูล "' + sug.item_name + '" แล้ว ตรวจสอบยอดและวันที่ก่อนบันทึก', 'info');
+    }
+
+    function currentFilters(page) {
+      var range = monthRange(state.filters.month);
+      return {
+        date_from: range.from, date_to: range.to, transaction_type: state.filters.type,
+        account_id: state.filters.account, q: state.filters.q, page: page || 1, page_size: 30
+      };
+    }
+
+    function applyList(data, append) {
+      state.rows = append ? state.rows.concat(data.rows) : data.rows;
+      state.total = data.total;
+      state.page = data.page;
+      state.hasMore = data.hasMore;
+      state.summary = data.summary;
+      state.status = 'ready';
+      state.loadingMore = false;
+    }
+
+    function applyPage(data) {
+      state.suggestions = data.suggestions;
+      renderHelpers();
+      applyList(data.list, false);
+      render();
+    }
+
+    /** โหลดรายการ + ตัวช่วยกรอก (+ Master เมื่อ withMasters) ในคำขอเดียว */
+    function refreshAll(withMasters) {
+      var seq = ++state.requestSeq;
+      if (withMasters !== false) { state.status = 'loading'; render(); }
+      return App.call('api_transactionPage', currentFilters(1), { includeMasters: withMasters !== false }).then(function (data) {
+        if (data.masters) {
+          if (state.queueScope && state.queueScope !== data.queueScope) {
+            location.reload();
+            return;
+          }
+          state.masters = data.masters;
+          renderFilterOptions();
+          if (!state.queueScope) restoreQueue(data.queueScope);
+        }
+        if (seq !== state.requestSeq) return;
+        applyPage(data);
+      }, function (err) {
+        if (seq !== state.requestSeq) return;
+        state.status = 'error';
+        state.errorMessage = err.message;
+        render();
+      });
+    }
+
+    // ---------- บันทึกและอัปเดตหน้าด้วยคำขอเดียว ----------
+
+    var writeTail = Promise.resolve();
+
+    function writeWithPage(api, args, withDeadline) {
+      var run = writeTail.then(function () {
+        var filters = currentFilters(1);
+        var params = [api].concat(args, [filters]);
+        if (api === 'api_createTransaction') params.push(state.queueScope);
+        var request = App.call.apply(null, params);
+        if (withDeadline) {
+          var timer;
+          var deadline = new Promise(function (_, reject) {
+            timer = setTimeout(function () {
+              reject({ code: 'NETWORK', message: 'ยังไม่ได้รับผลยืนยันจากระบบ' });
+            }, 60000);
+          });
+          request = Promise.race([request, deadline]).finally(function () { clearTimeout(timer); });
+        }
+        return request.then(function (result) {
+          if (!result.page || JSON.stringify(filters) !== JSON.stringify(currentFilters(1))) {
+            // ตัวกรองถูกเปลี่ยนระหว่างบันทึก หรือระบบเขียนสำเร็จแต่อ่านหน้าต่อไม่ได้
+            refreshAll(false);
+          } else {
+            ++state.requestSeq;
+            applyPage(result.page);
+          }
+          return result.row;
+        });
+      });
+      writeTail = run.catch(function () {});
+      return run;
+    }
+
+    function queueStorageWarning() {
+      var warning = document.getElementById('tx-queue-warning');
+      warning.textContent = 'เบราว์เซอร์เก็บคิวบนเครื่องไม่ได้ กรุณาเปิดหน้านี้ไว้จนกว่าจะได้รับผลยืนยัน';
+      warning.classList.remove('hidden');
+    }
+
+    function restoreQueue(scope) {
+      state.queueScope = scope;
+      var add = document.getElementById('tx-add');
+      var ready = function () { add.disabled = false; };
+      try {
+        var request = window.indexedDB.open('expense-manager-transactions-' + scope, 1);
+        request.onupgradeneeded = function () { request.result.createObjectStore('creates', { keyPath: 'key' }); };
+        request.onerror = request.onblocked = function () { queueStorageWarning(); ready(); };
+        request.onsuccess = function () {
+          var db = request.result;
+          db.onversionchange = function () { db.close(); state.queueDb = null; queueStorageWarning(); };
+          var read = db.transaction('creates').objectStore('creates').getAll();
+          read.onerror = function () { db.close(); queueStorageWarning(); ready(); };
+          read.onsuccess = function () {
+            state.queueDb = db;
+            read.result.forEach(function (draft) {
+              if (state.queue.some(function (d) { return d.key === draft.key; })) return;
+              draft.error = { message: 'มีรายการรอยืนยันจากการใช้งานครั้งก่อน' };
+              state.queue.push(draft);
+            });
+            renderQueue();
+            ready();
+          };
+        };
+      } catch (_) { queueStorageWarning(); ready(); }
+    }
+
+    function saveQueue(draft, removeKey) {
+      if (!state.queueDb) return Promise.resolve();
+      return new Promise(function (resolve, reject) {
+        var tx = state.queueDb.transaction('creates', 'readwrite');
+        tx.oncomplete = resolve;
+        tx.onabort = reject;
+        var store = tx.objectStore('creates');
+        if (draft) store.put({ key: draft.key, payload: draft.payload });
+        if (removeKey) store.delete(removeKey);
+      }).catch(queueStorageWarning);
+    }
+
+    function removeDraft(draft) {
+      state.queue = state.queue.filter(function (d) { return d !== draft; });
+      return saveQueue(null, draft.key);
+    }
+
+    function renderQueue() {
+      var list = document.getElementById('tx-queue');
+      list.textContent = '';
+      var pendingCount = state.queue.filter(function (draft) { return !draft.error; }).length;
+      var attentionCount = state.queue.length - pendingCount;
+      var formStatus = [
+        pendingCount ? 'กำลังบันทึก ' + pendingCount + ' รายการ…' : '',
+        attentionCount ? attentionCount + ' รายการต้องตรวจสอบในหน้ารายการ' : ''
+      ].filter(Boolean).join(' · ');
+      document.getElementById('tx-form-queue-status').textContent = formStatus;
+      state.queue.forEach(function (draft) {
+        var err = draft.error;
+        var duplicate = err && err.code === 'VALIDATION_POSSIBLE_DUPLICATE';
+        var invalid = !duplicate && err && String(err.code || '').indexOf('VALIDATION_') === 0;
+        var status = !err ? 'กำลังบันทึก…' : (duplicate ? 'พบรายการที่อาจซ้ำ' : (invalid ? 'กรุณาแก้ไขข้อมูล' : 'ยังไม่ได้รับผลยืนยัน'));
+        var action = duplicate ? 'ยืนยันบันทึกรายการซ้ำ' : (invalid ? 'แก้ไข' : 'ลองใหม่');
+        var details = duplicate && err.details && err.details.duplicates;
+        var message = details && details.length ? details.map(function (d) {
+          return App.formatDateTh(d.transaction_date) + ' · ' + d.item_name + ' · ' + money(d.amount) + ' บาท';
+        }).join(', ') : err && err.message;
+        list.appendChild(el('li', { class: 'rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-slate-800' },
+          el('p', { class: 'break-words font-medium', text: draft.payload.item_name + ' · ' + money(draft.payload.amount) + ' บาท' }),
+          el('p', { class: 'text-amber-900', text: status }),
+          message ? el('p', { class: 'break-words text-xs text-slate-600', text: message }) : null,
+          err ? el('button', { type: 'button', class: 'btn btn-secondary mt-2', onclick: function () {
+            if (duplicate) {
+              // คิวเดียวกันที่เปิดหลายแท็บต้องใช้ key เดียวกันเมื่อยืนยันรายการซ้ำ
+              enqueueCreate(Object.assign({}, draft.payload, { allow_duplicate: true }), draft, draft.key + '-confirmed');
+            } else if (invalid) {
+              openForm(null, draft);
+            } else {
+              attemptCreate(draft);
+            }
+          } }, action) : null,
+          (invalid || duplicate) ? el('button', { type: 'button', class: 'btn btn-ghost mt-2', onclick: function () {
+            removeDraft(draft);
+            renderQueue();
+          } }, 'ยกเลิกรายการนี้') : null));
+      });
+    }
+
+    function attemptCreate(draft) {
+      draft.error = null;
+      renderQueue();
+      function attempt(canRetry) {
+        return writeWithPage('api_createTransaction', [draft.payload, draft.key], true).catch(function (err) {
+          if (!canRetry || !err || (err.code !== 'NETWORK' && err.code !== 'BUSY')) throw err;
+          return new Promise(function (resolve) { setTimeout(resolve, 1000); }).then(function () { return attempt(false); });
+        });
+      }
+      return attempt(true).then(function (row) {
+        rememberTransaction(row);
+        removeDraft(draft);
+        renderQueue();
+        App.toast('บันทึกรายการแล้ว', 'success');
+      }, function (err) {
+        draft.error = err || { message: 'บันทึกไม่สำเร็จ' };
+        renderQueue();
+        App.toast(draft.error.message, 'error');
+      });
+    }
+
+    function enqueueCreate(payload, previous, key) {
+      var draft = { payload: payload, key: key || App.newKey(), error: null };
+      if (previous) state.queue = state.queue.filter(function (d) { return d !== previous; });
+      state.queue.push(draft);
+      renderQueue();
+      return saveQueue(draft, previous && previous.key).then(function () { return attemptCreate(draft); });
+    }
+
+    // ---------- แสดงผล ----------
+
+    function renderSummary() {
+      var s = state.summary;
+      document.getElementById('tx-sum-income').textContent = s ? money(s.income) : '–';
+      document.getElementById('tx-sum-expense').textContent = s ? money(s.expense) : '–';
+      var net = document.getElementById('tx-sum-net');
+      net.textContent = s ? money(s.net) : '–';
+      net.className = 'mt-1 truncate text-base font-semibold sm:text-lg ' + (s && s.net < 0 ? 'text-rose-600' : 'text-slate-800');
+    }
+
+    function flowText(r) {
+      if (r.from_account_name && r.to_account_name) return r.from_account_name + ' → ' + r.to_account_name;
+      return r.from_account_name || r.to_account_name || '';
+    }
+
+    function amountNode(r) {
+      var meta = TYPES[r.transaction_type] || { sign: 0 };
+      var sign = meta.sign * (r.reversal_of ? -1 : 1);
+      var cls = sign > 0 ? 'text-emerald-600' : (sign < 0 ? 'text-rose-600' : 'text-slate-700');
+      var prefix = sign > 0 ? '+' : (sign < 0 ? '−' : '');
+      return el('p', { class: 'whitespace-nowrap text-right font-semibold ' + cls, text: prefix + money(r.amount) });
+    }
+
+    function canEdit(r) { return !r.reversal_of && !r.is_reversed && !r.plan_id; }
+    function canReverse(r) { return !r.reversal_of && !r.is_reversed; }
+
+    function renderRow(r) {
+      var meta = TYPES[r.transaction_type] || { label: r.transaction_type, icon: '•' };
+      var sub = [meta.label, r.category_name, flowText(r), r.owner_name].filter(Boolean).join(' · ');
+      var badges = el('div', { class: 'mt-1 flex flex-wrap gap-1' });
+      if (r.reversal_of) badges.appendChild(el('span', { class: 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700', text: 'รายการกลับ' }));
+      if (r.is_reversed) badges.appendChild(el('span', { class: 'rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600', text: 'กลับรายการแล้ว' }));
+      if (r.plan_id) badges.appendChild(el('span', { class: 'rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700', text: 'จากแผนชำระ' }));
+      var actions = el('div', { class: 'mt-1 flex justify-end gap-1' });
+      if (canEdit(r)) actions.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'แก้ไข ' + r.item_name, onclick: function () { openForm(r); } }, 'แก้ไข'));
+      if (canReverse(r)) actions.appendChild(el('button', { type: 'button', class: 'btn btn-ghost text-rose-600', 'aria-label': 'กลับรายการ ' + r.item_name, onclick: function () { openReverse(r); } }, 'กลับรายการ'));
+      return el('li', { class: 'rounded-2xl border border-slate-200 bg-white p-3 ' + (r.is_reversed ? 'opacity-60' : '') },
+        el('div', { class: 'flex items-start gap-3' },
+          el('span', { class: 'grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-lg', 'aria-hidden': 'true' }, meta.icon),
+          el('div', { class: 'min-w-0 flex-1' },
+            el('p', { class: 'truncate font-medium', text: r.item_name }),
+            el('p', { class: 'truncate text-xs text-slate-500', text: sub }),
+            badges.childNodes.length ? badges : null),
+          amountNode(r)),
+        actions.childNodes.length ? actions : null);
+    }
+
+    function render() {
+      renderSummary();
+      panel.setAttribute('aria-busy', state.status === 'loading' ? 'true' : 'false');
+      panel.textContent = '';
+      if (state.status === 'loading' || state.status === 'idle') {
+        var skel = el('ul', { class: 'space-y-2', 'aria-label': 'กำลังโหลด' });
+        for (var i = 0; i < 4; i++) skel.appendChild(el('li', { class: 'h-16 animate-pulse rounded-2xl bg-slate-200/70' }));
+        panel.appendChild(el('p', { class: 'sr-only', text: 'กำลังโหลดรายการ…' }));
+        panel.appendChild(skel);
+        return;
+      }
+      if (state.status === 'error') {
+        panel.appendChild(el('div', { class: 'rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center', role: 'alert' },
+          el('p', { class: 'font-medium text-rose-700', text: 'โหลดรายการไม่สำเร็จ' }),
+          el('p', { class: 'mt-1 text-sm text-rose-600', text: state.errorMessage }),
+          el('button', { type: 'button', class: 'btn btn-secondary mt-3', onclick: function () { refreshAll(true); } }, 'ลองใหม่')));
+        return;
+      }
+      if (!state.rows.length) {
+        var filtered = state.filters.type || state.filters.account || state.filters.q;
+        var needSetup = !state.masters.accounts.some(function (a) { return a.is_active; }) || !state.masters.owners.some(function (o) { return o.is_active; });
+        panel.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center' },
+          el('p', { class: 'font-medium text-slate-700', text: filtered ? 'ไม่พบรายการตามตัวกรอง' : 'ยังไม่มีรายการในเดือนนี้' }),
+          el('p', { class: 'mt-1 text-sm text-slate-500', text: needSetup ? 'เริ่มจากเพิ่มบัญชีและเจ้าของรายการก่อน' : (filtered ? 'ลองเปลี่ยนตัวกรอง' : 'กด "บันทึกรายการ" เพื่อเริ่มต้น') }),
+          needSetup ? el('a', { href: '#accounts', target: '_self', class: 'btn btn-primary mt-4' }, 'ไปที่บัญชีและข้อมูลหลัก') : null));
+        return;
+      }
+      panel.appendChild(el('p', { class: 'mb-2 text-xs text-slate-500', text: 'แสดง ' + state.rows.length + ' จาก ' + state.total + ' รายการ' }));
+      var lastDate = null;
+      var list = null;
+      state.rows.forEach(function (r) {
+        if (r.transaction_date !== lastDate) {
+          lastDate = r.transaction_date;
+          panel.appendChild(el('h2', { class: 'mb-1 mt-4 text-sm font-semibold text-slate-600', text: App.formatDateTh(r.transaction_date) }));
+          list = el('ul', { class: 'space-y-2' });
+          panel.appendChild(list);
+        }
+        list.appendChild(renderRow(r));
+      });
+      if (state.hasMore) {
+        var more = el('button', { type: 'button', class: 'btn btn-secondary mt-4 w-full', onclick: function () { loadList(true); } }, state.loadingMore ? 'กำลังโหลด…' : 'โหลดเพิ่ม');
+        more.disabled = state.loadingMore;
+        panel.appendChild(more);
+      }
+    }
+
+    // ---------- ฟอร์มบันทึก/แก้ไข ----------
+
+    function accountOptions(classes, currentId) {
+      var opts = [['', classes === 'OPTIONAL' ? '— ไม่ระบุ —' : '— เลือกบัญชี —']];
+      state.masters.accounts.forEach(function (a) {
+        var allowed = classes === 'OPTIONAL' || classes.indexOf(classOf(a.account_type)) >= 0;
+        if (allowed && (a.is_active || a.account_id === currentId)) {
+          opts.push([a.account_id, a.account_name + (a.is_active ? '' : ' (ปิดใช้งาน)')]);
+        }
+      });
+      return opts;
+    }
+
+    function applyType(type, keep) {
+      var meta = TYPES[type];
+      typeSelect.value = type;
+      Array.prototype.forEach.call(document.querySelectorAll('#tx-quick-types .tx-chip'), function (b) {
+        b.setAttribute('aria-pressed', b.getAttribute('data-type') === type ? 'true' : 'false');
+      });
+      document.getElementById('tf-type-hint').textContent = meta.hint || '';
+      var cur = keep || {};
+      var fromBox = form.querySelector('[data-side="from"]');
+      var toBox = form.querySelector('[data-side="to"]');
+      var catBox = form.querySelector('[data-side="category"]');
+      fromBox.hidden = meta.from === null;
+      toBox.hidden = meta.to === null;
+      catBox.hidden = meta.category === null;
+      document.getElementById('tf-from-label').textContent = (meta.fromLabel || 'จากบัญชี') + (meta.from && meta.from !== 'OPTIONAL' ? ' *' : '');
+      document.getElementById('tf-to-label').textContent = (meta.toLabel || 'เข้าบัญชี') + (meta.to && meta.to !== 'OPTIONAL' ? ' *' : '');
+      document.getElementById('tf-note-label').textContent = meta.noteRequired ? 'หมายเหตุ (เหตุผล) *' : 'หมายเหตุ';
+      if (meta.noteRequired) document.getElementById('tx-more').open = true;
+      if (meta.from !== null) fillSelect(document.getElementById('tf-from_account_id'), accountOptions(meta.from, cur.from_account_id), cur.from_account_id);
+      else document.getElementById('tf-from_account_id').textContent = '';
+      if (meta.to !== null) fillSelect(document.getElementById('tf-to_account_id'), accountOptions(meta.to, cur.to_account_id), cur.to_account_id);
+      else document.getElementById('tf-to_account_id').textContent = '';
+      if (meta.category !== null) {
+        var cats = [['', '— เลือกหมวดหมู่ —']].concat(state.masters.categories.filter(function (c) {
+          return c.category_type === meta.category && (c.is_active || c.category_id === cur.category_id);
+        }).map(function (c) { return [c.category_id, (c.icon ? c.icon + ' ' : '') + c.category_name]; }));
+        fillSelect(document.getElementById('tf-category_id'), cats, cur.category_id);
+      } else {
+        document.getElementById('tf-category_id').textContent = '';
+      }
+    }
+
+    function clearErrors() {
+      formError.classList.add('hidden');
+      formError.textContent = '';
+      Array.prototype.forEach.call(form.querySelectorAll('[aria-invalid="true"]'), function (n) { n.removeAttribute('aria-invalid'); });
+      Array.prototype.forEach.call(form.querySelectorAll('.field-error'), function (n) { n.textContent = ''; n.classList.add('hidden'); });
+    }
+
+    function showError(err) {
+      var f = err && err.details && err.details.field;
+      var input = f && document.getElementById('tf-' + f);
+      var message = String((err && err.message) || 'บันทึกไม่สำเร็จ');
+      Object.keys(FIELD_LABELS).forEach(function (k) { message = message.split(k).join(FIELD_LABELS[k]); });
+      if (input && !input.closest('[hidden]')) {
+        if (input.closest('details')) input.closest('details').open = true;
+        input.setAttribute('aria-invalid', 'true');
+        var m = document.getElementById('tf-' + f + '-error');
+        m.textContent = message;
+        m.classList.remove('hidden');
+        input.focus();
+      } else {
+        formError.textContent = message;
+        formError.classList.remove('hidden');
+      }
+    }
+
+    function openForm(row, draft) {
+      state.editing = row;
+      state.correcting = draft || null;
+      state.submit = App.createSubmitter();
+      form.reset();
+      clearErrors();
+      var r = draft ? draft.payload : (row || {});
+      document.getElementById('tx-more').open = !!(r.description || r.note || r.external_ref);
+      document.getElementById('tx-form-title').textContent = row ? 'แก้ไขรายการ' : 'บันทึกรายการ';
+      saveNextBtn.hidden = !!row;
+      fillSelect(typeSelect, Object.keys(TYPES).map(function (k) { return [k, TYPES[k].label]; }), '');
+      var activeOwners = state.masters.owners.filter(function (o) { return o.is_active || o.owner_id === r.owner_id; });
+      var defaultOwner = r.owner_id || App.pref('lastOwner') || (activeOwners[0] && activeOwners[0].owner_id) || '';
+      fillSelect(document.getElementById('tf-owner_id'), [['', '— เลือกเจ้าของ —']].concat(activeOwners.map(function (o) {
+        return [o.owner_id, o.owner_name + (o.is_active ? '' : ' (ปิดใช้งาน)')];
+      })), defaultOwner);
+      var type = r.transaction_type || App.pref('lastType') || 'EXPENSE';
+      if (!TYPES[type]) type = 'EXPENSE';
+      applyType(type, row || draft ? r : { from_account_id: App.pref('lastFrom:' + type) || '', to_account_id: App.pref('lastTo:' + type) || '' });
+      document.getElementById('tf-amount').value = r.amount || '';
+      document.getElementById('tf-transaction_date').value = r.transaction_date || App.todayIso();
+      document.getElementById('tf-item_name').value = r.item_name || '';
+      document.getElementById('tf-description').value = r.description || '';
+      document.getElementById('tf-note').value = r.note || '';
+      document.getElementById('tf-external_ref').value = r.external_ref || '';
+      saveBtn.disabled = false;
+      saveNextBtn.disabled = false;
+      renderHelpers();
+      dialog.showModal();
+      document.getElementById('tf-amount').focus();
+      if (draft) showError(draft.error);
+    }
+
+    function collect() {
+      var meta = TYPES[typeSelect.value];
+      var data = {};
+      ['transaction_type', 'amount', 'transaction_date', 'item_name', 'owner_id', 'description', 'note', 'external_ref'].forEach(function (k) {
+        data[k] = document.getElementById('tf-' + k).value.trim();
+      });
+      data.from_account_id = meta.from === null ? '' : document.getElementById('tf-from_account_id').value;
+      data.to_account_id = meta.to === null ? '' : document.getElementById('tf-to_account_id').value;
+      data.category_id = meta.category === null ? '' : document.getElementById('tf-category_id').value;
+      data.amount = data.amount.replace(/,/g, '');
+      return data;
+    }
+
+    function clientCheck(data) {
+      var meta = TYPES[data.transaction_type];
+      if (!data.amount || !/^\d+(\.\d{1,2})?$/.test(data.amount) || Number(data.amount) <= 0) return { field: 'amount', message: 'กรุณากรอกจำนวนเงินที่มากกว่า 0 (ทศนิยมไม่เกิน 2 ตำแหน่ง)' };
+      if (!data.transaction_date) return { field: 'transaction_date', message: 'กรุณาเลือกวันที่' };
+      if (meta.from && meta.from !== 'OPTIONAL' && !data.from_account_id) return { field: 'from_account_id', message: 'กรุณาเลือกบัญชี' };
+      if (meta.to && meta.to !== 'OPTIONAL' && !data.to_account_id) return { field: 'to_account_id', message: 'กรุณาเลือกบัญชี' };
+      if (meta.category && !data.category_id) return { field: 'category_id', message: 'กรุณาเลือกหมวดหมู่' };
+      if (!data.item_name) return { field: 'item_name', message: 'กรุณากรอกชื่อรายการ' };
+      if (!data.owner_id) return { field: 'owner_id', message: 'กรุณาเลือกเจ้าของรายการ' };
+      if (meta.noteRequired && !data.note) return { field: 'note', message: 'กรุณาระบุเหตุผลการปรับยอด' };
+      return null;
+    }
+
+    function rememberTransaction(row) {
+      App.pref('lastType', row.transaction_type);
+      App.pref('lastOwner', row.owner_id);
+      if (row.from_account_id) App.pref('lastFrom:' + row.transaction_type, row.from_account_id);
+      if (row.to_account_id) App.pref('lastTo:' + row.transaction_type, row.to_account_id);
+    }
+
+    function resetForNext() {
+      state.correcting = null;
+      ['amount', 'item_name', 'description', 'note', 'external_ref'].forEach(function (field) {
+        document.getElementById('tf-' + field).value = '';
+      });
+      document.getElementById('tf-amount').focus();
+    }
+
+    function sendEdit(payload) {
+      var editing = state.editing;
+      App.setBusy(saveBtn, true);
+      return state.submit(payload, function (key) {
+        return writeWithPage('api_updateTransaction', [editing.transaction_id, payload, key]);
+      }).then(function (row) {
+        App.setBusy(saveBtn, false);
+        rememberTransaction(row);
+        App.toast('แก้ไขรายการแล้ว', 'success');
+        dialog.close();
+      }, function (err) {
+        App.setBusy(saveBtn, false);
+        if (err && err.code === 'VALIDATION_POSSIBLE_DUPLICATE') {
+          var dups = (err.details && err.details.duplicates) || [];
+          var lines = dups.map(function (d) { return App.formatDateTh(d.transaction_date) + ' ' + d.item_name + ' ' + money(d.amount); }).join(', ');
+          App.confirm('พบรายการที่อาจซ้ำ: ' + lines + ' — ต้องการบันทึกต่อหรือไม่?', 'บันทึกต่อ').then(function (ok) {
+            if (ok) sendEdit(Object.assign({}, payload, { allow_duplicate: true }));
+          });
+          return;
+        }
+        showError(err);
+      });
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (saveBtn.disabled) return;
+      clearErrors();
+      var keepOpen = !!(e.submitter && e.submitter.getAttribute('data-next'));
+      var payload = collect();
+      var problem = clientCheck(payload);
+      if (problem) { showError({ message: problem.message, details: { field: problem.field } }); return; }
+      if (state.editing) { sendEdit(payload); return; }
+      payload.source = 'QUICK_ENTRY';
+      enqueueCreate(payload, state.correcting);
+      if (keepOpen) resetForNext(); else dialog.close();
+    });
+
+    typeSelect.addEventListener('change', function () { applyType(typeSelect.value, { from_account_id: App.pref('lastFrom:' + typeSelect.value) || '', to_account_id: App.pref('lastTo:' + typeSelect.value) || '' }); });
+    Array.prototype.forEach.call(document.querySelectorAll('#tx-quick-types .tx-chip'), function (b) {
+      b.addEventListener('click', function () {
+        var t = b.getAttribute('data-type');
+        applyType(t, { from_account_id: App.pref('lastFrom:' + t) || '', to_account_id: App.pref('lastTo:' + t) || '' });
+      });
+    });
+
+    function closeForm() { if (!saveBtn.disabled) dialog.close(); }
+    document.getElementById('tx-form-cancel').addEventListener('click', closeForm);
+    document.getElementById('tx-form-close').addEventListener('click', closeForm);
+    dialog.addEventListener('cancel', function (e) { if (saveBtn.disabled) e.preventDefault(); });
+    document.getElementById('tx-add').addEventListener('click', function () { openForm(null); });
+
+    // ---------- กลับรายการ ----------
+
+    var revDialog = document.getElementById('tx-reverse-dialog');
+    var revSave = document.getElementById('tr-save');
+
+    function openReverse(row) {
+      state.reversing = row;
+      state.reverseSubmit = App.createSubmitter();
+      document.getElementById('tx-rev-desc').textContent = row.item_name + ' · ' + money(row.amount) + ' บาท · ' + App.formatDateTh(row.transaction_date);
+      document.getElementById('tr-reason').value = '';
+      document.getElementById('tr-date').value = App.todayIso();
+      document.getElementById('tr-date').min = row.transaction_date;
+      ['tr-reason', 'tr-date'].forEach(function (id) {
+        document.getElementById(id).removeAttribute('aria-invalid');
+        var m = document.getElementById(id + '-error'); m.textContent = ''; m.classList.add('hidden');
+      });
+      document.getElementById('tr-error').classList.add('hidden');
+      revSave.disabled = false;
+      revDialog.showModal();
+      document.getElementById('tr-reason').focus();
+    }
+
+    document.getElementById('tx-reverse-form').addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (revSave.disabled) return;
+      var reason = document.getElementById('tr-reason').value.trim();
+      var date = document.getElementById('tr-date').value;
+      if (!reason) {
+        var m = document.getElementById('tr-reason-error');
+        m.textContent = 'กรุณาระบุเหตุผล'; m.classList.remove('hidden');
+        document.getElementById('tr-reason').setAttribute('aria-invalid', 'true');
+        document.getElementById('tr-reason').focus();
+        return;
+      }
+      var row = state.reversing;
+      var payload = { reason: reason, transaction_date: date };
+      App.setBusy(revSave, true);
+      state.reverseSubmit(payload, function (key) {
+        return writeWithPage('api_reverseTransaction', [row.transaction_id, payload, key]);
+      }).then(function () {
+        App.setBusy(revSave, false);
+        revDialog.close();
+        App.toast('กลับรายการแล้ว', 'success');
+      }, function (err) {
+        App.setBusy(revSave, false);
+        var f = err && err.details && err.details.field;
+        var target = f === 'reason' ? 'tr-reason' : (f === 'transaction_date' ? 'tr-date' : null);
+        if (target) {
+          var m2 = document.getElementById(target + '-error');
+          m2.textContent = err.message; m2.classList.remove('hidden');
+          document.getElementById(target).setAttribute('aria-invalid', 'true');
+        } else {
+          var box = document.getElementById('tr-error');
+          box.textContent = err.message || 'กลับรายการไม่สำเร็จ';
+          box.classList.remove('hidden');
+        }
+      });
+    });
+    document.getElementById('tr-cancel').addEventListener('click', function () { if (!revSave.disabled) revDialog.close(); });
+    revDialog.addEventListener('cancel', function (e) { if (revSave.disabled) e.preventDefault(); });
+
+    // ---------- ตัวกรอง ----------
+
+    var monthInput = document.getElementById('tx-f-month');
+    state.filters.month = App.todayIso().slice(0, 7);
+    monthInput.value = state.filters.month;
+    monthInput.addEventListener('change', function () { state.filters.month = monthInput.value; loadList(false); });
+    document.getElementById('tx-f-type').addEventListener('change', function (e) { state.filters.type = e.target.value; loadList(false); });
+    document.getElementById('tx-f-account').addEventListener('change', function (e) { state.filters.account = e.target.value; loadList(false); });
+    document.getElementById('tx-f-q').addEventListener('input', App.debounce(function (e) { state.filters.q = e.target.value.trim(); loadList(false); }, 300));
+    document.getElementById('tx-filters').addEventListener('submit', function (e) { e.preventDefault(); });
+
+    App.onShow('transactions', function () { refreshAll(true); });
+  })();
+</script>

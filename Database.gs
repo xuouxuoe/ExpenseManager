@@ -1,7 +1,8 @@
 /**
  * Database.gs — ชั้นเข้าถึง Google Sheets
  * - อ่าน/เขียนแบบ batch (getValues / setValues)
- * - ตรวจ header ให้ตรง canonical ก่อนอ่านหรือเขียนทุกครั้ง
+ * - ตรวจ header ให้ตรง canonical ก่อนอ่านหรือเขียน (ครั้งเดียวต่อ execution ต่อชีต)
+ * - cache ข้อมูลที่อ่านแล้วภายใน execution และอัปเดต cache เมื่อเขียน
  * - initializeDatabase แบบเรียกซ้ำได้ ไม่ลบหรือเขียนทับข้อมูล
  */
 var Database = (function () {
@@ -12,6 +13,7 @@ var Database = (function () {
   function setSpreadsheetForTesting(ss) {
     spreadsheetOverride = ss;
     cachedSpreadsheet = null;
+    resetExecutionCache();
   }
 
   /**
@@ -37,12 +39,14 @@ var Database = (function () {
   function useTestSpreadsheet() {
     spreadsheetOverride = openTarget('TEST');
     cachedSpreadsheet = null;
+    resetExecutionCache();
   }
 
   /** ใช้ Spreadsheet Production (SPREADSHEET_ID) สำหรับ execution นี้ โดยไม่สนใจ DB_TARGET */
   function useProductionSpreadsheet() {
     spreadsheetOverride = openTarget('PRODUCTION');
     cachedSpreadsheet = null;
+    resetExecutionCache();
   }
 
   /** ไฟล์ที่ Web App/API ใช้: ตาม Script Property DB_TARGET ('TEST' หรือค่าเริ่มต้น 'PRODUCTION') */
@@ -115,6 +119,7 @@ var Database = (function () {
    * ไม่ลบชีต ไม่เปลี่ยน header ที่มีอยู่ ไม่แตะแถวข้อมูล; ชีตที่ header ไม่ตรงจะถูกรายงานเท่านั้น
    */
   function initialize() {
+    resetExecutionCache();
     var ss = getSpreadsheet();
     return Object.keys(Config.HEADERS).map(function (name) {
       var headers = Config.HEADERS[name];
@@ -166,25 +171,77 @@ var Database = (function () {
     return headers.map(function (h) { return toCell(obj[h], h); });
   }
 
-  // ---------- อ่าน/เขียน ----------
+  // ---------- Cache ภายใน execution ----------
+  // Apps Script เริ่ม global ใหม่ทุก execution; cache นี้ลดการเรียก Sheets ซ้ำภายในคำขอเดียว
+  // ต้องเรียก resetExecutionCache() หลังได้ lock (Operation.run) เพื่อไม่ใช้ข้อมูลที่อ่านก่อน lock
+  var execCache = { sheets: {}, tables: {} };
 
-  /** คืน sheet ที่ header ตรง canonical แล้วเท่านั้น */
-  function getVerifiedSheet(sheetName) {
-    var ss = getSpreadsheet();
-    var info = inspectSheet(ss, sheetName);
-    if (info.status !== 'OK') {
-      throw Util.AppError('SCHEMA_MISMATCH', 'โครงสร้างตาราง ' + sheetName + ' ไม่ตรงกับที่กำหนด (' + info.status + ') กรุณาเรียก checkDatabase()', info);
-    }
-    return ss.getSheetByName(sheetName);
+  function resetExecutionCache() {
+    execCache = { sheets: {}, tables: {} };
   }
 
-  /** อ่านทั้งตาราง: { rows: [object], rowNumbers: [number] } */
+  function trimHeader(row) {
+    var out = row.map(function (h) { return String(h).trim(); });
+    while (out.length && out[out.length - 1] === '') out.pop();
+    return out;
+  }
+
+  function sameHeader(actual, expected) {
+    return actual.length === expected.length && actual.every(function (h, i) { return h === expected[i]; });
+  }
+
+  function schemaError(sheetName, status) {
+    return Util.AppError('SCHEMA_MISMATCH', 'โครงสร้างตาราง ' + sheetName + ' ไม่ตรงกับที่กำหนด (' + status + ') กรุณาเรียก checkDatabase()', { sheet: sheetName, status: status });
+  }
+
+  /** sheet ที่ตรวจ header แล้ว (อ่านเฉพาะแถว header; ใช้กับการเขียนแบบ append ที่ไม่ต้องอ่านทั้งตาราง) */
+  function verifiedSheet(sheetName) {
+    var entry = execCache.sheets[sheetName];
+    if (entry) return entry;
+    var headers = headersOf(sheetName);
+    var sheet = getSpreadsheet().getSheetByName(sheetName);
+    if (!sheet) throw schemaError(sheetName, 'MISSING');
+    var actual = trimHeader(sheet.getRange(1, 1, 1, headers.length + 1).getValues()[0]);
+    if (!sameHeader(actual, headers)) throw schemaError(sheetName, actual.length ? 'MISMATCH' : 'EMPTY');
+    entry = execCache.sheets[sheetName] = { sheet: sheet, lastRow: null };
+    return entry;
+  }
+
+  /** อ่านทั้งตารางด้วย getDataRange().getValues() ครั้งเดียว (รวม header) แล้วเก็บใน cache */
+  function loadTable(sheetName) {
+    var table = execCache.tables[sheetName];
+    if (table) return table;
+    var headers = headersOf(sheetName);
+    var entry = execCache.sheets[sheetName];
+    var sheet = entry ? entry.sheet : getSpreadsheet().getSheetByName(sheetName);
+    if (!sheet) throw schemaError(sheetName, 'MISSING');
+    var values = sheet.getDataRange().getValues();
+    var actual = trimHeader(values[0] || []);
+    if (!sameHeader(actual, headers)) throw schemaError(sheetName, actual.length ? 'MISMATCH' : 'EMPTY');
+    var width = headers.length;
+    var body = values.slice(1).map(function (r) {
+      var row = r.slice(0, width);
+      while (row.length < width) row.push('');
+      return row;
+    });
+    while (body.length && body[body.length - 1].every(function (v) { return v === '' || v === null; })) body.pop();
+    execCache.sheets[sheetName] = { sheet: sheet, lastRow: body.length + 1 };
+    table = execCache.tables[sheetName] = { values: body };
+    return table;
+  }
+
+  function lastRowOf(sheetName) {
+    var entry = verifiedSheet(sheetName);
+    if (entry.lastRow === null) entry.lastRow = Math.max(entry.sheet.getLastRow(), 1);
+    return entry.lastRow;
+  }
+
+  // ---------- อ่าน/เขียน ----------
+
+  /** อ่านทั้งตาราง: { rows: [object], rowNumbers: [number] } — object ใหม่ทุกครั้ง แก้ไขได้โดยไม่กระทบ cache */
   function readAll(sheetName) {
     var headers = headersOf(sheetName);
-    var sheet = getVerifiedSheet(sheetName);
-    var lastRow = sheet.getLastRow();
-    if (lastRow < 2) return { rows: [], rowNumbers: [] };
-    var values = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
+    var values = loadTable(sheetName).values;
     var rows = [];
     var rowNumbers = [];
     for (var i = 0; i < values.length; i++) {
@@ -195,13 +252,46 @@ var Database = (function () {
     return { rows: rows, rowNumbers: rowNumbers };
   }
 
-  /** เพิ่มหลายแถวด้วย setValues ครั้งเดียว */
+  /**
+   * หาแถวที่คอลัมน์ตรงกับค่า โดยไม่อ่านทั้งตาราง (TextFinder ฝั่ง server) — สำหรับตาราง append-only ที่โตเรื่อย ๆ
+   * คืน [{ row: object, rowNumber }]
+   */
+  function findRowsByValue(sheetName, column, value) {
+    var headers = headersOf(sheetName);
+    var col = headers.indexOf(column);
+    if (col < 0) throw Util.AppError('UNKNOWN_COLUMN', 'ไม่พบคอลัมน์ ' + column);
+    var table = execCache.tables[sheetName];
+    if (table) {
+      var hits = [];
+      table.values.forEach(function (r, i) {
+        if (fromCell(r[col], column) === value) hits.push({ row: rowToObject(r, headers), rowNumber: i + 2 });
+      });
+      return hits;
+    }
+    var entry = verifiedSheet(sheetName);
+    var last = lastRowOf(sheetName);
+    if (last < 2) return [];
+    var matches = entry.sheet.getRange(2, col + 1, last - 1, 1).createTextFinder(String(value)).matchEntireCell(true).findAll();
+    return matches.map(function (m) {
+      var rn = m.getRow();
+      return { row: rowToObject(entry.sheet.getRange(rn, 1, 1, headers.length).getValues()[0], headers), rowNumber: rn };
+    });
+  }
+
+  /** เพิ่มหลายแถวด้วย setValues ครั้งเดียว (ไม่อ่านทั้งตาราง) */
   function appendRows(sheetName, objects) {
     if (!objects || !objects.length) return 0;
     var headers = headersOf(sheetName);
-    var sheet = getVerifiedSheet(sheetName);
+    var entry = verifiedSheet(sheetName);
+    var start = lastRowOf(sheetName) + 1;
     var values = objects.map(function (o) { return objectToRow(o, headers); });
-    sheet.getRange(sheet.getLastRow() + 1, 1, values.length, headers.length).setValues(values);
+    entry.sheet.getRange(start, 1, values.length, headers.length).setValues(values);
+    entry.lastRow = start + values.length - 1;
+    var table = execCache.tables[sheetName];
+    if (table) {
+      while (table.values.length < start - 2) table.values.push(headers.map(function () { return ''; }));
+      values.forEach(function (v) { table.values.push(v.slice()); });
+    }
     return values.length;
   }
 
@@ -215,6 +305,16 @@ var Database = (function () {
     return { appended: fresh.length, skipped: objects.length - fresh.length };
   }
 
+  /** เขียนทับแถวตามเลขแถวที่ทราบแล้ว (ใช้คู่กับ findRowsByValue) */
+  function writeRowAt(sheetName, rowNumber, object) {
+    var headers = headersOf(sheetName);
+    var entry = verifiedSheet(sheetName);
+    var values = objectToRow(object, headers);
+    entry.sheet.getRange(rowNumber, 1, 1, headers.length).setValues([values]);
+    var table = execCache.tables[sheetName];
+    if (table && table.values[rowNumber - 2]) table.values[rowNumber - 2] = values.slice();
+  }
+
   /**
    * แทนที่แถวตาม primary key ด้วย object ใหม่ทั้งแถว
    * เขียนเป็นช่วงแถวที่ติดกันเพื่อลดจำนวนการเรียก setValues
@@ -223,15 +323,16 @@ var Database = (function () {
     if (!objects || !objects.length) return 0;
     var headers = headersOf(sheetName);
     var pk = Config.PRIMARY_KEYS[sheetName];
-    var data = readAll(sheetName);
+    var pkIndex = headers.indexOf(pk);
+    var table = loadTable(sheetName);
     var rowById = {};
-    data.rows.forEach(function (r, i) { rowById[r[pk]] = data.rowNumbers[i]; });
+    table.values.forEach(function (r, i) { rowById[fromCell(r[pkIndex], pk)] = i + 2; });
     var targets = objects.map(function (o) {
       var rowNumber = rowById[o[pk]];
       if (!rowNumber) throw Util.AppError('NOT_FOUND', 'ไม่พบรายการ ' + o[pk] + ' ในตาราง ' + sheetName);
       return { rowNumber: rowNumber, values: objectToRow(o, headers) };
     }).sort(function (a, b) { return a.rowNumber - b.rowNumber; });
-    var sheet = getVerifiedSheet(sheetName);
+    var sheet = verifiedSheet(sheetName).sheet;
     var start = 0;
     for (var i = 1; i <= targets.length; i++) {
       if (i === targets.length || targets[i].rowNumber !== targets[i - 1].rowNumber + 1) {
@@ -240,11 +341,12 @@ var Database = (function () {
         start = i;
       }
     }
+    targets.forEach(function (t) { table.values[t.rowNumber - 2] = t.values.slice(); });
     return targets.length;
   }
 
   /**
-   * เขียนทั้งคอลัมน์ (แถว 2..n) ด้วย setValues ครั้งเดียวต่อคอลัมน์
+   * เขียนทั้งคอลัมน์ (แถว 2..n) ด้วย setValues ครั้งเดียวต่อคอลัมน์ โดยใช้ค่าเดิมจาก cache
    * values ต้องเรียงตาม rowNumbers ที่ได้จาก readAll
    */
   function writeColumn(sheetName, column, rowNumbers, values) {
@@ -252,13 +354,17 @@ var Database = (function () {
     var colIndex = headers.indexOf(column);
     if (colIndex < 0) throw Util.AppError('UNKNOWN_COLUMN', 'ไม่พบคอลัมน์ ' + column);
     if (!rowNumbers.length) return 0;
-    var sheet = getVerifiedSheet(sheetName);
+    var table = loadTable(sheetName);
     var first = rowNumbers[0];
     var last = rowNumbers[rowNumbers.length - 1];
-    var range = sheet.getRange(first, colIndex + 1, last - first + 1, 1);
-    var current = range.getValues();
-    rowNumbers.forEach(function (rn, i) { current[rn - first][0] = toCell(values[i], column); });
-    range.setValues(current);
+    var current = [];
+    for (var rn = first; rn <= last; rn++) {
+      var cached = table.values[rn - 2];
+      current.push([cached && cached[colIndex] !== undefined ? cached[colIndex] : '']);
+    }
+    rowNumbers.forEach(function (n, i) { current[n - first][0] = toCell(values[i], column); });
+    verifiedSheet(sheetName).sheet.getRange(first, colIndex + 1, last - first + 1, 1).setValues(current);
+    current.forEach(function (c, i) { if (table.values[first - 2 + i]) table.values[first - 2 + i][colIndex] = c[0]; });
     return rowNumbers.length;
   }
 
@@ -270,7 +376,11 @@ var Database = (function () {
     getSpreadsheet: getSpreadsheet,
     checkSchema: checkSchema,
     initialize: initialize,
+    resetExecutionCache: resetExecutionCache,
+    lastRowNumber: lastRowOf,
     readAll: readAll,
+    findRowsByValue: findRowsByValue,
+    writeRowAt: writeRowAt,
     appendRows: appendRows,
     appendRowsIfAbsent: appendRowsIfAbsent,
     updateRows: updateRows,

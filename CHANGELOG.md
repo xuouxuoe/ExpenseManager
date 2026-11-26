@@ -2,6 +2,34 @@
 
 ## [Unreleased]
 
+### Performance (2026-11-26)
+
+- `Database`: cache ภายใน execution, อ่านทั้งตารางครั้งเดียวด้วย getDataRange, ตรวจ header ครั้งเดียว, append ไม่อ่านทั้งตาราง, `findRowsByValue` (TextFinder), `writeRowAt`, `lastRowNumber`, `resetExecutionCache`
+- `Operation.run`: reset cache หลังได้ lock, ค้น journal ด้วย TextFinder, `ctx.replay`
+- `MasterData.update` ไม่ refresh projection เมื่อชื่อไม่เปลี่ยน
+- `api_transactionPage`: โหลดหน้ารายการในคำขอเดียว
+- การเรียก Sheets: createTransaction 107 → 38, updateMaster 156 → 33; เพิ่ม `tests/performance.test.js` และ `tests/perf-probe.js`
+
+### Added — ตัวช่วยกรอก (2026-11-25)
+
+- `Transactions.suggestions` + `api_transactionSuggestions`: "ใช้ประจำ" และ "รายการล่าสุด" จากประวัติจริง (ไม่เปลี่ยน schema)
+- ฟอร์มบันทึกรายการ: แถบแม่แบบแตะเพื่อเติมฟอร์ม และ autocomplete ชื่อรายการ
+
+### Fixed
+
+- หน้าบัญชีโหลดยอดคงเหลือใหม่หลังบันทึกบัญชี
+- `appsscript.json` รับค่า `webapp` (executeAs USER_DEPLOYING, access MYSELF) จาก deployment ที่ผู้ใช้สร้าง
+
+- ลิงก์ภายในหน้า (`#transactions`, `#accounts`, `#main`) ใช้ `target="_self"` — แก้หน้าว่างเมื่อกดเมนูบน Apps Script `/dev`; เพิ่ม `tests/html.test.js`
+
+### Added — Phase 3 Transactions (2026-11-25)
+
+- `TransactionService.gs`: กฎบัญชี/หมวดตามประเภท (รวม LOAN), เตือนรายการที่อาจซ้ำ, แก้ไขพร้อมเก็บค่าเดิมใน recovery_data, กลับรายการแทนการลบ, ค้นหา/กรอง/แบ่งหน้า/สรุปรายรับ-จ่าย, ยอดคงเหลือบัญชี (`Ledger`)
+- API `api_listTransactions`, `api_createTransaction`, `api_updateTransaction`, `api_reverseTransaction`, `api_accountBalances`
+- `PageTransactions.html`: บันทึกด่วน (ชิปประเภท, จำบัญชี/เจ้าของล่าสุด, บันทึกและเพิ่มต่อ), รายการจัดกลุ่มตามวัน, สรุปรายรับ/จ่าย/สุทธิ, ตัวกรองเดือน/ประเภท/บัญชี/ค้นหา, กลับรายการพร้อมเหตุผล
+- Router หน้า (#transactions, #accounts); หน้าบัญชีแสดงยอดคงเหลือ/หนี้คงค้าง
+- Unit tests เพิ่ม 14 กรณี (รวม 72)
+
 ### Changed — Business rules (2026-11-25)
 
 - `CASH_ADVANCE` รับบัญชีต้นทางประเภท `LOAN` ได้ (รับเงินกู้/ยืมเงินบุคคล ไม่ใช่รายรับ); เพิ่ม business-rules §3.3 เงินกู้และการยืมเงินบุคคล และ TC-TX-08..11 — ไม่เปลี่ยน schema

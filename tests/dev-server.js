@@ -30,8 +30,19 @@ function seed() {
   M.create('account', { account_name: 'เงินสด', account_type: 'CASH', owner_id: dad.owner_id }, req());
   M.create('account', { account_name: 'ออมทรัพย์ SCB *1234', account_type: 'BANK', account_subtype: 'SAVINGS', institution: 'SCB', opening_balance: '15000' }, req());
   M.create('account', { account_name: 'KBank Credit *5678', account_type: 'CREDIT_CARD', institution: 'KBank', credit_limit: '50000', statement_day: 20, due_day: 5 }, req());
-  M.create('category', { category_name: 'อาหาร', category_type: 'EXPENSE', icon: '🍜', color: '#fde68a' }, req());
-  M.create('category', { category_name: 'เงินเดือน', category_type: 'INCOME', icon: '💼', color: '#bbf7d0' }, req());
+  const food = M.create('category', { category_name: 'อาหาร', category_type: 'EXPENSE', icon: '🍜', color: '#fde68a' }, req());
+  const salary = M.create('category', { category_name: 'เงินเดือน', category_type: 'INCOME', icon: '💼', color: '#bbf7d0' }, req());
+  const accounts = ctx.Database.readAll('Accounts').rows;
+  const byName = (n) => accounts.find((a) => a.account_name === n).account_id;
+  const today = ctx.Util.todayIso();
+  const month = today.slice(0, 8);
+  const T = ctx.Transactions;
+  T.create({ transaction_date: month + '01', transaction_type: 'INCOME', to_account_id: byName('ออมทรัพย์ SCB *1234'), category_id: salary.category_id, owner_id: dad.owner_id, item_name: 'เงินเดือน', amount: '30000' }, req());
+  T.create({ transaction_date: today, transaction_type: 'EXPENSE', from_account_id: byName('เงินสด'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'ข้าวมันไก่', amount: '55' }, req());
+  const monthsAgo = (n) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0, 8) + '05'; };
+  [2, 1, 0].forEach((n) => T.create({ transaction_date: monthsAgo(n), transaction_type: 'EXPENSE', from_account_id: byName('ออมทรัพย์ SCB *1234'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'ค่าอินเทอร์เน็ต', amount: n ? '599' : '649' }, req()));
+  [3, 2, 1].forEach((d) => T.create({ transaction_date: month + String(d).padStart(2, '0'), transaction_type: 'EXPENSE', from_account_id: byName('เงินสด'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'กาแฟ', amount: '65' }, req()));
+  T.create({ transaction_date: today, transaction_type: 'CREDIT_PURCHASE', from_account_id: byName('KBank Credit *5678'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'ซูเปอร์มาร์เก็ต', amount: '1250.75' }, req());
 }
 if (!process.env.DEV_EMPTY) seed();
 

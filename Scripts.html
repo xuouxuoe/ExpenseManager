@@ -124,7 +124,69 @@
       }
     }
 
+    // ---------- Router: สลับหน้าโดยไม่ refresh ทั้งหน้า (#transactions, #accounts) ----------
+    var pageHandlers = {};
+    var currentPage = null;
+
+    /** fn ถูกเรียกทุกครั้งที่หน้านั้นถูกแสดง */
+    function onShow(page, fn) {
+      (pageHandlers[page] = pageHandlers[page] || []).push(fn);
+    }
+
+    function showPage(page) {
+      var pages = document.querySelectorAll('[data-page]');
+      var exists = Array.prototype.some.call(pages, function (p) { return p.getAttribute('data-page') === page; });
+      if (!exists) return false;
+      Array.prototype.forEach.call(pages, function (p) { p.hidden = p.getAttribute('data-page') !== page; });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-nav]'), function (a) {
+        var active = a.getAttribute('data-nav') === page;
+        a.classList.toggle('nav-active', active);
+        if (active) { a.setAttribute('aria-current', 'page'); a.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+        else a.removeAttribute('aria-current');
+      });
+      currentPage = page;
+      (pageHandlers[page] || []).forEach(function (fn) { fn(); });
+      return true;
+    }
+
+    function startRouter(defaultPage) {
+      function route() {
+        var page = (location.hash || '').replace('#', '');
+        if (!showPage(page)) showPage(defaultPage);
+      }
+      window.addEventListener('hashchange', route);
+      route();
+    }
+
+    /** วันที่วันนี้ตามเวลาเครื่อง (YYYY-MM-DD) */
+    function todayIso() {
+      var d = new Date();
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+
+    function formatDateTh(iso) {
+      if (!iso) return '';
+      var p = iso.split('-');
+      var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+      return d.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    /** localStorage แบบปลอดภัย (อาจใช้ไม่ได้ใน private mode) — เก็บเฉพาะค่าความสะดวก ไม่เก็บข้อมูลการเงิน */
+    function pref(key, value) {
+      try {
+        if (value === undefined) return window.localStorage.getItem('em.' + key);
+        window.localStorage.setItem('em.' + key, value);
+      } catch (e) { return null; }
+      return value;
+    }
+
     return {
+      onShow: onShow,
+      showPage: showPage,
+      startRouter: startRouter,
+      todayIso: todayIso,
+      formatDateTh: formatDateTh,
+      pref: pref,
       call: call,
       newKey: newKey,
       createSubmitter: createSubmitter,

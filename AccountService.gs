@@ -220,7 +220,8 @@ var MasterData = (function () {
       var renamed = clean[def.nameField] !== current[def.nameField];
       var updated = Object.assign({}, current, clean, { updated_at: ctx.now });
       Database.updateRows(def.sheet, [updated]);
-      var report = Projection.refresh({ masterKeys: [def.projectionKey] });
+      // refresh เฉพาะเมื่อชื่อเปลี่ยน หรือเป็นการ replay งานที่ค้าง (อาจ refresh ไม่ครบรอบก่อน)
+      var report = (renamed || ctx.replay) ? Projection.refresh({ masterKeys: [def.projectionKey] }) : { tables: [], orphans: [] };
       if (renamed) {
         Audit.log({ actorId: ctx.actorId, action: 'RENAME_MASTER', entityType: def.sheet, entityId: current[def.pk], operationId: ctx.operationId, result: 'SUCCESS' });
       }

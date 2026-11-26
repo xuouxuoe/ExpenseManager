@@ -13,6 +13,7 @@ class FakeRange {
     Object.assign(this, { sheet, row, col, numRows, numCols });
   }
   getValues() {
+    this.sheet.calls.getValues = (this.sheet.calls.getValues || 0) + 1;
     const out = [];
     for (let r = 0; r < this.numRows; r++) {
       const line = [];
@@ -37,6 +38,24 @@ class FakeRange {
     return this;
   }
   setNumberFormat(f) { this.sheet.formats.push({ col: this.col, format: f }); return this; }
+  createTextFinder(text) {
+    const range = this;
+    let entire = false;
+    return {
+      matchEntireCell(v) { entire = v; return this; },
+      findAll() {
+        range.sheet.calls.textFinder = (range.sheet.calls.textFinder || 0) + 1;
+        const hits = [];
+        for (let r = 0; r < range.numRows; r++) {
+          for (let c = 0; c < range.numCols; c++) {
+            const v = String((range.sheet.data[range.row - 1 + r] || [])[range.col - 1 + c] ?? '');
+            if (entire ? v === text : v.includes(text)) hits.push({ getRow: () => range.row + r });
+          }
+        }
+        return hits;
+      }
+    };
+  }
   setFontWeight() { return this; }
 }
 
@@ -50,24 +69,36 @@ class FakeSheet {
   }
   getName() { return this.name; }
   getLastRow() {
+    this.calls.getLastRow = (this.calls.getLastRow || 0) + 1;
     for (let i = this.data.length - 1; i >= 0; i--) {
       if ((this.data[i] || []).some((v) => v !== '' && v !== undefined && v !== null)) return i + 1;
     }
     return 0;
   }
   getLastColumn() {
+    this.calls.getLastColumn = (this.calls.getLastColumn || 0) + 1;
     let max = 0;
     this.data.forEach((row) => row.forEach((v, i) => { if (v !== '' && v !== undefined && v !== null) max = Math.max(max, i + 1); }));
     return max;
   }
   getMaxRows() { return 1000; }
-  getRange(row, col, numRows, numCols) { return new FakeRange(this, row, col, numRows || 1, numCols || 1); }
+  getDataRange() {
+    return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1));
+  }
+  getRange(row, col, numRows, numCols) {
+    this.calls.getRange = (this.calls.getRange || 0) + 1;
+    return new FakeRange(this, row, col, numRows || 1, numCols || 1);
+  }
   setFrozenRows(n) { this.frozen = n; }
 }
 
 class FakeSpreadsheet {
   constructor() { this.sheets = [new FakeSheet('ชีต1')]; }
-  getSheetByName(name) { return this.sheets.find((s) => s.name === name) || null; }
+  getSheetByName(name) {
+    this.calls = this.calls || { getSheetByName: 0 };
+    this.calls.getSheetByName++;
+    return this.sheets.find((s) => s.name === name) || null;
+  }
   insertSheet(name) {
     if (this.getSheetByName(name)) throw new Error('sheet exists');
     const s = new FakeSheet(name);
@@ -149,6 +180,19 @@ function createContext(options = {}) {
   return context;
 }
 
+/** รวมจำนวนการเรียก Sheets API ของทุกชีต (ใช้วัดประสิทธิภาพ) */
+function countCalls(ss) {
+  const total = { getSheetByName: (ss.calls && ss.calls.getSheetByName) || 0, getRange: 0, getValues: 0, setValues: 0, getLastRow: 0, getLastColumn: 0, textFinder: 0 };
+  ss.sheets.forEach((sh) => Object.keys(total).forEach((k) => { if (k !== 'getSheetByName') total[k] += sh.calls[k] || 0; }));
+  total.all = Object.values(total).reduce((a, b) => a + b, 0);
+  return total;
+}
+
+function resetCalls(ss) {
+  ss.calls = { getSheetByName: 0 };
+  ss.sheets.forEach((sh) => { sh.calls = { setValues: 0 }; });
+}
+
 /** context ที่ Database ชี้ไป FakeSpreadsheet ใหม่ และ initialize แล้ว */
 function createDbContext(options = {}) {
   const ctx = createContext(Object.assign({ properties: { ALLOWED_EMAILS: 'owner@example.com' } }, options));
@@ -159,4 +203,4 @@ function createDbContext(options = {}) {
   return ctx;
 }
 
-module.exports = { createContext, createDbContext, FakeSpreadsheet };
+module.exports = { createContext, createDbContext, FakeSpreadsheet, countCalls, resetCalls };

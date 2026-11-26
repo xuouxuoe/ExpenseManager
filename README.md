@@ -4,7 +4,7 @@
 
 - ข้อกำหนดโครงการ: [AGENTS.md](AGENTS.md)
 - เอกสารออกแบบ: [docs/](docs/) — database-schema, business-rules, system-architecture, development-plan, test-plan
-- สถานะ: Phase 2 (Master Data) — Backend/API/หน้าจอ บัญชีและข้อมูลหลัก เสร็จ
+- สถานะ: Phase 3 (Transactions) — หน้ารายการรับ-จ่าย และบัญชีและข้อมูลหลัก ใช้งานได้
 
 ## โครงสร้างไฟล์ runtime (Phase 1)
 
@@ -18,6 +18,8 @@
 | `OperationService.gs` | LockService + idempotency + OperationJournal + AuditLogs |
 | `ProjectionService.gs` | เติม/refresh คอลัมน์ `*_name` และข้อมูลแผนใน PaymentSchedules |
 | `AccountService.gs` | Master Data (Accounts, Owners, Categories) |
+| `TransactionService.gs` | ธุรกรรม (สร้าง/แก้ไข/กลับรายการ/ค้นหา) และ `Ledger` ยอดคงเหลือ |
+| `Index.html` `Styles.html` `Scripts.html` `PageTransactions.html` `PageAccounts.html` | หน้าจอ Web App |
 | `Code.gs` | `doGet`, Client API (`api_*`) และฟังก์ชันผู้ดูแล |
 
 ## ตั้งค่า (ครั้งแรก)
