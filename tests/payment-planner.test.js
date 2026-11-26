@@ -169,3 +169,37 @@ test('หมายเหตุรายงวดอยู่ครบเมื�
   assert.ok(record.schedules.every((r) => r.installment_count === 8 && r.item_name === 'ชื่อใหม่'));
   assert.deepEqual(record.schedules.slice(-2).map((r) => r.payment_month), [202706, 202707]);
 });
+
+test('กลับรายการชำระแล้ว เงินที่เคยกันไว้กลับมาเป็นกันไว้ และนำไปชำระใหม่ได้', () => {
+  const { ctx, input, account } = fixture();
+  const planId = ctx.api_createPaymentPlan(input, 'planner-reverse-restore').data.plan_id;
+  const schedules = () => plain(ctx.api_paymentPlannerPage().data.plans[0].schedules);
+  const [one, two] = schedules();
+  const date = ctx.Util.todayIso();
+  const act = (action, key, fields) => ctx.api_paymentActivity({ action, plan_id: planId, date, ...fields }, 'restore-' + key);
+  assert.equal(act('RESERVE', 'reserve', { schedule_id: one.schedule_id, account_id: account.account_id, amount: 60 }).ok, true);
+  assert.equal(act('PAY', 'pay', { account_id: account.account_id, lines: [{ schedule_id: one.schedule_id, amount: 100 }, { schedule_id: two.schedule_id, amount: 50 }] }).ok, true);
+  assert.equal(schedules()[0].amount_reserved, 0, 'ใช้เงินกันไว้ตอนชำระ');
+  const txId = ctx.Database.readAll('Transactions').rows[0].transaction_id;
+
+  assert.equal(act('REVERSE_PAY', 'reverse', { transaction_id: txId, note: 'บันทึกผิด' }).ok, true);
+  const after = schedules();
+  assert.equal(after[0].amount_paid, 0);
+  assert.equal(after[0].amount_reserved, 60, 'CONSUME ของการชำระที่ถูกกลับต้องไม่ถูกนับ');
+  assert.equal(after[0].amount_saved, 60);
+  assert.equal(after[0].remaining_to_save, 40);
+  assert.equal(after[0].saving_status, 'PARTIAL');
+  // ประวัติไม่ถูกลบ: CONSUME เดิมยังอยู่ในชีต
+  assert.equal(ctx.Database.readAll('Reservations').rows.filter((r) => r.action_type === 'CONSUME').length, 1);
+
+  const month = Number(date.slice(0, 7).replace('-', ''));
+  const cash = plain(ctx.api_dashboard({ month })).data.accounts.find((a) => a.name === 'เงินสด');
+  assert.equal(cash.reserved, 60);
+  assert.equal(cash.available, 940);
+
+  // ปลดเงินที่คืนมาได้ และชำระใหม่ใช้เงินกันไว้ได้อีกครั้ง
+  assert.equal(act('PAY', 'pay-again', { account_id: account.account_id, lines: [{ schedule_id: one.schedule_id, amount: 100 }] }).ok, true);
+  assert.equal(schedules()[0].amount_reserved, 0);
+  assert.equal(schedules()[0].payment_status, 'PAID');
+  assert.equal(plain(ctx.api_dashboard({ month })).data.accounts.find((a) => a.name === 'เงินสด').reserved, 0);
+});

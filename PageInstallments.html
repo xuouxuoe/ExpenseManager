@@ -1,68 +1,129 @@
 <section aria-labelledby="pp-title">
-  <h1 id="pp-title" class="text-xl font-semibold">แผนชำระ</h1>
-  <p class="mt-1 text-sm text-slate-600">วางแผนเก็บเงินและชำระรายจ่ายในอนาคต</p>
-  <form id="pp-form" class="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-    <fieldset id="pp-fields" class="grid grid-cols-1 gap-3 sm:grid-cols-2" disabled>
-      <legend class="mb-2 font-semibold">สร้างแผน</legend>
-      <label class="field-label">ชื่อรายการ <input name="item_name" class="field-input" required maxlength="150"></label>
-      <label class="field-label">วันที่ทำรายการ <input name="purchase_date" type="date" class="field-input" required></label>
-      <label class="field-label">ประเภทแผน
-        <select name="plan_type" class="field-input">
-          <option value="INSTALLMENT">ผ่อนชำระ</option>
-          <option value="ONE_TIME">รอชำระครั้งเดียว</option>
-          <option value="RECURRING">รายจ่ายประจำแบบกำหนดช่วงเวลา</option>
-        </select>
-      </label>
-      <label class="field-label">จำนวนงวด <input name="installment_count" type="number" min="1" max="360" value="1" class="field-input" required></label>
-      <label class="field-label">บัญชีหรือบัตร <select name="account_id" class="field-input" required></select></label>
-      <label class="field-label">เจ้าของรายการ <select name="owner_id" class="field-input" required></select></label>
-      <label class="field-label">หมวดหมู่รายจ่าย <select name="category_id" class="field-input" required></select></label>
-      <label class="field-label">เงินต้น (บาท) <input name="principal_amount" type="number" min="0" step="0.01" class="field-input" required></label>
-      <label class="field-label">ดอกเบี้ย (บาท) <input name="interest_amount" type="number" min="0" step="0.01" class="field-input"></label>
-      <label class="field-label">ค่าธรรมเนียม (บาท) <input name="fee_amount" type="number" min="0" step="0.01" class="field-input"></label>
-      <label class="field-label">เดือนเริ่มเก็บเงิน <input name="first_saving_month" type="month" class="field-input" required></label>
-      <label class="field-label">เดือนเริ่มชำระ <input name="first_payment_month" type="month" class="field-input" required></label>
-      <label class="field-label">วันครบกำหนดของเดือน <input name="due_day" type="number" min="1" max="31" class="field-input"></label>
-      <label class="field-label">เลขอ้างอิง <input name="external_ref" class="field-input" maxlength="100"></label>
-      <label class="field-label">รายละเอียด <textarea name="description" rows="2" maxlength="500" class="field-input"></textarea></label>
-      <label class="field-label">หมายเหตุของแผน <textarea name="note" rows="2" maxlength="1000" class="field-input"></textarea></label>
-      <div class="sm:col-span-2">
-        <button id="pp-preview-btn" type="submit" class="btn btn-secondary">ดูตัวอย่างงวด</button>
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 id="pp-title" class="text-xl font-semibold">แผนชำระ</h1>
+      <p class="text-sm text-slate-500">วางแผนเก็บเงินและชำระรายจ่ายในอนาคต: ผ่อนชำระ รอชำระครั้งเดียว และรายจ่ายประจำ</p>
+    </div>
+    <button type="button" id="pp-new-toggle" class="btn btn-primary" aria-expanded="false" aria-controls="pp-form"><span aria-hidden="true">+</span>สร้างแผนใหม่</button>
+  </div>
+
+  <div id="pp-summary" class="mt-4 grid min-h-[5.5rem] grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite"></div>
+
+  <form id="pp-form" class="mt-4 rounded-2xl border border-slate-200 bg-white" hidden novalidate>
+    <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+      <h2 class="font-semibold">สร้างแผนใหม่</h2>
+      <button type="button" id="pp-form-close" class="btn btn-ghost" aria-label="ปิดฟอร์มสร้างแผน">✕</button>
+    </div>
+    <fieldset id="pp-fields" class="space-y-5 p-4" disabled>
+      <legend class="sr-only">ข้อมูลแผน</legend>
+      <div>
+        <h3 class="pp-step"><span aria-hidden="true">1</span>รายการ</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label class="sm:col-span-2"><span class="field-label">ชื่อรายการ *</span><input name="item_name" class="field-input" required maxlength="150" placeholder="เช่น โทรศัพท์ใหม่, ค่าประกันรถ" autocomplete="off"></label>
+          <label><span class="field-label">ประเภทแผน *</span>
+            <select name="plan_type" class="field-input">
+              <option value="INSTALLMENT">ผ่อนชำระ</option>
+              <option value="ONE_TIME">รอชำระครั้งเดียว</option>
+              <option value="RECURRING">รายจ่ายประจำแบบกำหนดช่วงเวลา</option>
+            </select>
+          </label>
+          <label><span class="field-label">วันที่ทำรายการ *</span><input name="purchase_date" type="date" class="field-input" required></label>
+          <label><span class="field-label">บัญชีหรือบัตร *</span><select name="account_id" class="field-input" required></select></label>
+          <label><span class="field-label">เจ้าของรายการ *</span><select name="owner_id" class="field-input" required></select></label>
+          <label class="sm:col-span-2"><span class="field-label">หมวดหมู่รายจ่าย *</span><select name="category_id" class="field-input" required></select></label>
+        </div>
+      </div>
+      <div>
+        <h3 class="pp-step"><span aria-hidden="true">2</span>ยอดเงิน</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <label><span class="field-label">เงินต้น (บาท) *</span><input name="principal_amount" type="number" min="0" step="0.01" inputmode="decimal" class="field-input" required></label>
+          <label><span class="field-label">ดอกเบี้ย (บาท)</span><input name="interest_amount" type="number" min="0" step="0.01" inputmode="decimal" class="field-input" placeholder="0"></label>
+          <label><span class="field-label">ค่าธรรมเนียม (บาท)</span><input name="fee_amount" type="number" min="0" step="0.01" inputmode="decimal" class="field-input" placeholder="0"></label>
+        </div>
+        <p class="mt-2 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-800">ยอดรวมทั้งแผน <strong id="pp-total-live">0.00</strong> บาท · ประมาณงวดละ <strong id="pp-per-live">0.00</strong> บาท</p>
+      </div>
+      <div>
+        <h3 class="pp-step"><span aria-hidden="true">3</span>กำหนดเวลา</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label><span class="field-label">จำนวนงวด *</span><input name="installment_count" type="number" min="1" max="360" value="1" inputmode="numeric" class="field-input" required></label>
+          <label><span class="field-label">วันครบกำหนดของเดือน</span><input name="due_day" type="number" min="1" max="31" inputmode="numeric" class="field-input" placeholder="เช่น 25 (ไม่ทราบให้เว้นว่าง)"></label>
+          <label><span class="field-label">เดือนเริ่มเก็บเงิน *</span><input name="first_saving_month" type="month" class="field-input" required></label>
+          <label><span class="field-label">เดือนเริ่มชำระ *</span><input name="first_payment_month" type="month" class="field-input" required></label>
+        </div>
+      </div>
+      <details class="rounded-xl border border-slate-200 px-3 py-2">
+        <summary class="cursor-pointer py-1 text-sm font-medium text-slate-600">รายละเอียดเพิ่มเติม (ไม่บังคับ)</summary>
+        <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <label class="sm:col-span-2"><span class="field-label">เลขอ้างอิง</span><input name="external_ref" class="field-input" maxlength="100"></label>
+          <label><span class="field-label">รายละเอียด</span><textarea name="description" rows="2" maxlength="500" class="field-input"></textarea></label>
+          <label><span class="field-label">หมายเหตุของแผน</span><textarea name="note" rows="2" maxlength="1000" class="field-input"></textarea></label>
+        </div>
+      </details>
+      <div class="flex flex-wrap gap-2">
+        <button id="pp-preview-btn" type="submit" class="btn btn-primary">ดูตัวอย่างงวด</button>
       </div>
     </fieldset>
-    <section id="pp-preview" class="mt-4" aria-label="ตัวอย่างงวด" hidden>
-      <div id="pp-preview-content"></div>
-      <button id="pp-save" type="button" class="btn btn-primary mt-3">ยืนยันสร้างแผน</button>
+    <section id="pp-preview" class="border-t border-slate-100 p-4" aria-labelledby="pp-preview-title" hidden>
+      <h3 id="pp-preview-title" class="font-semibold">ตรวจสอบงวดก่อนยืนยัน</h3>
+      <p class="text-sm text-slate-500">แก้ยอดรายงวดได้ โดยผลรวมต้องเท่ากับยอดรวมทั้งแผน</p>
+      <div id="pp-preview-content" class="mt-3"></div>
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <button id="pp-save" type="button" class="btn btn-primary">ยืนยันสร้างแผน</button>
+        <p id="pp-preview-sum" class="text-sm" aria-live="polite"></p>
+      </div>
     </section>
-    <p id="pp-form-error" class="mt-3 text-sm text-rose-700" role="alert"></p>
+    <p id="pp-form-error" class="mx-4 mb-4 text-sm text-rose-700 empty:hidden" role="alert"></p>
   </form>
-  <h2 class="mt-6 font-semibold">แผนที่บันทึกแล้ว</h2>
-  <div id="pp-list" class="mt-2 space-y-2" aria-live="polite"></div>
+
+  <div class="mt-6 flex flex-wrap items-center justify-between gap-2">
+    <h2 class="font-semibold">แผนที่บันทึกแล้ว</h2>
+    <label class="inline-flex min-h-[2.75rem] items-center gap-2 text-sm text-slate-600">
+      <input id="pp-show-closed" type="checkbox" class="h-5 w-5 rounded border-slate-300 text-indigo-600"> แสดงแผนที่จบหรือยกเลิกแล้ว
+    </label>
+  </div>
+  <div id="pp-list" class="mt-2 space-y-3" aria-live="polite"></div>
 </section>
 
-<dialog id="pp-action-dialog" class="w-[min(34rem,calc(100vw-2rem))] rounded-xl p-4" aria-labelledby="pp-action-title">
-  <form id="pp-action-form" class="space-y-3">
-    <h2 id="pp-action-title" class="font-semibold"></h2>
-    <label class="field-label">การดำเนินการ
-      <select name="action" class="field-input">
-        <option value="RESERVE">กันเงิน</option>
-        <option value="RELEASE">ปลดเงิน</option>
-        <option value="PAY">บันทึกการชำระจริง</option>
-        <option value="REVERSE_PAY">กลับรายการชำระ</option>
-        <option value="NOTE">แก้หมายเหตุรายงวด</option>
-        <option value="EDIT_PLAN">แก้รายละเอียดแผน</option>
-        <option value="RENEW">ต่ออายุแผนประจำ</option>
-        <option value="CANCEL">ยกเลิกงวดหรือแผน</option>
-      </select>
-    </label>
-    <div id="pp-action-fields" class="space-y-3"></div>
-    <p id="pp-action-error" role="alert" class="text-sm text-rose-700"></p>
-    <div class="flex flex-wrap gap-2">
-      <button type="submit" id="pp-action-submit" class="btn btn-primary">ยืนยัน</button>
+<dialog id="pp-action-dialog" class="w-[min(34rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="pp-action-title">
+  <form id="pp-action-form" class="flex max-h-[88vh] flex-col">
+    <div class="border-b border-slate-200 px-5 py-4">
+      <h2 id="pp-action-title" class="font-semibold"></h2>
+      <p id="pp-action-sub" class="text-sm text-slate-500"></p>
+    </div>
+    <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <label class="block"><span class="field-label">การดำเนินการ</span>
+        <select name="action" class="field-input">
+          <option value="RESERVE">กันเงิน</option>
+          <option value="RELEASE">ปลดเงิน</option>
+          <option value="PAY">บันทึกการชำระจริง</option>
+          <option value="REVERSE_PAY">กลับรายการชำระ</option>
+          <option value="NOTE">แก้หมายเหตุรายงวด</option>
+          <option value="EDIT_PLAN">แก้รายละเอียดแผน</option>
+          <option value="RENEW">ต่ออายุแผนประจำ</option>
+          <option value="CANCEL">ยกเลิกงวดหรือแผน</option>
+        </select>
+      </label>
+      <p id="pp-action-hint" class="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600"></p>
+      <div id="pp-action-fields" class="space-y-3"></div>
+      <p id="pp-action-error" role="alert" class="text-sm text-rose-700 empty:hidden"></p>
+    </div>
+    <div class="flex flex-wrap justify-end gap-2 border-t border-slate-200 px-5 py-3">
       <button type="button" id="pp-action-close" class="btn btn-secondary">ปิด</button>
+      <button type="submit" id="pp-action-submit" class="btn btn-primary">ยืนยัน</button>
     </div>
   </form>
 </dialog>
+
+<style>
+  .pp-step { display: flex; align-items: center; gap: .5rem; margin-bottom: .75rem; font-weight: 600; color: #334155; }
+  .pp-step > span { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 9999px; background: #eef2ff; color: #4338ca; font-size: .75rem; }
+  .pp-badge { display: inline-flex; align-items: center; border-radius: 9999px; padding: .125rem .5rem; font-size: .75rem; font-weight: 500; white-space: nowrap; }
+  .pp-meter { height: .5rem; border-radius: 9999px; background: #e2e8f0; overflow: hidden; }
+  .pp-meter > span { display: block; height: 100%; background: #4f46e5; border-radius: 9999px; }
+  .pp-row { display: grid; grid-template-columns: 3rem minmax(0, 1fr) auto; gap: .75rem; align-items: start; padding: .75rem 0; }
+  .pp-row + .pp-row { border-top: 1px solid #f1f5f9; }
+  .pp-no { display: grid; place-items: center; height: 2.5rem; border-radius: .75rem; background: #f1f5f9; font-weight: 600; font-size: .8125rem; color: #334155; }
+</style>
 
 <script>
   (function () {
@@ -71,31 +132,78 @@
     var fields = document.getElementById('pp-fields');
     var preview = document.getElementById('pp-preview');
     var previewContent = document.getElementById('pp-preview-content');
+    var previewSum = document.getElementById('pp-preview-sum');
     var previewButton = document.getElementById('pp-preview-btn');
     var saveButton = document.getElementById('pp-save');
     var errorBox = document.getElementById('pp-form-error');
     var list = document.getElementById('pp-list');
+    var summaryBox = document.getElementById('pp-summary');
+    var newToggle = document.getElementById('pp-new-toggle');
+    var showClosed = document.getElementById('pp-show-closed');
     var draft = null;
+    var draftTotal = 0;
     var submit = App.createSubmitter();
     var saving = false;
     var loading = false;
     var unconfirmed = false;
     var masterAccounts = [];
+    var plansCache = [];
+    var openPlans = {};
     var actionDialog = document.getElementById('pp-action-dialog');
     var actionForm = document.getElementById('pp-action-form');
     var actionType = actionForm.elements.namedItem('action');
     var actionFields = document.getElementById('pp-action-fields');
     var actionError = document.getElementById('pp-action-error');
+    var actionHint = document.getElementById('pp-action-hint');
     var actionSubmit = document.getElementById('pp-action-submit');
     var actionClose = document.getElementById('pp-action-close');
     var selectedRecord = null;
     var activitySubmit;
     var retryActivity = null;
 
+    var PLAN_TYPES = { INSTALLMENT: 'ผ่อนชำระ', ONE_TIME: 'ชำระครั้งเดียว', RECURRING: 'รายจ่ายประจำ' };
+    var PLAN_STATUS = {
+      ACTIVE: ['กำลังดำเนินการ', 'bg-indigo-50 text-indigo-700'],
+      COMPLETED: ['ชำระครบแล้ว', 'bg-emerald-50 text-emerald-700'],
+      CANCELLED: ['ยกเลิกแล้ว', 'bg-slate-100 text-slate-600']
+    };
+    var PAYMENT_STATUS = {
+      UNPAID: ['ยังไม่ชำระ', 'bg-slate-100 text-slate-600'],
+      PARTIAL: ['ชำระบางส่วน', 'bg-amber-50 text-amber-700'],
+      PAID: ['ชำระแล้ว', 'bg-emerald-50 text-emerald-700'],
+      CANCELLED: ['ยกเลิก', 'bg-slate-100 text-slate-500']
+    };
+    var SAVING_STATUS = {
+      NOT_SAVED: ['ยังไม่กันเงิน', 'bg-slate-100 text-slate-600'],
+      PARTIAL: ['กันบางส่วน', 'bg-amber-50 text-amber-700'],
+      SAVED: ['กันเงินครบ', 'bg-indigo-50 text-indigo-700']
+    };
+    var ACTION_HINTS = {
+      RESERVE: 'กันเงินจากบัญชีไว้สำหรับงวดนี้ ไม่ใช่รายจ่าย เงินยังอยู่ในบัญชีแต่จะไม่นับเป็นเงินที่ใช้ได้',
+      RELEASE: 'คืนเงินที่กันไว้กลับเป็นเงินที่ใช้ได้',
+      PAY: 'บันทึกการจ่ายจริง ระบบจะสร้างรายการรายจ่ายและใช้เงินที่กันไว้ของงวดนั้นก่อน ชำระหลายงวดพร้อมกันได้',
+      REVERSE_PAY: 'ยกเลิกการชำระที่บันทึกผิด ประวัติเดิมยังอยู่ และเงินที่เคยกันไว้จะกลับมาเป็นกันไว้',
+      NOTE: 'หมายเหตุเฉพาะงวด ไม่กระทบยอดหรือสถานะ',
+      EDIT_PLAN: 'แก้ชื่อและรายละเอียดของแผน ทุกงวดจะอัปเดตตาม (หมายเหตุรายงวดไม่ถูกเขียนทับ)',
+      RENEW: 'เพิ่มงวดต่อจากงวดสุดท้ายของแผนประจำ',
+      CANCEL: 'ยกเลิกภาระที่ยังค้าง งวดที่ชำระแล้วและประวัติยังอยู่ครบ'
+    };
+
+    function money(v) { return App.formatMoney(v); }
+    function baht(v) { return money(v) + ' ฿'; }
+
     function month(value) {
       var s = String(value);
       return s.slice(0, 4) + '-' + s.slice(4);
     }
+
+    function monthTh(value) {
+      var s = String(value);
+      var d = new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, 1);
+      return d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+    }
+
+    function badge(pair) { return el('span', { class: 'pp-badge ' + pair[1], text: pair[0] }); }
 
     function field(name) { return form.elements.namedItem(name); }
 
@@ -105,12 +213,25 @@
       field('first_saving_month').value = today.slice(0, 7);
       field('first_payment_month').value = today.slice(0, 7);
       syncPlanType();
+      updateLiveTotal();
     }
 
     function syncPlanType() {
       var once = field('plan_type').value === 'ONE_TIME';
       field('installment_count').readOnly = once;
       if (once) field('installment_count').value = 1;
+    }
+
+    function toSatang(v) {
+      var n = Number(String(v || '').replace(/,/g, ''));
+      return isFinite(n) ? Math.round(n * 100) : 0;
+    }
+
+    function updateLiveTotal() {
+      var total = toSatang(field('principal_amount').value) + toSatang(field('interest_amount').value) + toSatang(field('fee_amount').value);
+      var count = Math.max(1, parseInt(field('installment_count').value, 10) || 1);
+      document.getElementById('pp-total-live').textContent = money(total / 100);
+      document.getElementById('pp-per-live').textContent = money(Math.floor(total / count) / 100);
     }
 
     function fillOptions(name, data, label) {
@@ -125,53 +246,186 @@
       select.value = data.some(function (row) { return row[name] === previous; }) ? previous : '';
     }
 
-    function renderSchedules(rows, editable) {
-      return el('ol', { class: 'mt-2 space-y-2' }, ...rows.map(function (row) {
+    function showForm(show) {
+      form.hidden = !show;
+      newToggle.setAttribute('aria-expanded', String(show));
+      if (show) field('item_name').focus();
+    }
+
+    // ---------- ตัวอย่างงวด (แก้ยอดได้) ----------
+
+    function updatePreviewSum() {
+      var sum = Array.from(previewContent.querySelectorAll('[data-pp-amount]')).reduce(function (s, input) { return s + toSatang(input.value); }, 0);
+      var ok = sum === draftTotal;
+      previewSum.textContent = 'ผลรวมงวด ' + money(sum / 100) + ' / ' + money(draftTotal / 100) + ' บาท' + (ok ? ' ✓' : ' — ต้องเท่ากับยอดรวม');
+      previewSum.className = 'text-sm ' + (ok ? 'text-emerald-700' : 'font-medium text-rose-700');
+      saveButton.disabled = !ok || saving;
+    }
+
+    function renderPreview(rows) {
+      var wrap = el('ol', { class: 'rounded-xl border border-slate-200 px-3' });
+      rows.forEach(function (row) {
         var ordinal = 'งวด ' + row.installment_no + '/' + row.installment_count;
-        var due = row.due_date ? ' · ครบกำหนด ' + App.formatDateTh(row.due_date) : '';
-        var amount = editable
-          ? el('input', { class: 'field-input mt-1 w-32', type: 'number', min: '0.01', step: '0.01', required: true,
-            value: row.amount_due, 'aria-label': 'ยอดชำระ ' + ordinal, 'data-pp-amount': true })
-          : el('div', { class: 'mt-1 text-sm' },
-            el('p', { text: 'ตามแผน ' + App.formatMoney(row.amount_due) + ' · กันไว้ ' + App.formatMoney(row.amount_reserved) +
-              ' · ชำระแล้ว ' + App.formatMoney(row.amount_paid) + ' บาท' }),
-            el('p', { text: row.is_cancelled ? 'ยกเลิกแล้ว' : 'ค้างชำระ ' + App.formatMoney(row.remaining_to_pay) + ' บาท' + (row.is_overdue ? ' · เกินกำหนด' : '') }),
-            row.note ? el('p', { class: 'break-words text-slate-600', text: row.note }) : null);
-        return el('li', { class: 'rounded-xl bg-slate-50 p-3' },
-          el('p', { class: 'font-medium', text: ordinal }),
-          el('p', { class: 'text-sm text-slate-600', text: 'เก็บ ' + month(row.saving_month) + ' · ชำระ ' + month(row.payment_month) + due }),
-          amount);
-      }));
+        var due = row.due_date ? 'ครบกำหนด ' + App.formatDateTh(row.due_date) : 'ไม่ระบุวันครบกำหนด';
+        var input = el('input', { class: 'field-input w-32 text-right', type: 'number', min: '0.01', step: '0.01', required: true,
+          value: row.amount_due, inputmode: 'decimal', 'aria-label': 'ยอดชำระ ' + ordinal, 'data-pp-amount': true });
+        input.addEventListener('input', updatePreviewSum);
+        wrap.appendChild(el('li', { class: 'pp-row' },
+          el('span', { class: 'pp-no', text: row.installment_no + '/' + row.installment_count }),
+          el('div', { class: 'min-w-0 text-sm' },
+            el('p', { class: 'font-medium', text: 'เก็บ ' + monthTh(row.saving_month) + ' → ชำระ ' + monthTh(row.payment_month) }),
+            el('p', { class: 'text-xs text-slate-500', text: due })),
+          input));
+      });
+      return wrap;
+    }
+
+    // ---------- รายการแผน ----------
+
+    function nextDue(record) {
+      return record.schedules.filter(function (r) { return !r.is_cancelled && r.remaining_to_pay > 0; })
+        .sort(function (a, b) { return a.payment_month - b.payment_month || a.installment_no - b.installment_no; })[0];
+    }
+
+    function scheduleRow(row) {
+      var badges = el('div', { class: 'mt-1 flex flex-wrap gap-1' });
+      if (row.is_cancelled) badges.appendChild(badge(PAYMENT_STATUS.CANCELLED));
+      else {
+        badges.appendChild(badge(PAYMENT_STATUS[row.payment_status] || PAYMENT_STATUS.UNPAID));
+        if (row.remaining_to_pay > 0 && SAVING_STATUS[row.saving_status]) badges.appendChild(badge(SAVING_STATUS[row.saving_status]));
+        if (row.is_overdue) badges.appendChild(badge(['เกินกำหนด', 'bg-rose-50 text-rose-700']));
+      }
+      var detail = ['กันไว้ ' + money(row.amount_reserved), 'ชำระแล้ว ' + money(row.amount_paid)];
+      return el('li', { class: 'pp-row' + (row.is_cancelled ? ' opacity-60' : '') },
+        el('span', { class: 'pp-no', text: row.installment_no + '/' + row.installment_count }),
+        el('div', { class: 'min-w-0 text-sm' },
+          el('p', { class: 'font-medium', text: 'เก็บ ' + monthTh(row.saving_month) + ' → ชำระ ' + monthTh(row.payment_month) }),
+          el('p', { class: 'text-xs text-slate-500', text: (row.due_date ? 'ครบกำหนด ' + App.formatDateTh(row.due_date) + ' · ' : '') + detail.join(' · ') }),
+          badges,
+          row.note ? el('p', { class: 'mt-1 break-words text-xs text-slate-600', text: '📝 ' + row.note }) : null),
+        el('div', { class: 'text-right' },
+          el('p', { class: 'text-sm font-semibold', text: money(row.amount_due) }),
+          !row.is_cancelled && row.remaining_to_pay > 0 ? el('p', { class: 'text-xs text-rose-600', text: 'ค้าง ' + money(row.remaining_to_pay) }) : null));
+    }
+
+    function planCard(record) {
+      var plan = record.plan;
+      var active = record.schedules.filter(function (r) { return !r.is_cancelled; });
+      var due = active.reduce(function (s, r) { return s + toSatang(r.amount_due); }, 0);
+      var paid = active.reduce(function (s, r) { return s + toSatang(r.amount_paid); }, 0);
+      var remaining = active.reduce(function (s, r) { return s + toSatang(r.remaining_to_pay); }, 0);
+      var pct = due ? Math.round(paid / due * 100) : 0;
+      var paidCount = active.filter(function (r) { return r.remaining_to_pay <= 0; }).length;
+      var next = nextDue(record);
+      var fill = el('span');
+      fill.style.width = pct + '%';
+      var status = PLAN_STATUS[plan.plan_status] || PLAN_STATUS.ACTIVE;
+      var isActive = plan.plan_status === 'ACTIVE';
+
+      var details = el('details', { class: 'mt-3 border-t border-slate-100 pt-2' },
+        el('summary', { class: 'cursor-pointer py-1 text-sm font-medium text-indigo-700', text: 'ดูงวดทั้งหมด (' + record.schedules.length + ')' }),
+        el('ol', { class: 'mt-1' }, ...record.schedules.map(scheduleRow)));
+      details.open = !!openPlans[plan.plan_id];
+      details.addEventListener('toggle', function () { openPlans[plan.plan_id] = details.open; });
+
+      var actions = el('div', { class: 'mt-3 flex flex-wrap gap-2' });
+      if (isActive) {
+        actions.appendChild(el('button', { type: 'button', class: 'btn btn-secondary', onclick: function () { openActivity(record, 'RESERVE'); } }, 'กันเงิน'));
+        actions.appendChild(el('button', { type: 'button', class: 'btn btn-primary', onclick: function () { openActivity(record, 'PAY'); } }, 'บันทึกการชำระ'));
+      }
+      actions.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'การจัดการอื่นของแผน ' + plan.item_name,
+        onclick: function () { openActivity(record); } }, 'จัดการอื่น ๆ'));
+
+      return el('article', { class: 'rounded-2xl border border-slate-200 bg-white p-4', 'aria-label': plan.item_name },
+        el('div', { class: 'flex flex-wrap items-start justify-between gap-2' },
+          el('div', { class: 'min-w-0 flex-1' },
+            el('div', { class: 'flex flex-wrap items-center gap-1.5' }, badge([PLAN_TYPES[plan.plan_type] || plan.plan_type, 'bg-slate-100 text-slate-700']), badge(status)),
+            el('h3', { class: 'mt-1.5 break-words text-base font-semibold', text: plan.item_name }),
+            el('p', { class: 'text-xs text-slate-500', text: [plan.account_name, plan.owner_name, plan.category_name].filter(Boolean).join(' · ') })),
+          el('div', { class: 'text-right' },
+            el('p', { class: 'text-lg font-bold', text: baht(plan.total_amount) }),
+            el('p', { class: 'text-xs text-slate-500', text: 'ชำระแล้ว ' + paidCount + '/' + active.length + ' งวด' }))),
+        el('div', { class: 'mt-3' },
+          el('div', { class: 'mb-1 flex justify-between text-xs text-slate-500' },
+            el('span', { text: 'ชำระแล้ว ' + baht(paid / 100) }), el('span', { text: 'คงเหลือ ' + baht(remaining / 100) })),
+          el('div', { class: 'pp-meter', role: 'progressbar', 'aria-label': 'ความคืบหน้าการชำระ ' + plan.item_name,
+            'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct }, fill)),
+        next ? el('p', { class: 'mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm' + (next.is_overdue ? ' text-rose-700' : ' text-slate-700'),
+          text: (next.is_overdue ? '⚠️ เกินกำหนด: ' : 'งวดถัดไป: ') + 'งวด ' + next.installment_no + ' · ' + monthTh(next.payment_month) +
+            (next.due_date ? ' (' + App.formatDateTh(next.due_date) + ')' : '') + ' · ค้าง ' + baht(next.remaining_to_pay) +
+            (next.amount_reserved ? ' · กันไว้ ' + baht(next.amount_reserved) : '') }) : null,
+        actions,
+        details);
+    }
+
+    function renderSummary(plans) {
+      summaryBox.textContent = '';
+      var active = plans.filter(function (r) { return r.plan.plan_status === 'ACTIVE'; });
+      var rows = [];
+      active.forEach(function (r) { rows = rows.concat(r.schedules.filter(function (s) { return !s.is_cancelled; })); });
+      var thisMonth = Number(App.todayIso().slice(0, 7).replace('-', ''));
+      var remaining = rows.reduce(function (s, r) { return s + toSatang(r.remaining_to_pay); }, 0);
+      var reserved = rows.reduce(function (s, r) { return s + toSatang(r.amount_reserved); }, 0);
+      var dueMonth = rows.filter(function (r) { return r.payment_month <= thisMonth; }).reduce(function (s, r) { return s + toSatang(r.remaining_to_pay); }, 0);
+      var overdue = rows.filter(function (r) { return r.is_overdue; }).length;
+      [['แผนที่กำลังดำเนินการ', active.length + ' แผน', 'text-slate-800'],
+        ['ยอดค้างทั้งหมด', baht(remaining / 100), 'text-rose-600'],
+        ['ต้องชำระถึงเดือนนี้', baht(dueMonth / 100), dueMonth ? 'text-amber-600' : 'text-slate-800'],
+        ['เงินกันไว้แล้ว', baht(reserved / 100), 'text-indigo-700']].forEach(function (c) {
+        summaryBox.appendChild(el('div', { class: 'rounded-2xl border border-slate-200 bg-white p-3' },
+          el('p', { class: 'text-xs text-slate-500', text: c[0] }),
+          el('p', { class: 'mt-1 font-semibold ' + c[2], text: c[1] })));
+      });
+      if (overdue) summaryBox.appendChild(el('p', { class: 'col-span-2 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 sm:col-span-4', role: 'status',
+        text: 'มี ' + overdue + ' งวดเกินกำหนดชำระ' }));
+    }
+
+    function renderPlans() {
+      list.textContent = '';
+      var visible = plansCache.filter(function (r) { return showClosed.checked || r.plan.plan_status === 'ACTIVE'; });
+      if (!visible.length) {
+        var hidden = plansCache.length - visible.length;
+        list.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center' },
+          el('p', { class: 'font-medium text-slate-700', text: plansCache.length ? 'ไม่มีแผนที่กำลังดำเนินการ' : 'ยังไม่มีแผนชำระ' }),
+          el('p', { class: 'mt-1 text-sm text-slate-500', text: hidden ? 'มีแผนที่จบหรือยกเลิกแล้ว ' + hidden + ' แผน' : 'เริ่มจากสร้างแผนผ่อนหรือรายจ่ายที่ต้องจ่ายในอนาคต' }),
+          el('button', { type: 'button', class: 'btn btn-primary mt-4', onclick: function () { showForm(true); } }, 'สร้างแผนใหม่')));
+        return;
+      }
+      visible.forEach(function (record) { list.appendChild(planCard(record)); });
     }
 
     function load() {
       if (loading) return;
       loading = true;
-      list.textContent = 'กำลังโหลดแผน…';
+      if (!plansCache.length) {
+        list.textContent = '';
+        for (var i = 0; i < 2; i++) list.appendChild(el('div', { class: 'h-40 animate-pulse rounded-2xl bg-slate-200/70', 'aria-hidden': 'true' }));
+      }
       return App.call('api_paymentPlannerPage').then(function (data) {
         masterAccounts = data.masters.accounts;
         fillOptions('account_id', data.masters.accounts.filter(function (row) { return row.is_active; }), 'บัญชีหรือบัตร');
         fillOptions('owner_id', data.masters.owners.filter(function (row) { return row.is_active; }), 'เจ้าของรายการ');
         fillOptions('category_id', data.masters.categories.filter(function (row) { return row.is_active && row.category_type === 'EXPENSE'; }), 'หมวดหมู่');
         fields.disabled = saving || unconfirmed;
-        list.textContent = data.plans.length ? '' : 'ยังไม่มีแผนชำระ';
-        data.plans.forEach(function (record) {
-          var plan = record.plan;
-          list.appendChild(el('details', { class: 'rounded-2xl border border-slate-200 bg-white p-4' },
-            el('summary', { class: 'cursor-pointer font-medium break-words', text: plan.item_name + ' · ' + App.formatMoney(plan.total_amount) + ' บาท' }),
-            el('p', { class: 'mt-2 text-sm text-slate-600', text: [plan.account_name, plan.owner_name, plan.category_name].join(' · ') }),
-            el('button', { type: 'button', class: 'btn btn-secondary mt-2', onclick: function () { openActivity(record); } }, 'จัดการแผนและงวด'),
-            renderSchedules(record.schedules, false)));
-        });
+        plansCache = data.plans;
+        if (selectedRecord) {
+          selectedRecord = plansCache.find(function (r) { return r.plan.plan_id === selectedRecord.plan.plan_id; }) || selectedRecord;
+        }
+        renderSummary(plansCache);
+        renderPlans();
       }, function (err) {
         list.textContent = '';
-        list.appendChild(el('p', { role: 'alert', text: err.message }));
-        list.appendChild(el('button', { type: 'button', class: 'btn btn-secondary mt-2', onclick: load }, 'โหลดใหม่'));
+        list.appendChild(el('div', { class: 'rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center', role: 'alert' },
+          el('p', { class: 'font-medium text-rose-700', text: 'โหลดแผนไม่สำเร็จ' }),
+          el('p', { class: 'mt-1 text-sm text-rose-600', text: err.message }),
+          el('button', { type: 'button', class: 'btn btn-secondary mt-3', onclick: load }, 'โหลดใหม่')));
       }).finally(function () { loading = false; });
     }
 
+    // ---------- หน้าต่างจัดการ ----------
+
     function labeled(label, control) {
-      return el('label', { class: 'field-label' }, label, control);
+      return el('label', { class: 'block' }, el('span', { class: 'field-label', text: label }), control);
     }
 
     function option(value, label) { return el('option', { value: value, text: label }); }
@@ -181,47 +435,70 @@
       var rows = selectedRecord.schedules;
       actionError.textContent = '';
       actionFields.textContent = '';
+      actionHint.textContent = ACTION_HINTS[action] || '';
       var needsReason = action === 'CANCEL' || action === 'REVERSE_PAY';
       var note = el('textarea', { name: 'note', class: 'field-input', rows: '2', maxlength: '1000', required: needsReason });
       if (['PAY', 'EDIT_PLAN', 'RENEW', 'REVERSE_PAY'].indexOf(action) < 0) {
         var schedule = el('select', { name: 'schedule_id', class: 'field-input', required: action !== 'CANCEL' });
-        schedule.appendChild(option('', action === 'CANCEL' ? 'ทั้งแผน' : 'เลือกงวด'));
-        rows.filter(function (row) {
-          return action === 'NOTE' || (!row.is_cancelled && (action === 'RELEASE' || row.remaining_to_pay > 0));
-        }).forEach(function (row) {
-          schedule.appendChild(option(row.schedule_id, 'งวด ' + row.installment_no + ' · ' + month(row.payment_month)));
+        schedule.appendChild(option('', action === 'CANCEL' ? 'ทั้งแผน (เฉพาะงวดที่ยังค้าง)' : 'เลือกงวด'));
+        var candidates = rows.filter(function (row) {
+          if (action === 'NOTE') return true;
+          if (row.is_cancelled) return false;
+          if (action === 'RELEASE') return row.amount_reserved > 0;
+          return row.remaining_to_pay > 0;
         });
+        candidates.forEach(function (row) {
+          var extra = action === 'RELEASE' ? ' · กันไว้ ' + money(row.amount_reserved)
+            : (action === 'RESERVE' ? ' · ต้องเก็บเพิ่ม ' + money(row.remaining_to_save) : '');
+          schedule.appendChild(option(row.schedule_id, 'งวด ' + row.installment_no + ' · ชำระ ' + monthTh(row.payment_month) + extra));
+        });
+        if (action !== 'CANCEL' && action !== 'NOTE' && candidates.length === 1) schedule.value = candidates[0].schedule_id;
         if (action === 'NOTE') schedule.addEventListener('change', function () {
           var row = rows.find(function (r) { return r.schedule_id === schedule.value; });
           note.value = row ? row.note : '';
         });
         actionFields.appendChild(labeled('งวด', schedule));
+        if (!candidates.length && action !== 'CANCEL') actionError.textContent = action === 'RELEASE' ? 'ยังไม่มีงวดที่กันเงินไว้' : 'ไม่มีงวดที่ทำรายการนี้ได้';
       }
       if (['RESERVE', 'RELEASE', 'PAY'].indexOf(action) >= 0) {
         var account = el('select', { name: 'account_id', class: 'field-input', required: true });
         account.appendChild(option('', 'เลือกบัญชี'));
-        masterAccounts.filter(function (row) {
+        var accounts = masterAccounts.filter(function (row) {
           return ['CASH', 'BANK', 'E_WALLET'].indexOf(row.account_type) >= 0 && (row.is_active || action === 'RELEASE');
-        }).forEach(function (row) { account.appendChild(option(row.account_id, row.account_name)); });
-        actionFields.appendChild(labeled('บัญชีสินทรัพย์', account));
+        });
+        accounts.forEach(function (row) { account.appendChild(option(row.account_id, row.account_name)); });
+        if (accounts.length === 1) account.value = accounts[0].account_id;
+        actionFields.appendChild(labeled(action === 'PAY' ? 'จ่ายจากบัญชี' : 'บัญชีสินทรัพย์', account));
         actionFields.appendChild(labeled('วันที่ทำรายการ', el('input', { name: 'date', type: 'date', class: 'field-input', value: App.todayIso(), required: true })));
       }
       if (action === 'PAY') {
-        rows.filter(function (row) { return !row.is_cancelled && row.remaining_to_pay > 0; }).forEach(function (row) {
-          actionFields.appendChild(labeled('ยอดชำระงวด ' + row.installment_no + ' · ค้าง ' + App.formatMoney(row.remaining_to_pay),
-            el('input', { class: 'field-input', type: 'number', min: '0.01', step: '0.01', max: row.remaining_to_pay,
-              'data-payment-schedule': row.schedule_id })));
+        var payable = rows.filter(function (row) { return !row.is_cancelled && row.remaining_to_pay > 0; });
+        var box = el('fieldset', { class: 'rounded-xl border border-slate-200 p-3' },
+          el('legend', { class: 'px-1 text-sm font-medium text-slate-700', text: 'ยอดชำระแต่ละงวด (เว้นว่างงวดที่ไม่จ่าย)' }));
+        payable.forEach(function (row, i) {
+          var input = el('input', { class: 'field-input w-32 text-right', type: 'number', min: '0.01', step: '0.01', max: row.remaining_to_pay,
+            inputmode: 'decimal', 'data-payment-schedule': row.schedule_id, 'aria-label': 'ยอดชำระงวด ' + row.installment_no });
+          var fillButton = el('button', { type: 'button', class: 'btn btn-ghost px-2 text-xs', onclick: function () { input.value = row.remaining_to_pay; updatePayTotal(); } }, 'เต็มงวด');
+          input.addEventListener('input', updatePayTotal);
+          box.appendChild(el('div', { class: 'flex flex-wrap items-center justify-between gap-2 py-1.5' + (i ? ' border-t border-slate-100' : '') },
+            el('div', { class: 'min-w-0 text-sm' },
+              el('p', { class: 'font-medium', text: 'งวด ' + row.installment_no + ' · ' + monthTh(row.payment_month) }),
+              el('p', { class: 'text-xs text-slate-500', text: 'ค้าง ' + money(row.remaining_to_pay) + (row.amount_reserved ? ' · กันไว้ ' + money(row.amount_reserved) : '') })),
+            el('div', { class: 'flex items-center gap-1' }, fillButton, input)));
         });
+        box.appendChild(el('p', { id: 'pp-pay-total', class: 'mt-2 text-right text-sm font-semibold', text: 'รวม 0.00 บาท' }));
+        actionFields.appendChild(box);
       } else if (action === 'REVERSE_PAY') {
         var payment = el('select', { name: 'transaction_id', class: 'field-input', required: true });
         payment.appendChild(option('', 'เลือกรายการชำระ'));
         selectedRecord.payments.forEach(function (row) {
-          payment.appendChild(option(row.transaction_id, App.formatDateTh(row.transaction_date) + ' · ' + App.formatMoney(row.amount) + ' บาท'));
+          payment.appendChild(option(row.transaction_id, App.formatDateTh(row.transaction_date) + ' · ' + money(row.amount) + ' บาท'));
         });
+        if (selectedRecord.payments.length === 1) payment.value = selectedRecord.payments[0].transaction_id;
         actionFields.appendChild(labeled('รายการชำระ', payment));
         actionFields.appendChild(labeled('วันที่กลับรายการ', el('input', { name: 'date', type: 'date', class: 'field-input', value: App.todayIso(), required: true })));
       } else if (action === 'RESERVE' || action === 'RELEASE') {
-        actionFields.appendChild(labeled('จำนวนเงิน (บาท)', el('input', { name: 'amount', class: 'field-input', type: 'number', min: '0.01', step: '0.01', required: true })));
+        actionFields.appendChild(labeled('จำนวนเงิน (บาท)', el('input', { name: 'amount', class: 'field-input', type: 'number', min: '0.01', step: '0.01', inputmode: 'decimal', required: true })));
       }
       if (action === 'EDIT_PLAN') {
         var plan = selectedRecord.plan;
@@ -233,27 +510,37 @@
       }
       if (action === 'RENEW') {
         actionFields.appendChild(labeled('จำนวนงวดที่เพิ่ม', el('input', { name: 'additional_count', class: 'field-input',
-          type: 'number', min: '1', step: '1', required: true })));
+          type: 'number', min: '1', step: '1', inputmode: 'numeric', required: true })));
         actionFields.appendChild(labeled('ยอดรวมสำหรับงวดที่เพิ่ม (บาท)', el('input', { name: 'renewal_amount', class: 'field-input',
-          type: 'number', min: '0.01', step: '0.01', required: true })));
+          type: 'number', min: '0.01', step: '0.01', inputmode: 'decimal', required: true })));
       } else {
-        actionFields.appendChild(labeled(needsReason ? 'เหตุผล' : 'หมายเหตุ', note));
+        actionFields.appendChild(labeled(needsReason ? 'เหตุผล *' : 'หมายเหตุ', note));
       }
-      actionSubmit.textContent = action === 'PAY' ? 'ยืนยันยอดชำระจริง' : 'ยืนยัน';
+      actionSubmit.textContent = action === 'PAY' ? 'ยืนยันยอดชำระจริง' : (action === 'CANCEL' ? 'ยืนยันยกเลิก' : 'ยืนยัน');
+      actionSubmit.className = 'btn ' + (action === 'CANCEL' || action === 'REVERSE_PAY' ? 'btn-danger' : 'btn-primary');
     }
 
-    function openActivity(record) {
+    function updatePayTotal() {
+      var total = Array.from(actionFields.querySelectorAll('[data-payment-schedule]')).reduce(function (s, input) { return s + toSatang(input.value); }, 0);
+      var label = document.getElementById('pp-pay-total');
+      if (label) label.textContent = 'รวม ' + money(total / 100) + ' บาท';
+    }
+
+    function openActivity(record, preferred) {
       selectedRecord = record;
       retryActivity = null;
       activitySubmit = App.createSubmitter();
-      actionType.value = record.plan.plan_status === 'ACTIVE' ? 'RESERVE' : 'NOTE';
+      var state = record.plan.plan_status;
       Array.from(actionType.options).forEach(function (row) {
-        var state = record.plan.plan_status;
         if (row.value === 'REVERSE_PAY') row.disabled = !record.payments.length;
         else if (row.value === 'RENEW') row.disabled = state === 'CANCELLED' || record.plan.plan_type !== 'RECURRING';
         else row.disabled = state !== 'ACTIVE' && ['NOTE', 'EDIT_PLAN'].indexOf(row.value) < 0;
       });
+      var wanted = preferred || (state === 'ACTIVE' ? 'RESERVE' : 'NOTE');
+      var opt = Array.from(actionType.options).find(function (o) { return o.value === wanted && !o.disabled; });
+      actionType.value = opt ? wanted : 'NOTE';
       document.getElementById('pp-action-title').textContent = record.plan.item_name;
+      document.getElementById('pp-action-sub').textContent = (PLAN_TYPES[record.plan.plan_type] || '') + ' · ' + baht(record.plan.total_amount);
       renderActivity();
       actionDialog.showModal();
     }
@@ -276,12 +563,13 @@
       }
       App.setBusy(actionSubmit, true);
       actionError.textContent = '';
-      var inputs = Array.from(actionFields.querySelectorAll('input, select, textarea')).concat([actionType, actionClose]);
+      var inputs = Array.from(actionFields.querySelectorAll('input, select, textarea, button')).concat([actionType, actionClose]);
       inputs.forEach(function (input) { input.disabled = true; });
+      openPlans[selectedRecord.plan.plan_id] = openPlans[selectedRecord.plan.plan_id] || false;
       activitySubmit(payload, function (key) { return App.call('api_paymentActivity', payload, key); }).then(function () {
         retryActivity = null;
         actionDialog.close();
-        App.toast('อัปเดตงวดแล้ว', 'success');
+        App.toast('อัปเดตแผนแล้ว', 'success');
         load();
       }, function (err) {
         retryActivity = ['NETWORK', 'BUSY', 'INTERNAL_ERROR'].indexOf(err.code) >= 0 ? payload : null;
@@ -292,16 +580,23 @@
       });
     });
 
+    // ---------- ฟอร์มสร้างแผน ----------
+
     fields.addEventListener('input', function () {
       draft = null;
       preview.hidden = true;
       errorBox.textContent = '';
+      updateLiveTotal();
     });
-    field('plan_type').addEventListener('change', syncPlanType);
+    field('plan_type').addEventListener('change', function () { syncPlanType(); updateLiveTotal(); });
+    newToggle.addEventListener('click', function () { showForm(form.hidden); });
+    document.getElementById('pp-form-close').addEventListener('click', function () { if (!saving) showForm(false); });
+    showClosed.addEventListener('change', renderPlans);
 
     form.addEventListener('submit', function (event) {
       event.preventDefault();
       if (fields.disabled || previewButton.disabled || saving) return;
+      if (!form.reportValidity()) return;
       var input = Object.fromEntries(new FormData(form));
       ['first_saving_month', 'first_payment_month'].forEach(function (key) {
         input[key] = input[key].replace('-', '');
@@ -313,10 +608,13 @@
       fields.disabled = true;
       App.call('api_previewPaymentPlan', input).then(function (data) {
         draft = input;
+        draftTotal = toSatang(data.plan.total_amount);
         previewContent.textContent = '';
-        previewContent.appendChild(el('p', { class: 'font-semibold', text: 'ยอดรวม ' + App.formatMoney(data.plan.total_amount) + ' บาท' }));
-        previewContent.appendChild(renderSchedules(data.schedules, true));
+        previewContent.appendChild(el('p', { class: 'mb-2 font-semibold', text: 'ยอดรวม ' + baht(data.plan.total_amount) + ' · ' + data.schedules.length + ' งวด' }));
+        previewContent.appendChild(renderPreview(data.schedules));
         preview.hidden = false;
+        updatePreviewSum();
+        preview.scrollIntoView({ block: 'start', behavior: 'smooth' });
       }, function (err) {
         errorBox.textContent = err.message;
       }).finally(function () {
@@ -343,6 +641,7 @@
         previewContent.textContent = '';
         form.reset();
         defaults();
+        showForm(false);
         App.toast('สร้างแผนชำระแล้ว', 'success');
         load();
       }, function (err) {
@@ -353,6 +652,7 @@
         fields.disabled = unconfirmed;
         amounts.forEach(function (input) { input.disabled = unconfirmed; });
         App.setBusy(saveButton, false);
+        if (!preview.hidden) updatePreviewSum();
       });
     });
 

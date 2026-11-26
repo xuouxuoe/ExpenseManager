@@ -85,7 +85,7 @@ var FinanceReports = (function () {
     });
 
     var balances = Ledger.balances(d.accounts, d.allTransactions);
-    var reserves = PaymentActivity.balances(d.reservations).accounts;
+    var reserves = PaymentActivity.balances(d.reservations, d.allTransactions).accounts;
     var accountTotals = { assets: 0, reserved: 0, available: 0, liabilities: 0 };
     d.accounts.forEach(function (row) {
       var id = row.account_id;
@@ -110,7 +110,7 @@ var FinanceReports = (function () {
         var id = row.account_id;
         var asset = Ledger.isAsset(row.account_type);
         var held = reserves[id] || 0;
-        return { name: row.account_name, balance: baht(balances[id]), reserved: baht(held), isAsset: asset,
+        return { account_id: id, type: row.account_type, is_active: row.is_active === true, name: row.account_name, balance: baht(balances[id]), reserved: baht(held), isAsset: asset,
           available: asset ? baht(balances[id] - held) : null };
       }),
       recent: d.transactions.slice().sort(function (a, b) {

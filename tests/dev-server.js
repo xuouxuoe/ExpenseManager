@@ -43,6 +43,20 @@ function seed() {
   [2, 1, 0].forEach((n) => T.create({ transaction_date: monthsAgo(n), transaction_type: 'EXPENSE', from_account_id: byName('ออมทรัพย์ SCB *1234'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'ค่าอินเทอร์เน็ต', amount: n ? '599' : '649' }, req()));
   [3, 2, 1].forEach((d) => T.create({ transaction_date: month + String(d).padStart(2, '0'), transaction_type: 'EXPENSE', from_account_id: byName('เงินสด'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'กาแฟ', amount: '65' }, req()));
   T.create({ transaction_date: today, transaction_type: 'CREDIT_PURCHASE', from_account_id: byName('KBank Credit *5678'), category_id: food.category_id, owner_id: dad.owner_id, item_name: 'ซูเปอร์มาร์เก็ต', amount: '1250.75' }, req());
+
+  // แผนชำระตัวอย่าง: ผ่อน 6 งวด (กันเงินและชำระบางส่วน) + แผนครั้งเดียวที่เลยกำหนด
+  const ym = (offset) => { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + offset); return d.getFullYear() * 100 + d.getMonth() + 1; };
+  const scb = byName('ออมทรัพย์ SCB *1234');
+  const plan = ctx.api_createPaymentPlan({ item_name: 'โทรศัพท์ใหม่', purchase_date: today, plan_type: 'INSTALLMENT', owner_id: dad.owner_id,
+    account_id: scb, category_id: food.category_id, principal_amount: '12000', interest_amount: '', fee_amount: '', installment_count: 6,
+    first_saving_month: ym(0), first_payment_month: ym(1), due_day: 25, description: 'ผ่อน 0% 6 เดือน' }, 'seed-plan-phone').data;
+  const sch = ctx.Database.readAll('PaymentSchedules').rows.filter((r) => r.plan_id === plan.plan_id).sort((a, b) => a.installment_no - b.installment_no);
+  ctx.api_paymentActivity({ action: 'RESERVE', plan_id: plan.plan_id, schedule_id: sch[0].schedule_id, account_id: scb, amount: 2000, date: today }, 'seed-reserve-1');
+  ctx.api_paymentActivity({ action: 'PAY', plan_id: plan.plan_id, account_id: scb, date: today, lines: [{ schedule_id: sch[0].schedule_id, amount: 2000 }] }, 'seed-pay-1');
+  ctx.api_paymentActivity({ action: 'RESERVE', plan_id: plan.plan_id, schedule_id: sch[1].schedule_id, account_id: scb, amount: 800, date: today }, 'seed-reserve-2');
+  ctx.api_createPaymentPlan({ item_name: 'ค่าประกันรถ', purchase_date: today, plan_type: 'ONE_TIME', owner_id: dad.owner_id,
+    account_id: scb, category_id: food.category_id, principal_amount: '8500', installment_count: 1,
+    first_saving_month: ym(-2), first_payment_month: ym(-1), due_day: 10 }, 'seed-plan-insurance');
 }
 if (!process.env.DEV_EMPTY) seed();
 

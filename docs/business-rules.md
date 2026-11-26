@@ -126,7 +126,7 @@
 ตาม AGENTS.md §6.3 และ §7.3:
 
 - amount_saved = SUM(RESERVE) − SUM(RELEASE)
-- amount_reserved = amount_saved − SUM(CONSUME)
+- amount_reserved = amount_saved − SUM(CONSUME ของธุรกรรมที่มีผลจริง) — CONSUME ที่ผูกกับธุรกรรมชำระซึ่งถูกกลับรายการแล้วไม่ถูกนับ เงินที่เคยกันไว้จึงกลับมาเป็นกันไว้ในบัญชีเดิมและใช้ชำระใหม่ได้; แถว CONSUME เดิมยังคงอยู่เป็นประวัติ (ตัดสินใจ 2026-11-26)
 - amount_paid = ผลรวม allocated_amount ของธุรกรรมที่มีผล (ไม่ถูกกลับรายการ)
 - remaining_to_pay = MAX(0, amount_due − amount_paid)
 - remaining_to_save = MAX(0, remaining_to_pay − amount_reserved)

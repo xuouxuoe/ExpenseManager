@@ -1,26 +1,60 @@
 <section aria-labelledby="fr-title">
-  <h1 id="fr-title" class="text-xl font-semibold">ภาพรวมและรายงาน</h1>
-  <form id="fr-filters" class="mt-4 grid grid-cols-2 gap-3 rounded-xl bg-white p-4 sm:grid-cols-3">
-    <label class="field-label">เดือน <input class="field-input" name="month" type="month"></label>
-    <label class="field-label">ปี ค.ศ. (เมื่อไม่ระบุเดือน) <input class="field-input" name="year" type="number" min="1900" max="2200"></label>
-    <label class="field-label">เจ้าของรายการ <select class="field-input" name="owner_id"></select></label>
-    <label class="field-label">หมวดหมู่ <select class="field-input" name="category_id"></select></label>
-    <label class="field-label">บัญชีหรือบัตร <select class="field-input" name="account_id"></select></label>
-    <button class="btn btn-primary self-end" type="submit">แสดงรายงาน</button>
-  </form>
-  <p id="fr-status" role="status" class="mt-3 text-sm text-slate-600"></p>
-  <div id="fr-content" class="space-y-4"></div>
-  <div class="mt-4 flex flex-wrap items-end gap-2 rounded-xl bg-white p-4">
-    <label class="field-label">ชุดข้อมูล CSV
-      <select class="field-input" id="fr-export-kind">
-        <option value="TRANSACTIONS">ธุรกรรมจริง</option>
-        <option value="SAVING">แผนเก็บเงิน</option>
-        <option value="PAYMENT">แผนชำระ</option>
-      </select>
-    </label>
-    <button type="button" class="btn btn-secondary" id="fr-download">ดาวน์โหลด CSV</button>
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 id="fr-title" class="text-xl font-semibold">ภาพรวมและรายงาน</h1>
+      <p id="fr-period" class="text-sm text-slate-500">สรุปรายรับรายจ่าย แผนชำระ และยอดบัญชี</p>
+    </div>
   </div>
+
+  <form id="fr-filters" class="mt-4 rounded-2xl border border-slate-200 bg-white p-3" aria-label="ตัวกรองรายงาน">
+    <div class="flex flex-wrap items-end gap-2">
+      <label class="min-w-[11rem] flex-1">
+        <span class="field-label">เดือน</span>
+        <input class="field-input" name="month" type="month">
+      </label>
+      <button type="button" id="fr-more-toggle" class="btn btn-secondary" aria-expanded="false" aria-controls="fr-more">
+        ตัวกรองเพิ่มเติม <span id="fr-filter-count" class="hidden rounded-full bg-indigo-600 px-2 text-xs text-white"></span>
+      </button>
+      <button class="btn btn-primary" type="submit">แสดงรายงาน</button>
+    </div>
+    <div id="fr-more" class="mt-3 grid grid-cols-1 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-2 lg:grid-cols-4" hidden>
+      <label><span class="field-label">ปี ค.ศ. (เมื่อไม่ระบุเดือน)</span><input class="field-input" name="year" type="number" min="1900" max="2200"></label>
+      <label><span class="field-label">เจ้าของรายการ</span><select class="field-input" name="owner_id"></select></label>
+      <label><span class="field-label">หมวดหมู่</span><select class="field-input" name="category_id"></select></label>
+      <label><span class="field-label">บัญชีหรือบัตร</span><select class="field-input" name="account_id"></select></label>
+    </div>
+  </form>
+
+  <p id="fr-status" role="status" class="mt-3 text-sm text-slate-600"></p>
+  <div id="fr-content" class="mt-2 space-y-4" aria-live="polite"></div>
+
+  <section class="mt-4 rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby="fr-export-title">
+    <h2 id="fr-export-title" class="font-semibold">ส่งออกข้อมูล</h2>
+    <p class="text-sm text-slate-500">ไฟล์ CSV ตามตัวกรองที่แสดงอยู่ เปิดด้วย Excel หรือ Google Sheets ได้</p>
+    <div class="mt-3 flex flex-wrap items-end gap-2">
+      <label class="min-w-[12rem] flex-1">
+        <span class="field-label">ชุดข้อมูล</span>
+        <select class="field-input" id="fr-export-kind">
+          <option value="TRANSACTIONS">ธุรกรรมจริง</option>
+          <option value="SAVING">แผนเก็บเงิน</option>
+          <option value="PAYMENT">แผนชำระ</option>
+        </select>
+      </label>
+      <button type="button" class="btn btn-secondary" id="fr-download">ดาวน์โหลด CSV</button>
+    </div>
+  </section>
 </section>
+
+<style>
+  .fr-card { border-radius: 1rem; border: 1px solid #e2e8f0; background: #fff; padding: 1rem; }
+  .fr-kpi-label { font-size: .8125rem; color: #64748b; }
+  .fr-kpi-value { margin-top: .25rem; font-size: clamp(1.05rem, 4.2vw, 1.375rem); font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+  .fr-meter { height: .5rem; border-radius: 9999px; background: #e2e8f0; overflow: hidden; }
+  .fr-meter > span { display: block; height: 100%; border-radius: 9999px; }
+  .fr-stat { display: flex; justify-content: space-between; gap: .75rem; font-size: .875rem; padding: .25rem 0; }
+  .fr-stat dt { color: #64748b; }
+  .fr-stat dd { font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+</style>
 
 <script>
   (function () {
@@ -29,15 +63,33 @@
     var content = document.getElementById('fr-content');
     var status = document.getElementById('fr-status');
     var download = document.getElementById('fr-download');
+    var more = document.getElementById('fr-more');
+    var moreToggle = document.getElementById('fr-more-toggle');
     var activeFilters = null;
     var requestSeq = 0;
     var chartLibrary = null;
     var instances = [];
     var startDate = App.todayIso();
+    var ICONS = { CASH: '💵', BANK: '🏦', E_WALLET: '📱', CREDIT_CARD: '💳', CASH_CARD: '🏧', LOAN: '📄' };
+    var INCOME_TYPES = ['INCOME', 'REFUND'];
+    var EXPENSE_TYPES = ['EXPENSE', 'CREDIT_PURCHASE', 'INTEREST', 'FEE'];
     form.elements.namedItem('month').value = startDate.slice(0, 7);
     form.elements.namedItem('year').value = startDate.slice(0, 4);
 
-    function money(value) { return App.formatMoney(value) + ' บาท'; }
+    function money(value) { return App.formatMoney(value); }
+    function baht(value) { return money(value) + ' ฿'; }
+
+    function monthLabel(ym) {
+      var s = String(ym);
+      var d = new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, 1);
+      return d.toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+    }
+
+    function periodLabel(filters) {
+      if (filters.month) return 'ข้อมูลเดือน ' + monthLabel(filters.month.replace('-', ''));
+      if (filters.year) return 'ข้อมูลปี ค.ศ. ' + filters.year;
+      return 'ข้อมูลทั้งหมด';
+    }
 
     function select(name, rows) {
       var field = form.elements.namedItem(name);
@@ -45,44 +97,173 @@
       field.textContent = '';
       field.appendChild(el('option', { value: '', text: 'ทั้งหมด' }));
       rows.forEach(function (row) {
-        field.appendChild(el('option', { value: row[name], text: row[name.slice(0, -3) + '_name'] }));
+        field.appendChild(el('option', { value: row[name], text: row[name.slice(0, -3) + '_name'] + (row.is_active === false ? ' (ปิดใช้งาน)' : '') }));
       });
       field.value = rows.some(function (row) { return row[name] === old; }) ? old : '';
     }
 
-    function section(title) {
-      return el('section', { class: 'rounded-xl bg-white p-4' },
-        el('h2', { class: 'mb-2 font-semibold', text: title }));
+    function updateFilterCount() {
+      var n = ['owner_id', 'category_id', 'account_id'].filter(function (k) { return form.elements.namedItem(k).value; }).length;
+      var badge = document.getElementById('fr-filter-count');
+      badge.textContent = n;
+      badge.classList.toggle('hidden', !n);
     }
 
-    function chart(title, series) {
-      var box = section(title);
-      var max = series.reduce(function (m, row) { return Math.max(m, Math.abs(row.amount)); }, 1);
-      var list = el('ul', { class: 'space-y-2' });
-      series.forEach(function (row) {
-        var bar = el('div', { class: 'h-2 rounded bg-indigo-500', 'aria-hidden': 'true' });
-        bar.style.width = Math.abs(row.amount) / max * 100 + '%';
-        list.appendChild(el('li', { class: 'text-sm' },
-          el('p', { class: 'break-words', text: row.label + ' · ' + money(row.amount) }),
-          el('div', { class: 'mt-1 rounded bg-slate-100' }, bar)));
+    function card(title, subtitle) {
+      var box = el('section', { class: 'fr-card' }, el('h2', { class: 'font-semibold', text: title }));
+      if (subtitle) box.appendChild(el('p', { class: 'text-sm text-slate-500', text: subtitle }));
+      return box;
+    }
+
+    function kpi(label, value, tone, hint, extraClass) {
+      var colors = { emerald: 'text-emerald-600', rose: 'text-rose-600', indigo: 'text-indigo-700', slate: 'text-slate-800' };
+      return el('div', { class: 'fr-card ' + (extraClass || '') },
+        el('p', { class: 'fr-kpi-label', text: label }),
+        el('p', { class: 'fr-kpi-value ' + (colors[tone] || colors.slate), text: baht(value) }),
+        hint ? el('p', { class: 'mt-1 text-xs text-slate-500', text: hint }) : null);
+    }
+
+    function meter(done, total, color, label) {
+      var pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+      var fill = el('span');
+      fill.style.width = pct + '%';
+      fill.style.background = color;
+      return el('div', { class: 'mt-3' },
+        el('div', { class: 'mb-1 flex justify-between text-xs text-slate-500' }, el('span', { text: label }), el('span', { text: pct + '%' })),
+        el('div', { class: 'fr-meter', role: 'progressbar', 'aria-label': label, 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-valuenow': pct }, fill));
+    }
+
+    function stats(rows) {
+      var dl = el('dl', { class: 'mt-3 divide-y divide-slate-100' });
+      rows.forEach(function (r) {
+        dl.appendChild(el('div', { class: 'fr-stat' }, el('dt', { text: r[0] }), el('dd', { class: r[2] || '', text: baht(r[1]) })));
       });
-      box.appendChild(series.length ? list : el('p', { class: 'text-sm text-slate-500', text: 'ไม่มีรายการในช่วงที่เลือก' }));
-      if (window.Chart && series.length) {
-        var canvas = el('canvas', { 'aria-hidden': 'true' });
-        var wrapper = el('div', { class: 'relative mb-3' }, canvas);
-        wrapper.style.height = Math.min(420, Math.max(120, series.length * 24)) + 'px';
-        box.insertBefore(wrapper, list);
-        requestAnimationFrame(function () {
-          if (!canvas.isConnected) return;
-          instances.push(new window.Chart(canvas, {
-            type: 'bar',
-            data: { labels: series.map(function (row) { return row.label; }),
-              datasets: [{ data: series.map(function (row) { return row.amount; }), backgroundColor: '#6366f1' }] },
-            options: { maintainAspectRatio: false, animation: false, indexAxis: 'y', plugins: { legend: { display: false } } }
-          }));
-          list.className = 'sr-only';
-        });
-      }
+      return dl;
+    }
+
+    function empty(text) {
+      return el('p', { class: 'mt-3 rounded-xl bg-slate-50 p-4 text-center text-sm text-slate-500', text: text });
+    }
+
+    function drawChart(box, config, height) {
+      if (!window.Chart) return;
+      var canvas = el('canvas', { 'aria-hidden': 'true' });
+      var wrapper = el('div', { class: 'relative mt-3' }, canvas);
+      wrapper.style.height = height + 'px';
+      box.appendChild(wrapper);
+      requestAnimationFrame(function () {
+        if (canvas.isConnected) instances.push(new window.Chart(canvas, config));
+      });
+    }
+
+    function monthlyCard(rows) {
+      var box = card('รายรับและรายจ่ายตามเดือน');
+      if (!rows.length) { box.appendChild(empty('ไม่มีรายการในช่วงที่เลือก')); return box; }
+      var table = el('table', { class: window.Chart ? 'sr-only' : 'mt-3 w-full text-sm' },
+        el('caption', { class: 'sr-only', text: 'รายรับและรายจ่ายตามเดือน' }),
+        el('thead', null, el('tr', { class: 'text-left text-slate-500' },
+          el('th', { scope: 'col', class: 'py-1 font-medium', text: 'เดือน' }),
+          el('th', { scope: 'col', class: 'py-1 text-right font-medium', text: 'รายรับ' }),
+          el('th', { scope: 'col', class: 'py-1 text-right font-medium', text: 'รายจ่าย' }))));
+      var body = el('tbody');
+      rows.forEach(function (r) {
+        body.appendChild(el('tr', { class: 'border-t border-slate-100' },
+          el('th', { scope: 'row', class: 'py-1 text-left font-normal', text: monthLabel(r.month) }),
+          el('td', { class: 'py-1 text-right text-emerald-600', text: money(r.income) }),
+          el('td', { class: 'py-1 text-right text-rose-600', text: money(r.expense) })));
+      });
+      table.appendChild(body);
+      box.appendChild(table);
+      drawChart(box, {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (r) { return monthLabel(r.month); }),
+          datasets: [
+            { label: 'รายรับ', data: rows.map(function (r) { return r.income; }), backgroundColor: '#10b981', borderRadius: 6, maxBarThickness: 48 },
+            { label: 'รายจ่าย', data: rows.map(function (r) { return r.expense; }), backgroundColor: '#f43f5e', borderRadius: 6, maxBarThickness: 48 }
+          ]
+        },
+        options: { maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true, ticks: { callback: function (v) { return Number(v).toLocaleString('th-TH'); } } } } }
+      }, 240);
+      return box;
+    }
+
+    function categoryCard(rows) {
+      var box = card('รายจ่ายตามหมวด');
+      var sorted = rows.filter(function (r) { return r.amount > 0; }).sort(function (a, b) { return b.amount - a.amount; });
+      if (!sorted.length) { box.appendChild(empty('ไม่มีรายจ่ายในช่วงที่เลือก')); return box; }
+      var total = sorted.reduce(function (s, r) { return s + r.amount; }, 0);
+      var list = el('ul', { class: 'mt-3 space-y-3' });
+      sorted.forEach(function (r) {
+        var pct = total ? Math.round(r.amount / total * 100) : 0;
+        var bar = el('span');
+        bar.style.width = (total ? r.amount / sorted[0].amount * 100 : 0) + '%';
+        bar.style.background = '#6366f1';
+        list.appendChild(el('li', null,
+          el('div', { class: 'flex justify-between gap-3 text-sm' },
+            el('span', { class: 'min-w-0 truncate', text: r.name }),
+            el('span', { class: 'shrink-0 font-medium', text: baht(r.amount) + ' · ' + pct + '%' })),
+          el('div', { class: 'fr-meter mt-1', 'aria-hidden': 'true' }, bar)));
+      });
+      box.appendChild(list);
+      return box;
+    }
+
+    function accountsCard(data) {
+      var total = data.accountTotals;
+      var box = card('ยอดบัญชีและบัตรปัจจุบัน', 'ยอดสะสมจริงทั้งหมด ไม่ขึ้นกับเดือนที่เลือก');
+      var strip = el('div', { class: 'mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4' });
+      [['สินทรัพย์', total.assets, 'text-slate-800'], ['กันไว้', total.reserved, 'text-amber-600'],
+        ['ใช้ได้จริง', total.available, 'text-indigo-700'], ['หนี้สิน', total.liabilities, 'text-rose-600']].forEach(function (r) {
+        strip.appendChild(el('div', { class: 'rounded-xl bg-slate-50 p-3' },
+          el('p', { class: 'text-xs text-slate-500', text: r[0] }),
+          el('p', { class: 'mt-0.5 font-semibold ' + r[2], text: baht(r[1]) })));
+      });
+      box.appendChild(strip);
+      var list = el('ul', { class: 'mt-3 divide-y divide-slate-100' });
+      data.accounts.filter(function (a) { return a.is_active !== false || a.balance !== 0; }).forEach(function (a) {
+        var right;
+        var detail;
+        if (a.isAsset) {
+          right = el('p', { class: 'font-semibold text-indigo-700', text: baht(a.available) });
+          detail = 'ยอด ' + baht(a.balance) + (a.reserved ? ' · กันไว้ ' + baht(a.reserved) : '');
+        } else {
+          right = el('p', { class: 'font-semibold text-rose-600', text: baht(a.balance) });
+          detail = 'หนี้คงค้าง';
+        }
+        var row = el('li', { class: 'flex items-center gap-3 py-2.5' },
+          el('span', { class: 'grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-base', 'aria-hidden': 'true' }, ICONS[a.type] || '•'),
+          el('div', { class: 'min-w-0 flex-1' },
+            el('p', { class: 'truncate text-sm font-medium', text: a.name }),
+            el('p', { class: 'truncate text-xs text-slate-500', text: detail })),
+          el('div', { class: 'shrink-0 text-right' }, right,
+            el('p', { class: 'text-xs text-slate-500', text: a.isAsset ? 'ใช้ได้' : 'หนี้' })));
+        list.appendChild(row);
+      });
+      if (!list.childNodes.length) box.appendChild(empty('ยังไม่มีบัญชี'));
+      else box.appendChild(list);
+      return box;
+    }
+
+    function recentCard(rows) {
+      var box = card('รายการล่าสุด');
+      if (!rows.length) { box.appendChild(empty('ไม่มีรายการในช่วงที่เลือก')); return box; }
+      var list = el('ul', { class: 'mt-2 divide-y divide-slate-100' });
+      rows.forEach(function (r) {
+        var sign = INCOME_TYPES.indexOf(r.transaction_type) >= 0 ? 1 : (EXPENSE_TYPES.indexOf(r.transaction_type) >= 0 ? -1 : 0);
+        if (r.reversal_of) sign = -sign;
+        var tone = sign > 0 ? 'text-emerald-600' : (sign < 0 ? 'text-rose-600' : 'text-slate-700');
+        var prefix = sign > 0 ? '+' : (sign < 0 ? '−' : '');
+        var sub = [App.formatDateTh(r.transaction_date), r.category_name, r.from_account_name || r.to_account_name].filter(Boolean).join(' · ');
+        list.appendChild(el('li', { class: 'flex items-center gap-3 py-2.5' },
+          el('div', { class: 'min-w-0 flex-1' },
+            el('p', { class: 'truncate text-sm font-medium', text: r.item_name }),
+            el('p', { class: 'truncate text-xs text-slate-500', text: sub })),
+          el('p', { class: 'shrink-0 text-sm font-semibold ' + tone, text: prefix + money(r.amount) })));
+      });
+      box.appendChild(list);
+      box.appendChild(el('a', { href: '#transactions', target: '_self', class: 'btn btn-ghost mt-2' }, 'ดูรายการทั้งหมด'));
       return box;
     }
 
@@ -91,47 +272,54 @@
       instances = [];
       content.textContent = '';
       var s = data.summary;
-      var cards = [['รายรับ', s.income], ['รายจ่ายที่รับรู้', s.expense], ['รายรับหักรายจ่าย', s.net], ['กระแสเงินสดสุทธิ', s.cashFlow],
-        ['กันเงินจริงสุทธิ', s.saved], ['ยังต้องเก็บเพิ่ม', s.needToSave], ['ยอดตามแผนชำระ', s.scheduled],
-        ['ชำระจริงที่จัดสรร', s.paid], ['ค้างชำระในช่วง', s.outstanding], ['ค้างตามแผนทุกเดือน', s.planOutstanding]];
-      var grid = el('div', { class: 'grid grid-cols-2 gap-2 sm:grid-cols-3' });
-      cards.forEach(function (card) {
-        grid.appendChild(el('div', { class: 'rounded-xl bg-white p-3' },
-          el('p', { class: 'text-sm text-slate-600', text: card[0] }), el('p', { class: 'break-words font-semibold', text: money(card[1]) })));
-      });
+
+      var top = el('div', { class: 'grid grid-cols-2 gap-3 sm:grid-cols-3' });
+      top.appendChild(kpi('รายรับ', s.income, 'emerald'));
+      top.appendChild(kpi('รายจ่ายที่รับรู้', s.expense, 'rose'));
+      top.appendChild(kpi('รายรับหักรายจ่าย', s.net, s.net < 0 ? 'rose' : 'indigo', 'กระแสเงินสดสุทธิ ' + baht(s.cashFlow), 'col-span-2 sm:col-span-1'));
+      content.appendChild(top);
+
+      var plans = el('div', { class: 'grid grid-cols-1 gap-3 lg:grid-cols-2' });
+      var pay = card('แผนชำระในช่วงนี้', 'งวดที่ครบกำหนดชำระในช่วงที่เลือก');
+      if (s.scheduled > 0) pay.appendChild(meter(Math.max(0, s.scheduled - s.outstanding), s.scheduled, '#4f46e5', 'ชำระงวดในช่วงนี้แล้ว'));
+      else pay.appendChild(el('p', { class: 'mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500', text: 'ไม่มีงวดที่ครบกำหนดชำระในช่วงนี้' }));
+      pay.appendChild(stats([['ยอดตามแผน', s.scheduled], ['ชำระจริงที่จัดสรร', s.paid, 'text-emerald-600'],
+        ['ค้างชำระในช่วง', s.outstanding, s.outstanding > 0 ? 'text-rose-600' : ''], ['ค้างตามแผนทุกเดือน', s.planOutstanding]]));
+      plans.appendChild(pay);
+      var save = card('การเก็บเงิน', 'เงินที่กันไว้สำหรับงวดที่ต้องเก็บในช่วงนี้');
+      if (s.saved + s.needToSave > 0) save.appendChild(meter(s.saved, s.saved + s.needToSave, '#f59e0b', 'เก็บแล้ว'));
+      else save.appendChild(el('p', { class: 'mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-500', text: 'ไม่มีงวดที่ต้องเก็บเงินในช่วงนี้' }));
+      save.appendChild(stats([['กันเงินจริงสุทธิ', s.saved, 'text-amber-600'], ['ยังต้องเก็บเพิ่ม', s.needToSave, s.needToSave > 0 ? 'text-rose-600' : '']]));
+      save.appendChild(el('a', { href: '#installments', target: '_self', class: 'btn btn-ghost mt-2' }, 'ไปที่แผนชำระ'));
+      plans.appendChild(save);
+      content.appendChild(plans);
+
+      content.appendChild(accountsCard(data));
+
+      var charts = el('div', { class: 'grid grid-cols-1 gap-3 lg:grid-cols-2' });
+      charts.appendChild(monthlyCard(data.monthly));
+      charts.appendChild(categoryCard(data.categories));
+      content.appendChild(charts);
+
+      content.appendChild(recentCard(data.recent));
+    }
+
+    function skeleton() {
+      content.textContent = '';
+      var grid = el('div', { class: 'grid grid-cols-1 gap-3 sm:grid-cols-3', 'aria-hidden': 'true' });
+      for (var i = 0; i < 3; i++) grid.appendChild(el('div', { class: 'h-24 animate-pulse rounded-2xl bg-slate-200/70' }));
       content.appendChild(grid);
-      var accounts = section('ยอดปัจจุบันของบัญชีและบัตร');
-      var total = data.accountTotals;
-      accounts.appendChild(el('p', { class: 'mb-2 break-words text-sm font-medium',
-        text: 'สินทรัพย์ ' + money(total.assets) + ' · กันไว้ ' + money(total.reserved) +
-          ' · ใช้ได้ ' + money(total.available) + ' · หนี้ ' + money(total.liabilities) }));
-      data.accounts.forEach(function (a) {
-        var values = a.isAsset ? 'ยอด ' + money(a.balance) + ' · กันไว้ ' + money(a.reserved) + ' · ใช้ได้ ' + money(a.available)
-          : 'หนี้คงเหลือ ' + money(a.balance);
-        accounts.appendChild(el('p', { class: 'break-words border-t border-slate-100 py-2 text-sm', text: a.name + ' · ' + values }));
-      });
-      content.appendChild(accounts);
-      var monthly = [];
-      data.monthly.forEach(function (r) {
-        monthly.push({ label: r.month + ' รายรับ', amount: r.income }, { label: r.month + ' รายจ่าย', amount: r.expense });
-      });
-      content.appendChild(chart('รายรับและรายจ่ายตามเดือน', monthly));
-      content.appendChild(chart('รายจ่ายตามหมวด', data.categories.map(function (r) { return { label: r.name, amount: r.amount }; })));
-      var recent = section('รายการล่าสุด');
-      data.recent.forEach(function (r) {
-        recent.appendChild(el('p', { class: 'break-words border-t border-slate-100 py-2 text-sm',
-          text: [App.formatDateTh(r.transaction_date), r.item_name, money(r.amount)].join(' · ') }));
-      });
-      if (!data.recent.length) recent.appendChild(el('p', { class: 'text-sm text-slate-500', text: 'ไม่มีรายการในช่วงที่เลือก' }));
-      content.appendChild(recent);
+      content.appendChild(el('div', { class: 'h-48 animate-pulse rounded-2xl bg-slate-200/70', 'aria-hidden': 'true' }));
     }
 
     function load() {
       var seq = ++requestSeq;
       var filters = Object.fromEntries(new FormData(form));
+      document.getElementById('fr-period').textContent = periodLabel(filters);
       filters.month = filters.month.replace('-', '');
       download.disabled = true;
       status.textContent = 'กำลังโหลดรายงาน…';
+      if (!content.childNodes.length) skeleton();
       if (!chartLibrary) chartLibrary = new Promise(function (resolve) {
         var script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js';
@@ -143,6 +331,7 @@
         select('owner_id', data.masters.owners);
         select('category_id', data.masters.categories);
         select('account_id', data.masters.accounts);
+        updateFilterCount();
         render(data);
         if (!window.Chart) chartLibrary.then(function () {
           if (window.Chart && seq === requestSeq) render(data);
@@ -151,23 +340,37 @@
         status.textContent = '';
         download.disabled = false;
       }, function (err) {
-        if (seq === requestSeq) status.textContent = err.message;
+        if (seq !== requestSeq) return;
+        status.textContent = '';
+        content.textContent = '';
+        content.appendChild(el('div', { class: 'rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center', role: 'alert' },
+          el('p', { class: 'font-medium text-rose-700', text: 'โหลดรายงานไม่สำเร็จ' }),
+          el('p', { class: 'mt-1 text-sm text-rose-600', text: err.message }),
+          el('button', { type: 'button', class: 'btn btn-secondary mt-3', onclick: load }, 'ลองใหม่')));
       });
     }
 
+    moreToggle.addEventListener('click', function () {
+      more.hidden = !more.hidden;
+      moreToggle.setAttribute('aria-expanded', String(!more.hidden));
+    });
     form.addEventListener('submit', function (event) { event.preventDefault(); load(); });
+    form.elements.namedItem('month').addEventListener('change', load);
+    ['owner_id', 'category_id', 'account_id'].forEach(function (name) {
+      form.elements.namedItem(name).addEventListener('change', function () { updateFilterCount(); load(); });
+    });
     download.addEventListener('click', function () {
       var kind = document.getElementById('fr-export-kind').value;
       App.setBusy(download, true, 'กำลังเตรียมไฟล์…');
       App.call('api_exportFinanceReport', kind, activeFilters).then(function (csv) {
-        var url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+        var url = URL.createObjectURL(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }));
         var link = el('a', { href: url, download: 'expense-' + kind.toLowerCase() + '.csv', target: '_self' });
         document.body.appendChild(link);
         link.click();
         link.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
       }, function (err) {
-        status.textContent = err.message;
+        App.toast(err.message, 'error');
       }).finally(function () { App.setBusy(download, false); });
     });
     App.onShow('reports', load);

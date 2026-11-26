@@ -22,10 +22,18 @@ var PaymentActivity = (function () {
     };
   }
 
-  function balances(reservations) {
+  /**
+   * ยอดกันเงินต่องวดและต่อบัญชี (สตางค์)
+   * transactions (ถ้าส่งมา): CONSUME ของธุรกรรมชำระที่ถูกกลับรายการแล้วไม่ถูกนับ
+   * เงินที่เคยกันไว้จึงกลับมาเป็น "กันไว้" เมื่อการชำระถูกยกเลิก (ผู้ใช้ตัดสินใจ 2026-11-26)
+   */
+  function balances(reservations, transactions) {
     var accounts = Object.create(null);
     var schedules = Object.create(null);
+    var reversedTx = Object.create(null);
+    (transactions || []).forEach(function (t) { if (t.reversal_of) reversedTx[t.reversal_of] = true; });
     reservations.forEach(function (r) {
+      if (r.action_type === 'CONSUME' && r.transaction_id && reversedTx[r.transaction_id]) return;
       var amount = sat(r.amount);
       var net = r.action_type === 'RESERVE' ? amount : -amount;
       var s = schedules[r.schedule_id] || (schedules[r.schedule_id] = { saved: 0, reserved: 0, accounts: Object.create(null) });
@@ -39,7 +47,7 @@ var PaymentActivity = (function () {
 
   function derive(rows, state, date) {
     var today = Util.todayIso();
-    var reserved = balances(state.reservations).schedules;
+    var reserved = balances(state.reservations, state.transactions).schedules;
     var reversed = new Set(state.transactions.filter(function (t) { return t.reversal_of; }).map(function (t) { return t.reversal_of; }));
     var transactions = new Map(state.transactions.filter(function (t) { return !reversed.has(t.transaction_id) && !t.reversal_of; })
       .map(function (t) { return [t.transaction_id, t]; }));
@@ -111,7 +119,7 @@ var PaymentActivity = (function () {
       fail('งวดถูกยกเลิกหรือชำระครบแล้ว');
     }
 
-    var reserved = balances(state.reservations);
+    var reserved = balances(state.reservations, state.transactions);
     var batch = { planId: id, date: date, at: ctx.now, reservations: [], allocations: [], transactions: [], edits: [] };
     var ledger = Ledger.balances(state.accounts, state.transactions);
     function reservation(row, account, event, amount, transaction) {
