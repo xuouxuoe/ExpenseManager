@@ -11,12 +11,14 @@ var FinanceReports = (function () {
     var owner = Validation.requireId(f.owner_id, 'owner_id', { required: false });
     var category = Validation.requireId(f.category_id, 'category_id', { required: false });
     var account = Validation.requireId(f.account_id, 'account_id', { required: false });
-    var accounts = Database.readAll('Accounts').rows;
+    var subAccount = Validation.requireId(f.sub_account_id, 'sub_account_id', { required: false });
+    var accounts = MasterData.listAll({ includeInactive: true }).accounts;
     var types = Object.create(null);
     accounts.forEach(function (a) { types[a.account_id] = a.account_type; });
     function byMonth(ym) { return month ? ym === month : !year || Validation.yearOf(ym) === year; }
     function byMaster(row, actualAccount) {
-      return (!owner || row.owner_id === owner) && (!category || row.category_id === category) &&
+      return (!subAccount || row.sub_account_id === subAccount || row.from_sub_account_id === subAccount || row.to_sub_account_id === subAccount) &&
+        (!owner || row.owner_id === owner) && (!category || row.category_id === category) &&
         (!account || (actualAccount ? actualAccount === account :
           row.account_id === account || row.from_account_id === account || row.to_account_id === account));
     }
@@ -29,6 +31,70 @@ var FinanceReports = (function () {
       reservations: Database.readAll('Reservations').rows,
       allocations: Database.readAll('PaymentAllocations').rows
     };
+  }
+
+  function subAccountBalances(d, filters) {
+    var accounts = [];
+    var groups = Object.create(null);
+    var types = Object.create(null);
+    function key(parent, sub) { return sub || 'unassigned-' + parent; }
+    function add(parent, sub) {
+      var id = key(parent.account_id, sub && sub.sub_account_id);
+      types[id] = parent.account_type;
+      accounts.push({ account_id: id, account_type: parent.account_type, opening_balance: sub ? 0 : parent.opening_balance });
+      groups[id] = { account_id: parent.account_id, sub_account_id: sub ? sub.sub_account_id : '',
+        name: sub ? sub.sub_account_name : 'ยังไม่ระบุบัญชีย่อย · ' + parent.account_name,
+        type: parent.account_type, isAsset: Ledger.isAsset(parent.account_type),
+        is_active: parent.is_active && (!sub || sub.is_active), reserved: 0, income: 0, expense: 0 };
+    }
+    var children = Database.readAll('SubAccounts').rows;
+    d.accounts.forEach(function (a) {
+      add(a, null);
+      children.filter(function (s) { return s.account_id === a.account_id; }).forEach(function (s) { add(a, s); });
+    });
+    function groupedTransaction(t) {
+      return Object.assign({}, t, {
+        from_account_id: t.from_account_id ? key(t.from_account_id, t.from_sub_account_id) : '',
+        to_account_id: t.to_account_id ? key(t.to_account_id, t.to_sub_account_id) : ''
+      });
+    }
+    var balances = Ledger.balances(accounts, d.allTransactions.map(groupedTransaction));
+    d.transactions.forEach(function (t) {
+      var effect = Ledger.effectsOf(groupedTransaction(t), types);
+      var source = groups[key(t.from_account_id, t.from_sub_account_id)];
+      var target = groups[key(t.to_account_id, t.to_sub_account_id)];
+      if (source || target) (source || target).expense += effect.expenseSatang;
+      if (target) target.income += effect.incomeSatang;
+    });
+    var scheduleById = new Map(d.allSchedules.map(function (s) { return [s.schedule_id, s]; }));
+    var reserved = PaymentActivity.balances(d.reservations, d.allTransactions).schedules;
+    Object.keys(reserved).forEach(function (id) {
+      var schedule = scheduleById.get(id);
+      Object.keys(reserved[id].accounts).forEach(function (parent) {
+        var sub = schedule && schedule.account_id === parent ? schedule.sub_account_id : '';
+        var group = groups[key(parent, sub)];
+        if (group) group.reserved += reserved[id].accounts[parent];
+      });
+    });
+    return Object.keys(groups).map(function (id) {
+      var group = groups[id];
+      group.balance = baht(balances[id] || 0);
+      group.reserved = baht(group.reserved);
+      group.available = group.isAsset ? baht((balances[id] || 0) - sat(group.reserved)) : null;
+      group.income = baht(group.income);
+      group.expense = baht(group.expense);
+      return group;
+    }).filter(function (row) {
+      return (!filters || !filters.account_id || row.account_id === filters.account_id) &&
+        (!filters || !filters.sub_account_id || row.sub_account_id === filters.sub_account_id);
+    });
+  }
+
+  function sharedReport(filters) {
+    var d = data(filters);
+    return { accounts: subAccountBalances(d, filters).filter(function (row) { return !!row.sub_account_id; }).map(function (row) {
+      return { name: row.name, balance: row.balance, income: row.income, expense: row.expense, isAsset: row.isAsset };
+    }) };
   }
 
   function dashboard(filters) {
@@ -106,7 +172,7 @@ var FinanceReports = (function () {
       }),
       categories: Object.keys(categories).sort().map(function (name) { return { name: name, amount: baht(categories[name]) }; }),
       accountTotals: accountTotals,
-      accounts: d.accounts.map(function (row) {
+      accounts: filters && filters.account_view === 'SUB' ? subAccountBalances(d, filters) : d.accounts.map(function (row) {
         var id = row.account_id;
         var asset = Ledger.isAsset(row.account_type);
         var held = reserves[id] || 0;
@@ -127,17 +193,17 @@ var FinanceReports = (function () {
     var rows;
     if (type === 'TRANSACTIONS') {
       headers = ['transaction_date', 'month', 'transaction_type', 'owner_name', 'category_name', 'from_account_name',
-        'to_account_name', 'item_name', 'amount', 'income', 'expense', 'reversal_of'];
+        'to_account_name', 'item_name', 'amount', 'income', 'expense', 'reversal_of', 'from_sub_account_name', 'to_sub_account_name'];
       rows = d.transactions.map(function (r) {
         var effect = Ledger.effectsOf(r, d.types);
         return [r.transaction_date, dateMonth(r.transaction_date), r.transaction_type, r.owner_name, r.category_name, r.from_account_name,
-          r.to_account_name, r.item_name, r.amount, baht(effect.incomeSatang), baht(effect.expenseSatang), r.reversal_of];
+          r.to_account_name, r.item_name, r.amount, baht(effect.incomeSatang), baht(effect.expenseSatang), r.reversal_of, r.from_sub_account_name || '', r.to_sub_account_name || ''];
       });
     } else {
       var isSaving = type === 'SAVING';
       var monthField = isSaving ? 'saving_month' : 'payment_month';
       var leftField = isSaving ? 'remaining_to_save' : 'remaining_to_pay';
-      headers = ['schedule_id', 'plan_id', 'account_name', 'owner_name', 'category_name', 'item_name', monthField, 'amount_due', leftField];
+      headers = ['schedule_id', 'plan_id', 'account_name', 'owner_name', 'category_name', 'item_name', monthField, 'amount_due', leftField, 'sub_account_name'];
       rows = d.schedules.filter(function (r) { return d.byMonth(r[monthField]); }).map(function (r) {
         return headers.map(function (key) { return r[key]; });
       });
@@ -157,9 +223,9 @@ var FinanceReports = (function () {
 
   function refreshPivots() {
     var specs = [
-      { type: 'SAVING', name: 'Pivot_Saving', groups: [3], column: 7, totals: [8, 9] },
-      { type: 'PAYMENT', name: 'Pivot_Payment', groups: [3], column: 7, totals: [8, 9] },
-      { type: 'TRANSACTIONS', name: 'Pivot_Transactions', groups: [4, 5], column: 2, totals: [10, 11] }
+      { type: 'SAVING', name: 'Pivot_Saving', groups: [3, 10], column: 7, totals: [8, 9] },
+      { type: 'PAYMENT', name: 'Pivot_Payment', groups: [3, 10], column: 7, totals: [8, 9] },
+      { type: 'TRANSACTIONS', name: 'Pivot_Transactions', groups: [4, 5, 13, 14], column: 2, totals: [10, 11] }
     ];
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(Config.LOCK_TIMEOUT_MS)) throw Util.AppError('BUSY', 'ระบบกำลังเขียนข้อมูล กรุณาลองใหม่');
@@ -209,5 +275,5 @@ var FinanceReports = (function () {
     }
   }
 
-  return { dashboard: dashboard, exportCsv: exportCsv, refreshPivots: refreshPivots };
+  return { dashboard: dashboard, exportCsv: exportCsv, refreshPivots: refreshPivots, sharedReport: sharedReport };
 })();

@@ -9,8 +9,9 @@
     </button>
   </div>
 
-  <div role="tablist" aria-label="ประเภทข้อมูลหลัก" class="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 text-sm">
+  <div role="tablist" aria-label="ประเภทข้อมูลหลัก" class="mt-4 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 text-sm sm:grid-cols-4">
     <button type="button" role="tab" id="tab-account" data-type="account" aria-controls="master-panel" aria-selected="true" tabindex="0" class="master-tab">บัญชี/บัตร</button>
+    <button type="button" role="tab" id="tab-subaccount" data-type="subaccount" aria-controls="master-panel" aria-selected="false" tabindex="-1" class="master-tab">บัญชีย่อย</button>
     <button type="button" role="tab" id="tab-owner" data-type="owner" aria-controls="master-panel" aria-selected="false" tabindex="-1" class="master-tab">เจ้าของ</button>
     <button type="button" role="tab" id="tab-category" data-type="category" aria-controls="master-panel" aria-selected="false" tabindex="-1" class="master-tab">หมวดหมู่</button>
   </div>
@@ -62,6 +63,7 @@
     var CATEGORY_TYPES = [['EXPENSE', 'รายจ่าย'], ['INCOME', 'รายรับ']];
 
     var TYPE_META = {
+      subaccount: { list: 'subAccounts', pk: 'sub_account_id', name: 'sub_account_name', label: 'บัญชีย่อย', empty: 'ยังไม่มีบัญชีย่อย' },
       account: { list: 'accounts', pk: 'account_id', name: 'account_name', label: 'บัญชี/บัตร', empty: 'ยังไม่มีบัญชีหรือบัตร' },
       owner: { list: 'owners', pk: 'owner_id', name: 'owner_name', label: 'เจ้าของ', empty: 'ยังไม่มีเจ้าของรายการ' },
       category: { list: 'categories', pk: 'category_id', name: 'category_name', label: 'หมวดหมู่', empty: 'ยังไม่มีหมวดหมู่' }
@@ -146,6 +148,10 @@
     }
 
     function rowDetails(row) {
+      if (state.type === 'subaccount') {
+        var parent = state.data.accounts.find(function (a) { return a.account_id === row.account_id; });
+        return [badge('บัญชีหลัก ' + (parent ? parent.account_name : ''), 'indigo')];
+      }
       var parts = [];
       if (state.type === 'account') {
         var liability = LIABILITY.indexOf(row.account_type) >= 0;
@@ -256,6 +262,15 @@
     function buildFields(row) {
       var r = row || {};
       fieldsBox.textContent = '';
+      if (state.type === 'subaccount') {
+        var parents = state.data.accounts.filter(function (a) { return a.is_active || a.account_id === r.account_id; });
+        fieldsBox.appendChild(field('account_id', 'บัญชีหลัก *', selectInput('account_id',
+          [['', '— เลือกบัญชีหลัก —']].concat(parents.map(function (a) { return [a.account_id, a.account_name]; })), r.account_id, { required: true })));
+        fieldsBox.appendChild(field('sub_account_name', 'ชื่อบัญชีย่อยที่ใช้ในรายงาน *',
+          textInput('sub_account_name', r.sub_account_name, { required: true, maxlength: 100, placeholder: 'เช่น บัญชี A, บัญชีครอบครัว' }),
+          'เลือกชื่อนี้ตอนบันทึกรายการและสร้างแผน รายงานสำหรับส่งต่อจะแสดงชื่อบัญชีย่อย'));
+        return;
+      }
       if (state.type === 'owner') {
         fieldsBox.appendChild(field('owner_name', 'ชื่อเจ้าของรายการ *', textInput('owner_name', r.owner_name, { required: true, maxlength: 100, autocomplete: 'off' })));
         return;
@@ -273,8 +288,10 @@
       var owners = [['', '— ไม่ระบุ —']].concat(state.data.owners.filter(function (o) {
         return o.is_active === true || o.owner_id === r.owner_id;
       }).map(function (o) { return [o.owner_id, o.owner_name + (o.is_active ? '' : ' (ปิดใช้งาน)')]; }));
-      fieldsBox.appendChild(field('account_name', 'ชื่อบัญชี/บัตร *', textInput('account_name', r.account_name, { required: true, maxlength: 100, autocomplete: 'off', placeholder: 'เช่น KBank *1234' }),
+      fieldsBox.appendChild(field('account_name', 'ชื่อบัญชี/บัตร *', textInput('account_name', r.real_account_name || r.account_name, { required: true, maxlength: 100, autocomplete: 'off', placeholder: 'เช่น KBank *1234' }),
         'ห้ามใส่เลขบัตรเต็ม ใช้ 4 หลักท้ายได้'));
+      fieldsBox.appendChild(field('display_name', 'ชื่อที่ใช้แสดง', textInput('display_name', r.display_name, { maxlength: 100, autocomplete: 'off', placeholder: 'เช่น บัตรหลัก, บัญชีใช้จ่าย' }),
+        'ใช้ชื่อนี้ในกราฟ ตาราง ตัวเลือกบัญชี และรายงาน เว้นว่างเพื่อใช้ชื่อบัญชี/บัตร'));
       fieldsBox.appendChild(field('account_type', 'ประเภท *', selectInput('account_type', ACCOUNT_TYPES, r.account_type || 'BANK')));
       fieldsBox.appendChild(field('account_subtype', 'ชนิดบัญชีธนาคาร', selectInput('account_subtype', [['', 'ทั่วไป'], ['SAVINGS', 'ออมทรัพย์']], r.account_subtype)));
       fieldsBox.appendChild(field('owner_id', 'เจ้าของ', selectInput('owner_id', owners, r.owner_id)));

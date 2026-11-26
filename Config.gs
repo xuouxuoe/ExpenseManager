@@ -18,6 +18,7 @@ var Config = {
 
   SHEETS: {
     ACCOUNTS: 'Accounts',
+    SUB_ACCOUNTS: 'SubAccounts',
     OWNERS: 'Owners',
     CATEGORIES: 'Categories',
     TRANSACTIONS: 'Transactions',
@@ -31,6 +32,7 @@ var Config = {
   },
 
   HEADERS: {
+    SubAccounts: ['sub_account_id', 'sub_account_name', 'account_id', 'is_active', 'created_at', 'updated_at'],
     Accounts: ['account_id', 'account_name', 'account_type', 'account_subtype', 'owner_id', 'institution', 'opening_balance', 'opening_date', 'credit_limit', 'statement_day', 'due_day', 'is_active', 'note', 'created_at', 'updated_at'],
     Owners: ['owner_id', 'owner_name', 'is_active', 'created_at', 'updated_at'],
     Categories: ['category_id', 'category_name', 'category_type', 'icon', 'color', 'is_active', 'created_at', 'updated_at'],
@@ -46,6 +48,7 @@ var Config = {
 
   /** Primary key ของแต่ละตาราง */
   PRIMARY_KEYS: {
+    SubAccounts: 'sub_account_id',
     Accounts: 'account_id',
     Owners: 'owner_id',
     Categories: 'category_id',
@@ -63,7 +66,7 @@ var Config = {
     ACCOUNT_TYPE: ['CASH', 'BANK', 'E_WALLET', 'CREDIT_CARD', 'CASH_CARD', 'LOAN'],
     ACCOUNT_SUBTYPE: ['SAVINGS'],
     CATEGORY_TYPE: ['INCOME', 'EXPENSE'],
-    TRANSACTION_TYPE: ['INCOME', 'EXPENSE', 'TRANSFER', 'CREDIT_PURCHASE', 'CREDIT_PAYMENT', 'CASH_ADVANCE', 'INTEREST', 'FEE', 'REFUND', 'ADJUSTMENT'],
+    TRANSACTION_TYPE: ['INCOME', 'EXPENSE', 'TRANSFER', 'RECLASSIFY', 'CREDIT_PURCHASE', 'CREDIT_PAYMENT', 'CASH_ADVANCE', 'INTEREST', 'FEE', 'REFUND', 'ADJUSTMENT'],
     TRANSACTION_SOURCE: ['MANUAL', 'QUICK_ENTRY', 'PLAN', 'MIGRATION', 'AI'],
     PLAN_TYPE: ['INSTALLMENT', 'ONE_TIME', 'RECURRING'],
     PLAN_STATUS: ['ACTIVE', 'COMPLETED', 'CANCELLED'],
@@ -86,17 +89,21 @@ var Config = {
   /** คอลัมน์ *_name ที่เป็น projection จาก Master: [id column, name column, master] */
   NAME_PROJECTIONS: {
     Transactions: [
+      ['from_sub_account_id', 'from_sub_account_name', 'subAccounts'],
+      ['to_sub_account_id', 'to_sub_account_name', 'subAccounts'],
       ['from_account_id', 'from_account_name', 'accounts'],
       ['to_account_id', 'to_account_name', 'accounts'],
       ['owner_id', 'owner_name', 'owners'],
       ['category_id', 'category_name', 'categories']
     ],
     PaymentPlans: [
+      ['sub_account_id', 'sub_account_name', 'subAccounts'],
       ['account_id', 'account_name', 'accounts'],
       ['owner_id', 'owner_name', 'owners'],
       ['category_id', 'category_name', 'categories']
     ],
     PaymentSchedules: [
+      ['sub_account_id', 'sub_account_name', 'subAccounts'],
       ['account_id', 'account_name', 'accounts'],
       ['owner_id', 'owner_name', 'owners'],
       ['category_id', 'category_name', 'categories']
@@ -123,3 +130,13 @@ var Config = {
     return 'text';
   }
 };
+
+// Additive extension. Earlier headers remain a supported prefix when reading existing files.
+Config.LEGACY_HEADERS = {};
+['Transactions', 'PaymentPlans', 'PaymentSchedules'].forEach(function (name) {
+  Config.LEGACY_HEADERS[name] = Config.HEADERS[name].slice();
+});
+Config.HEADERS.Transactions = Config.HEADERS.Transactions.concat(['from_sub_account_id', 'from_sub_account_name', 'to_sub_account_id', 'to_sub_account_name']);
+Config.HEADERS.PaymentPlans = Config.HEADERS.PaymentPlans.concat(['sub_account_id', 'sub_account_name']);
+Config.HEADERS.PaymentSchedules = Config.HEADERS.PaymentSchedules.concat(['sub_account_id', 'sub_account_name']);
+Config.PLAN_TO_SCHEDULE_FIELDS.push('sub_account_id');

@@ -57,7 +57,7 @@
 | description | Text(1000) | INPUT (Plans/Transactions), PROJ (Schedules) | รายละเอียดของรายการหลัก |
 | note | Text(1000) | INPUT ในทุกตาราง (แยกอิสระต่อแถว) | หมายเหตุเพิ่มเติม ห้ามใช้แทนสถานะ |
 
-Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`to_account_name` แทน `account_id`/`account_name`
+Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`to_account_name` แทน `account_id`/`account_name`, from_sub_account_id, from_sub_account_name, to_sub_account_id, to_sub_account_name
 
 ลำดับคอลัมน์มาตรฐาน: `*_id` ตามด้วย `*_name` เสมอ, `note` อยู่ท้ายคอลัมน์ธุรกิจก่อน `created_at`, `updated_at`
 
@@ -82,12 +82,13 @@ Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`t
 ## 3. Canonical headers
 
 ```text
+SubAccounts: sub_account_id, sub_account_name, account_id, is_active, created_at, updated_at
 Accounts: account_id, account_name, account_type, account_subtype, owner_id, institution, opening_balance, opening_date, credit_limit, statement_day, due_day, is_active, note, created_at, updated_at
 Owners: owner_id, owner_name, is_active, created_at, updated_at
 Categories: category_id, category_name, category_type, icon, color, is_active, created_at, updated_at
-Transactions: transaction_id, transaction_date, transaction_type, from_account_id, from_account_name, to_account_id, to_account_name, owner_id, owner_name, category_id, category_name, item_name, description, amount, plan_id, external_ref, source, reversal_of, note, created_at, updated_at
-PaymentPlans: plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, principal_amount, interest_amount, fee_amount, total_amount, installment_count, first_saving_month, first_payment_month, due_day, external_ref, plan_status, note, created_at, updated_at
-PaymentSchedules: schedule_id, plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, installment_no, installment_count, saving_month, payment_month, due_date, amount_due, amount_saved, amount_reserved, amount_paid, remaining_to_save, remaining_to_pay, saving_status, payment_status, is_overdue, is_cancelled, is_month_different, saving_year, saving_month_no, payment_year, payment_month_no, remaining_installments, saving_completed_date, paid_date, note, created_at, updated_at
+Transactions: transaction_id, transaction_date, transaction_type, from_account_id, from_account_name, to_account_id, to_account_name, owner_id, owner_name, category_id, category_name, item_name, description, amount, plan_id, external_ref, source, reversal_of, note, created_at, updated_at, from_sub_account_id, from_sub_account_name, to_sub_account_id, to_sub_account_name
+PaymentPlans: plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, principal_amount, interest_amount, fee_amount, total_amount, installment_count, first_saving_month, first_payment_month, due_day, external_ref, plan_status, note, created_at, updated_at, sub_account_id, sub_account_name
+PaymentSchedules: schedule_id, plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, installment_no, installment_count, saving_month, payment_month, due_date, amount_due, amount_saved, amount_reserved, amount_paid, remaining_to_save, remaining_to_pay, saving_status, payment_status, is_overdue, is_cancelled, is_month_different, saving_year, saving_month_no, payment_year, payment_month_no, remaining_installments, saving_completed_date, paid_date, note, created_at, updated_at, sub_account_id, sub_account_name
 Reservations: reservation_id, reservation_date, schedule_id, account_id, action_type, amount, transaction_id, note, created_at
 PaymentAllocations: allocation_id, transaction_id, schedule_id, allocated_amount, created_at
 Settings: setting_key, setting_value, description, updated_at
@@ -95,7 +96,23 @@ AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operati
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
 ```
 
-จำนวนคอลัมน์: Accounts 15, Owners 5, Categories 8, Transactions 21, PaymentPlans 24, PaymentSchedules 38, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10
+จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10
+
+### บัญชีย่อยสำหรับรายงาน (อนุมัติ 2026-11-26)
+
+| ตาราง | คอลัมน์เพิ่ม | ชนิดและความหมาย |
+|---|---|---|
+| SubAccounts | sub_account_id | UUID, primary key |
+| SubAccounts | sub_account_name | Text(100), ชื่อที่ใช้แสดงในรายงานสำหรับส่งต่อ |
+| SubAccounts | account_id | UUID, FK → Accounts, กำหนดบัญชีหลักเมื่อสร้างและคงความสัมพันธ์นี้ไว้ |
+| SubAccounts | is_active | Boolean, ปิดใช้งานแทนการลบ |
+| SubAccounts | created_at, updated_at | Timestamp |
+| Transactions | from_sub_account_id, to_sub_account_id | UUID หรือว่าง, FK → SubAccounts ต้องอยู่ในบัญชีหลักของฝั่งนั้น |
+| Transactions | from_sub_account_name, to_sub_account_name | Text(100), projection ของชื่อบัญชีย่อย |
+| PaymentPlans / PaymentSchedules | sub_account_id | UUID หรือว่าง, FK → SubAccounts, งวดคัดลอกจากแผน |
+| PaymentPlans / PaymentSchedules | sub_account_name | Text(100), projection ของชื่อบัญชีย่อย |
+
+คอลัมน์ใหม่ของตารางเดิมต่อท้าย header เดิมเพื่อรักษาตำแหน่งข้อมูลเดิม รองรับอ่าน header รุ่นก่อนโดยเติมค่าว่างในหน่วยความจำ การเขียนตารางนั้นครั้งแรกภายใต้ operation lock จะเติมเฉพาะ header ที่ขาดและจัดรูปแบบคอลัมน์ กรณี schema อื่นที่ไม่ตรงยังถูกปฏิเสธตามเดิม ชีต SubAccounts สร้างเมื่อ initialize หรือสร้างบัญชีย่อยครั้งแรก ยอดยกมาอยู่ในกลุ่มยังไม่ระบุบัญชีย่อย
 
 ## 4. รายละเอียดตาราง
 

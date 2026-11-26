@@ -19,6 +19,42 @@ function throwsCode(fn, code) {
   assert.throws(fn, (err) => err.code === code, `expected ${code}`);
 }
 
+test('ชื่อแสดงบัญชีแยกจากชื่อจริง เปลี่ยนย้อนหลังและล้างชื่อแสดงได้ โดยยอดและ ID ตรงเดิม', () => {
+  const { ctx, M, req } = setup();
+  const owner = M.create('owner', { owner_name: 'เจ้าของ' }, req());
+  const cat = M.create('category', { category_name: 'ของใช้', category_type: 'EXPENSE' }, req());
+  const input = { account_name: 'ชื่อบัญชีจริง', account_type: 'CASH', opening_balance: 1000, display_name: 'กระเป๋าหลัก' };
+  const acc = M.create('account', input, req());
+  assert.equal(acc.account_name, 'กระเป๋าหลัก');
+  assert.equal(acc.real_account_name, input.account_name);
+  assert.equal(ctx.Database.readAll('Accounts').rows[0].account_name, input.account_name);
+  const tx = ctx.api_createTransaction({ transaction_type: 'EXPENSE', transaction_date: ctx.Util.todayIso(), from_account_id: acc.account_id,
+    owner_id: owner.owner_id, category_id: cat.category_id, item_name: 'ทดสอบ', amount: 10 }, key());
+  assert.equal(tx.ok, true);
+  const plan = ctx.api_createPaymentPlan({ plan_type: 'ONE_TIME', purchase_date: ctx.Util.todayIso(), account_id: acc.account_id,
+    owner_id: owner.owner_id, category_id: cat.category_id, item_name: 'แผนทดสอบ', principal_amount: 100, installment_count: 1,
+    first_saving_month: 202611, first_payment_month: 202612 }, key());
+  assert.equal(plan.ok, true);
+  const before = plain(ctx.Database.readAll('Transactions').rows[0]);
+  const changed = M.update('account', acc.account_id, { ...input, display_name: 'บัญชีส่วนตัว' }, req());
+  assert.equal(changed.row.display_name, 'บัญชีส่วนตัว');
+  assert.equal(M.listAll().accounts[0].account_name, 'บัญชีส่วนตัว');
+  assert.equal(ctx.Database.readAll('Transactions').rows[0].from_account_name, 'บัญชีส่วนตัว');
+  assert.equal(ctx.Database.readAll('PaymentPlans').rows[0].account_name, 'บัญชีส่วนตัว');
+  assert.equal(ctx.Database.readAll('PaymentSchedules').rows[0].account_name, 'บัญชีส่วนตัว');
+  assert.equal(ctx.api_dashboard({}).data.accounts[0].name, 'บัญชีส่วนตัว');
+  const csv = ctx.api_exportFinanceReport('TRANSACTIONS', {}).data;
+  assert.ok(csv.includes('บัญชีส่วนตัว'));
+  assert.ok(!csv.includes('ชื่อบัญชีจริง'));
+  assert.equal(ctx.Database.readAll('Transactions').rows[0].updated_at, before.updated_at);
+  assert.equal(ctx.Transactions.accountBalances()[acc.account_id], 990);
+  M.update('account', acc.account_id, { ...input, display_name: '' }, req());
+  assert.equal(M.listAll().accounts[0].account_name, input.account_name);
+  assert.equal(ctx.Database.readAll('PaymentSchedules').rows[0].account_name, input.account_name);
+  const setting = ctx.Database.readAll('Settings').rows.find((r) => r.setting_key === 'account.display_name.' + acc.account_id);
+  assert.equal(setting.setting_value, '');
+});
+
 test('สร้าง Owner / Category / Account และ list เฉพาะที่ active', () => {
   const { M, req } = setup();
   const owner = M.create('owner', { owner_name: '  พ่อ  ' }, req());

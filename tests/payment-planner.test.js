@@ -22,6 +22,32 @@ function fixture() {
   return { ctx, input, actor, account };
 }
 
+test('ดาวประจำแผนผูกกับผู้ใช้ สร้างพร้อมแผนได้ และการส่งซ้ำไม่ทับการเลือกครั้งใหม่', () => {
+  const { ctx, input } = fixture();
+  const create = () => ctx.api_createPaymentPlan({ ...input, favorite: 'true' }, 'star-create-plan');
+  const id = create().data.plan_id;
+  const read = () => plain(ctx.api_paymentPlannerPage()).data.plans.find((r) => r.plan.plan_id === id).favorite;
+  const set = (value, key) => ctx.api_setPlanFavorite(id, value, key);
+  assert.equal(read(), true);
+  ctx.__props.ALLOWED_EMAILS += ',other@example.com';
+  ctx.__state.activeEmail = 'other@example.com';
+  assert.equal(read(), false);
+  assert.equal(set(true, 'other-user-star').ok, true);
+  ctx.__state.activeEmail = 'owner@example.com';
+  assert.equal(set(false, 'owner-remove-star').ok, true);
+  assert.equal(create().data.plan_id, id);
+  assert.equal(read(), false);
+  assert.equal(set(true, 'owner-readd-star').ok, true);
+  assert.equal(set(false, 'owner-remove-star').ok, true);
+  assert.equal(read(), true);
+  assert.equal(set(false, 'owner-remove-again').ok, true);
+  ctx.__state.activeEmail = 'other@example.com';
+  assert.equal(read(), true);
+  assert.equal(set('invalid', 'invalid-star-flag').ok, false);
+  assert.equal(ctx.api_setPlanFavorite(ctx.Util.uuid(), true, 'missing-plan-star').ok, false);
+  assert.equal(ctx.Database.readAll('Transactions').rows.length, 0);
+});
+
 test('ตัวอย่าง 600 บาท 6 งวด ข้ามปีและครบกำหนดปลายเดือน โดยไม่เขียนชีต', () => {
   const { ctx, input } = fixture();
   const preview = plain(ctx.api_previewPaymentPlan(input));
@@ -51,6 +77,22 @@ test('รองรับแผนครั้งเดียว แผนปร�
   }
   assert.equal(ctx.api_previewPaymentPlan({ ...f, schedule_amounts: [400, 300, 299] }).ok, false);
   assert.equal(ctx.api_previewPaymentPlan({ ...f, schedule_amounts: [400, 300, 300] }).ok, true);
+});
+
+test('ค่าธรรมเนียมงวดแรกคิดครั้งเดียว ปัดเศษที่งวดสุดท้ายและบันทึกตรงกับตัวอย่าง', () => {
+  const { ctx, input } = fixture();
+  const payload = { ...input, principal_amount: '1000', interest_amount: '25', fee_amount: '20', fee_timing: 'FIRST', installment_count: 3 };
+  const preview = plain(ctx.api_previewPaymentPlan(payload)).data;
+  const amounts = preview.schedules.map((row) => row.amount_due);
+  assert.deepEqual(amounts, [361.66, 341.66, 341.68]);
+  assert.equal(preview.plan.total_amount, 1045);
+  assert.equal(ctx.api_createPaymentPlan({ ...payload, schedule_amounts: amounts }, 'planner-first-fee').ok, true);
+  assert.deepEqual(plain(ctx.api_paymentPlannerPage()).data.plans[0].schedules.map((row) => row.amount_due), amounts);
+  assert.equal(ctx.api_previewPaymentPlan({ ...payload, schedule_amounts: [10, 500, 535] }).ok, false);
+  assert.equal(ctx.api_previewPaymentPlan({ ...payload, fee_timing: 'OTHER' }).ok, false);
+  const feeOnly = { ...payload, principal_amount: 0, interest_amount: 0 };
+  assert.equal(ctx.api_previewPaymentPlan(feeOnly).ok, false);
+  assert.equal(ctx.api_previewPaymentPlan({ ...feeOnly, installment_count: 1 }).data.schedules[0].amount_due, 20);
 });
 
 test('สร้างแผนและคืนหน้ารายการจริงด้วย ID เดิมเมื่อส่งซ้ำ โดยไม่มีธุรกรรมจริง', () => {

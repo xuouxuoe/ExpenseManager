@@ -11,14 +11,40 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { createDbContext } = require('./gas-shim');
+const { createContext, createDbContext } = require('./gas-shim');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.argv[2] || process.env.PORT || 5178);
 const DELAY = Number(process.env.DEV_DELAY_MS || 350);
 const FAIL_RATE = Number(process.env.DEV_FAIL_RATE || 0);
 
-const ctx = createDbContext();
+let ctx = createDbContext();
+let backendVersion = backendSignature();
+
+function backendSignature() {
+  return fs.readdirSync(ROOT).filter((name) => name.endsWith('.gs')).sort().map((name) => {
+    const info = fs.statSync(path.join(ROOT, name));
+    return name + ':' + info.mtimeMs + ':' + info.size;
+  }).join('|');
+}
+
+function reloadBackendIfChanged() {
+  const version = backendSignature();
+  if (version === backendVersion) return;
+  // Build first so a syntax error leaves the running context and its data intact.
+  const next = createContext({
+    properties: ctx.__props,
+    activeEmail: ctx.__state.activeEmail,
+    effectiveEmail: ctx.__state.effectiveEmail
+  });
+  next.__ss = ctx.__ss;
+  next.__state.spreadsheets = ctx.__state.spreadsheets;
+  next.__state.logs = ctx.__state.logs;
+  next.Database.setSpreadsheetForTesting(next.__ss);
+  ctx = next;
+  backendVersion = version;
+  console.log('Reloaded local backend; in-memory test data retained.');
+}
 
 function seed() {
   const actor = { actorId: 'owner@example.com' };
@@ -99,9 +125,10 @@ const server = http.createServer((req, res) => {
     req.on('end', () => {
       setTimeout(() => {
         if (Math.random() < FAIL_RATE) { res.writeHead(503); res.end(); return; }
-        const fn = ctx[m[1]];
-        if (typeof fn !== 'function') { res.writeHead(404); res.end(); return; }
         try {
+          reloadBackendIfChanged();
+          const fn = ctx[m[1]];
+          if (typeof fn !== 'function') { res.writeHead(404); res.end(); return; }
           const result = fn.apply(null, JSON.parse(body || '[]'));
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify(result));
@@ -117,5 +144,5 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Expense Manager dev preview: http://localhost:${PORT} (ข้อมูลจำลองในหน่วยความจำ)`);
+  console.log(`Expense Manager dev preview: http://localhost:${server.address().port} (ข้อมูลจำลองในหน่วยความจำ)`);
 });

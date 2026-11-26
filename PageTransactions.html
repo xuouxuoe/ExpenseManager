@@ -94,11 +94,15 @@
       <div data-side="from">
         <label for="tf-from_account_id" class="field-label" id="tf-from-label">จากบัญชี</label>
         <select id="tf-from_account_id" name="from_account_id" class="field-input" aria-describedby="tf-from_account_id-error"></select>
+        <label for="tf-from_sub_account_id" class="field-label mt-2">บัญชีย่อยต้นทาง</label>
+        <select id="tf-from_sub_account_id" name="from_sub_account_id" class="field-input"></select>
         <p class="field-error hidden" id="tf-from_account_id-error"></p>
       </div>
       <div data-side="to">
         <label for="tf-to_account_id" class="field-label" id="tf-to-label">เข้าบัญชี</label>
         <select id="tf-to_account_id" name="to_account_id" class="field-input" aria-describedby="tf-to_account_id-error"></select>
+        <label for="tf-to_sub_account_id" class="field-label mt-2">บัญชีย่อยปลายทาง</label>
+        <select id="tf-to_sub_account_id" name="to_sub_account_id" class="field-input"></select>
         <p class="field-error hidden" id="tf-to_account_id-error"></p>
       </div>
       <div data-side="category">
@@ -192,6 +196,8 @@
 
     // ประเภทธุรกรรม: ข้อความหน้าจอ + ฝั่งบัญชี (ต้องตรงกับ TransactionService RULES)
     var TYPES = {
+      RECLASSIFY: { label: 'จัดกลุ่มยอดบัญชีย่อย', from: ['ASSET', 'LIABILITY'], to: ['ASSET', 'LIABILITY'], category: null, sign: 0, icon: '🗂️',
+        hint: 'เลือกบัญชีหลักเดียวกันทั้งสองฝั่ง แล้วเลือกบัญชีย่อยต้นทางและปลายทาง ใช้แบ่งยอดยกมาหรือย้ายกลุ่มภายในบัญชี' },
       EXPENSE: { label: 'รายจ่าย', from: ['ASSET'], to: null, category: 'EXPENSE', fromLabel: 'จ่ายจากบัญชี', sign: -1, icon: '🧾' },
       INCOME: { label: 'รายรับ', from: null, to: ['ASSET'], category: 'INCOME', toLabel: 'รับเข้าบัญชี', sign: 1, icon: '💰' },
       TRANSFER: { label: 'โอนระหว่างบัญชี', from: ['ASSET'], to: ['ASSET'], category: null, fromLabel: 'โอนจากบัญชี', toLabel: 'ไปยังบัญชี', sign: 0, icon: '🔁' },
@@ -554,8 +560,10 @@
     }
 
     function flowText(r) {
-      if (r.from_account_name && r.to_account_name) return r.from_account_name + ' → ' + r.to_account_name;
-      return r.from_account_name || r.to_account_name || '';
+      var from = [r.from_account_name, r.from_sub_account_name].filter(Boolean).join(' · ');
+      var to = [r.to_account_name, r.to_sub_account_name].filter(Boolean).join(' · ');
+      if (from && to) return from + ' → ' + to;
+      return from || to;
     }
 
     function amountNode(r) {
@@ -672,6 +680,7 @@
       else document.getElementById('tf-from_account_id').textContent = '';
       if (meta.to !== null) fillSelect(document.getElementById('tf-to_account_id'), accountOptions(meta.to, cur.to_account_id), cur.to_account_id);
       else document.getElementById('tf-to_account_id').textContent = '';
+      syncSubAccounts(cur);
       if (meta.category !== null) {
         var cats = [['', '— เลือกหมวดหมู่ —']].concat(state.masters.categories.filter(function (c) {
           return c.category_type === meta.category && (c.is_active || c.category_id === cur.category_id);
@@ -740,6 +749,20 @@
       if (draft) showError(draft.error);
     }
 
+    function syncSubAccounts(current) {
+      ['from', 'to'].forEach(function (side) {
+        var account = document.getElementById('tf-' + side + '_account_id').value;
+        var select = document.getElementById('tf-' + side + '_sub_account_id');
+        var id = current ? current[side + '_sub_account_id'] : select.value;
+        var rows = (state.masters.subAccounts || []).filter(function (s) { return s.account_id === account && (s.is_active || s.sub_account_id === id); });
+        fillSelect(select, [['', 'ยังไม่ระบุบัญชีย่อย']].concat(rows.map(function (s) { return [s.sub_account_id, s.sub_account_name]; })), id);
+      });
+    }
+
+    ['from', 'to'].forEach(function (side) {
+      document.getElementById('tf-' + side + '_account_id').addEventListener('change', function () { syncSubAccounts(); });
+    });
+
     function collect() {
       var meta = TYPES[typeSelect.value];
       var data = {};
@@ -748,6 +771,8 @@
       });
       data.from_account_id = meta.from === null ? '' : document.getElementById('tf-from_account_id').value;
       data.to_account_id = meta.to === null ? '' : document.getElementById('tf-to_account_id').value;
+      data.from_sub_account_id = meta.from === null ? '' : document.getElementById('tf-from_sub_account_id').value;
+      data.to_sub_account_id = meta.to === null ? '' : document.getElementById('tf-to_sub_account_id').value;
       data.category_id = meta.category === null ? '' : document.getElementById('tf-category_id').value;
       data.amount = data.amount.replace(/,/g, '');
       return data;

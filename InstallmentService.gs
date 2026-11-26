@@ -5,6 +5,35 @@ var PaymentPlanner = (function () {
   var MAX_INSTALLMENTS = 360;
   var LINK_MODES = ['NONE', 'NEW', 'EXISTING'];
 
+  function feeTimingKey(planId) { return 'plan.fee_timing.' + planId; }
+
+  function favoritePrefix(actor) { return 'plan.star.' + Util.sha256Hex(actor.actorId).slice(0, 32) + '.'; }
+
+  function favoriteSetting(actor, planId, favorite, now) {
+    return { setting_key: favoritePrefix(actor) + planId, setting_value: favorite ? 'ON' : 'OFF',
+      description: 'รายการแผนชำระที่ใช้ประจำ', updated_at: now };
+  }
+
+  function setFavorite(planId, favorite, request) {
+    var id = Validation.requireId(planId, 'plan_id');
+    var enabled = Validation.requireBoolean(favorite, 'favorite');
+    return Operation.run({ operationType: 'SET_PLAN_FAVORITE', actor: request.actor, idempotencyKey: request.idempotencyKey,
+      payload: { plan_id: id, favorite: enabled } }, function (ctx) {
+      if (!Database.findRowsByValue(PLANS, 'plan_id', id).length) throw error('plan_id', 'ไม่พบแผนชำระ');
+      var row = favoriteSetting(request.actor, id, enabled, ctx.now);
+      var hit = Database.findRowsByValue('Settings', 'setting_key', row.setting_key)[0];
+      if (hit && hit.row.setting_value !== row.setting_value) Database.writeRowAt('Settings', hit.rowNumber, row);
+      if (!hit && enabled) Database.appendRows('Settings', [row]);
+      return { favorite: enabled };
+    }).result;
+  }
+
+  function hasFirstInstallmentFee(planId) {
+    return Database.findRowsByValue('Settings', 'setting_key', feeTimingKey(planId)).some(function (hit) {
+      return hit.row.setting_value === 'FIRST';
+    });
+  }
+
   function error(field, message) {
     return Util.AppError('VALIDATION_PLAN', message, { field: field });
   }
@@ -31,6 +60,7 @@ var PaymentPlanner = (function () {
       purchase_date: Validation.requireDate(f.purchase_date, 'purchase_date'),
       plan_type: type,
       account_id: Validation.requireId(f.account_id, 'account_id'),
+      sub_account_id: Projection.validateSubAccount(f.sub_account_id, f.account_id, masters),
       owner_id: Validation.requireId(f.owner_id, 'owner_id'),
       category_id: Validation.requireId(f.category_id, 'category_id'),
       item_name: text(f, 'item_name', limits.ITEM_NAME, true),
@@ -52,7 +82,9 @@ var PaymentPlanner = (function () {
       throw error('category_id', 'แผนชำระต้องใช้หมวดหมู่รายจ่าย');
     }
 
-    var amounts = Validation.splitSatang(total, count);
+    var timing = Validation.isBlank(f.fee_timing) ? 'SPREAD' : Validation.requireEnum(f.fee_timing, ['SPREAD', 'FIRST'], 'fee_timing');
+    var firstFee = timing === 'FIRST' ? fee : 0;
+    var amounts;
     if (f.schedule_amounts !== undefined) {
       if (!Array.isArray(f.schedule_amounts) || f.schedule_amounts.length !== count) {
         throw error('schedule_amounts', 'จำนวนยอดรายงวดต้องตรงกับจำนวนงวด');
@@ -61,6 +93,13 @@ var PaymentPlanner = (function () {
       if (amounts.reduce(function (sum, amount) { return sum + amount; }, 0) !== total) {
         throw error('schedule_amounts', 'ผลรวมรายงวดต้องตรงกับยอดรวมของแผน');
       }
+      if (amounts[0] < firstFee) throw error('schedule_amounts', 'งวดแรกต้องครอบคลุมค่าธรรมเนียมทั้งหมด');
+    } else if (count === 1) {
+      amounts = [total];
+    } else {
+      if (total - firstFee < count) throw error('installment_count', 'ยอดที่ใช้แบ่งงวดต้องเพียงพออย่างน้อยงวดละ 0.01 บาท');
+      amounts = Validation.splitSatang(total - firstFee, count);
+      amounts[0] += firstFee;
     }
     // ตรวจขอบเขตก่อนเขียนลงชีต
     Validation.addMonths(plan.first_saving_month, count - 1);
@@ -88,7 +127,7 @@ var PaymentPlanner = (function () {
     if (plan.purchase_date > Util.todayIso()) throw error('purchase_date', 'วันที่ซื้อต้องไม่เป็นวันในอนาคต');
     if (mode === 'NEW') {
       var tx = Transactions.validate({
-        transaction_date: plan.purchase_date, transaction_type: 'CREDIT_PURCHASE', from_account_id: plan.account_id,
+        transaction_date: plan.purchase_date, transaction_type: 'CREDIT_PURCHASE', from_account_id: plan.account_id, from_sub_account_id: plan.sub_account_id,
         owner_id: plan.owner_id, category_id: plan.category_id, item_name: plan.item_name, description: plan.description,
         amount: plan.principal_amount, external_ref: plan.external_ref, note: ''
       }, masters);
@@ -103,6 +142,7 @@ var PaymentPlanner = (function () {
       throw error('principal_amount', 'เงินต้นของแผนต้องเท่ากับยอดรายการซื้อ ' + candidate.amount + ' บาท');
     }
     if (candidate.transaction_date !== plan.purchase_date) throw error('purchase_date', 'วันที่ซื้อของแผนต้องตรงกับรายการซื้อ');
+    if ((candidate.from_sub_account_id || '') !== plan.sub_account_id) throw error('sub_account_id', 'บัญชีย่อยต้องตรงกับรายการซื้อที่เลือก');
     return { mode: mode, transaction_id: id };
   }
 
@@ -184,6 +224,7 @@ var PaymentPlanner = (function () {
       var draft = ctx.recoveryData;
       if (!draft) {
         draft = normalize(input, masters);
+        draft.favorite = input.favorite !== undefined && Validation.requireBoolean(input.favorite, 'favorite');
         draft.plan.plan_id = ctx.id('plan');
         draft.plan.created_at = ctx.now;
         draft.plan.updated_at = ctx.now;
@@ -206,6 +247,12 @@ var PaymentPlanner = (function () {
         schedule.created_at = plan.created_at;
         schedule.updated_at = plan.updated_at;
       });
+      // Persist the choice before the schedules become payable. The operation lock and key cover retries.
+      if (draft.favorite) Database.appendRowsIfAbsent('Settings', [favoriteSetting(request.actor, plan.plan_id, true, plan.created_at)]);
+      if (input.fee_timing === 'FIRST' && plan.fee_amount > 0) {
+        Database.appendRowsIfAbsent('Settings', [{ setting_key: feeTimingKey(plan.plan_id), setting_value: 'FIRST',
+          description: 'รับรู้ค่าธรรมเนียมเมื่อชำระงวดแรก', updated_at: plan.created_at }]);
+      }
       Database.appendRowsIfAbsent(PLANS, [plan]);
       Database.appendRowsIfAbsent(SCHEDULES, schedules);
       var saved = Database.readAll(SCHEDULES).rows.filter(function (r) { return r.plan_id === plan.plan_id; });
@@ -225,7 +272,7 @@ var PaymentPlanner = (function () {
     }).result;
   }
 
-  function list() {
+  function list(actor) {
     var schedulesByPlan = {};
     var paymentsByPlan = {};
     var purchaseByPlan = {};
@@ -248,11 +295,15 @@ var PaymentPlanner = (function () {
       row.is_overdue = !row.is_cancelled && row.remaining_to_pay > 0 && !!row.due_date && row.due_date < today;
       (schedulesByPlan[row.plan_id] || (schedulesByPlan[row.plan_id] = [])).push(row);
     });
+    var settings = new Map(Database.readAll('Settings').rows.map(function (row) { return [row.setting_key, row.setting_value]; }));
+    var starPrefix = favoritePrefix(actor);
     return Database.readAll(PLANS).rows.slice().reverse().reduce(function (result, plan) {
       var schedules = schedulesByPlan[plan.plan_id] || [];
       if (schedules.length === plan.installment_count) {
         schedules.sort(function (a, b) { return a.installment_no - b.installment_no; });
-        result.push({ plan: plan, schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [], purchase: purchaseByPlan[plan.plan_id] || null });
+        result.push({ plan: plan, schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [], purchase: purchaseByPlan[plan.plan_id] || null,
+          first_installment_fee: settings.get(feeTimingKey(plan.plan_id)) === 'FIRST',
+          favorite: settings.get(starPrefix + plan.plan_id) === 'ON' });
       }
       return result;
     }, []);
@@ -286,5 +337,6 @@ var PaymentPlanner = (function () {
     });
   }
 
-  return { preview: preview, create: create, list: list, extension: extension, purchaseCandidates: purchaseCandidates };
+  return { preview: preview, create: create, list: list, extension: extension, purchaseCandidates: purchaseCandidates,
+    hasFirstInstallmentFee: hasFirstInstallmentFee, setFavorite: setFavorite };
 })();

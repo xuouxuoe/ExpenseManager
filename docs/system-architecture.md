@@ -1,5 +1,11 @@
 # System Architecture — Expense Manager V2
 
+## บัญชีย่อยและรายงานสำหรับส่งต่อ
+
+SubAccounts อ้างอิง Accounts ผ่าน account_id ส่วน Transactions ระบุบัญชีย่อยแยก from/to และ PaymentPlans ระบุ sub_account_id ที่คัดลอกไปทุก PaymentSchedules ทุกผลทางบัญชียังคำนวณที่บัญชีหลักเดิม รายงานบัญชีย่อยใช้ Ledger ชุดเดียวกันโดยจัด endpoint แต่ละฝั่งลงกลุ่ม รวมกลุ่มว่างสำหรับยอดยกมาและรายการเดิม
+
+api_sharedAccountReport คืนเฉพาะชื่อบัญชีย่อย balance, income, expense และ isAsset สำหรับรายงานส่งต่อ หน้าเว็บสร้าง PNG และ CSV จาก payload นี้ การรวมยอดบัญชีหลักและรายงานรายละเอียดส่วนตัวยังมีชื่อบัญชีหลักเพื่อใช้ตรวจสอบ
+
 สถานะ: **ร่างเพื่อขออนุมัติ**
 ปรับปรุงล่าสุด: 2026-11-25
 

@@ -7,11 +7,11 @@ const { createDbContext } = require('./gas-shim');
 
 const plain = (value) => JSON.parse(JSON.stringify(value));
 
-function cardFixture() {
+function cardFixture(openingBalance = 1000) {
   const ctx = createDbContext();
   const actor = { actorId: 'owner@example.com' };
   const owner = ctx.MasterData.create('owner', { owner_name: 'เจ้าของ' }, { actor, idempotencyKey: 'card-seed-owner' });
-  const account = ctx.MasterData.create('account', { account_name: 'เงินสด', account_type: 'CASH', opening_balance: 1000 }, { actor, idempotencyKey: 'card-seed-cash' });
+  const account = ctx.MasterData.create('account', { account_name: 'เงินสด', account_type: 'CASH', opening_balance: openingBalance }, { actor, idempotencyKey: 'card-seed-cash' });
   const card = ctx.MasterData.create('account', { account_name: 'บัตรเครดิต', account_type: 'CREDIT_CARD' }, { actor, idempotencyKey: 'card-seed-card' });
   const category = ctx.MasterData.create('category', { category_name: 'เครื่องใช้ไฟฟ้า', category_type: 'EXPENSE' }, { actor, idempotencyKey: 'card-seed-category' });
   const today = ctx.Util.todayIso();
@@ -109,6 +109,63 @@ test('ผ่อนบัตรมีดอกเบี้ย/ค่าธรร�
   assert.equal(plain(ctx.api_paymentPlannerPage()).data.plans[0].plan.plan_status, 'ACTIVE');
 });
 
+test('ค่าธรรมเนียมงวดแรกตามยอดที่จัดสรรจริง แม้จ่ายข้ามงวด ย้อนรายการเก่า และชำระใหม่', () => {
+  const { ctx, input, account, card, today, balances, expense } = cardFixture(2000);
+  const payload = { ...input, principal_amount: 1000, interest_amount: 25, fee_amount: 20, installment_count: 3,
+    purchase_link: 'NEW', fee_timing: 'FIRST' };
+  const planId = ctx.api_createPaymentPlan(payload, 'first-fee-create').data.plan_id;
+  const record = plain(ctx.api_paymentPlannerPage()).data.plans[0];
+  assert.equal(record.first_installment_fee, true);
+  assert.deepEqual(record.schedules.map((s) => s.amount_due), [361.66, 341.66, 341.68]);
+  const line = (index, amount) => ({ schedule_id: record.schedules[index].schedule_id, amount });
+  const pay = (key, lines) => {
+    const res = ctx.api_paymentActivity({ action: 'PAY', plan_id: planId, date: today, account_id: account.account_id, lines }, key);
+    assert.equal(res.ok, true, JSON.stringify(res));
+  };
+  const txs = () => plain(ctx.Database.readAll('Transactions').rows);
+  const fees = () => {
+    const rows = txs();
+    const reversed = new Set(rows.map((r) => r.reversal_of));
+    return rows.filter((r) => r.transaction_type === 'FEE' && !r.reversal_of && !reversed.has(r.transaction_id));
+  };
+  pay('later-installment', [line(1, 300)]);
+  assert.equal(fees().length, 0);
+  pay('half-first-payment', [line(0, 180.83)]);
+  pay('half-first-payment', [line(0, 180.83)]);
+  assert.deepEqual(fees().map((r) => r.amount), [10]);
+  const halfPaymentId = fees()[0].external_ref;
+  pay('mixed-installments', [line(2, 150), line(0, 180.83)]);
+  assert.deepEqual(fees().map((r) => r.amount), [10, 10]);
+  assert.equal(ctx.api_paymentActivity({ action: 'REVERSE_PAY', plan_id: planId, date: today,
+    transaction_id: halfPaymentId, note: 'แก้ยอดชำระ' }, 'reverse-half-first').ok, true);
+  assert.deepEqual(fees().map((r) => r.amount), [10]);
+  pay('finish-later-lines', [line(1, 41.66), line(2, 191.68)]);
+  assert.deepEqual(fees().map((r) => r.amount), [10]);
+  pay('replace-first-line', [line(0, 180.83)]);
+  assert.deepEqual(fees().map((r) => r.amount), [10, 10]);
+  assert.equal(balances()[card.account_id], 0);
+  assert.equal(balances()[account.account_id], 955);
+  assert.equal(expense(), 1045);
+});
+
+test('ปัดเศษค่าธรรมเนียมที่สตางค์สุดท้ายของงวดแรก และรองรับสินเชื่อที่มีเฉพาะค่าธรรมเนียม', () => {
+  const { ctx, input, account, actor, today } = cardFixture();
+  const loan = ctx.MasterData.create('account', { account_name: 'สินเชื่อทดสอบ', account_type: 'LOAN' }, { actor, idempotencyKey: 'fee-only-loan' });
+  for (const [index, principal, fee, partial, expected] of [[1, '0.02', '0.01', '0.02', []], [2, '0', '0.03', '0.02', [0.02]]]) {
+    const plan = { ...input, account_id: loan.account_id, principal_amount: principal, interest_amount: 0, fee_amount: fee,
+      installment_count: 1, fee_timing: 'FIRST' };
+    const planId = ctx.api_createPaymentPlan(plan, 'penny-create-' + index).data.plan_id;
+    const schedule = ctx.api_paymentPlannerPage().data.plans.find((p) => p.plan.plan_id === planId).schedules[0];
+    const pay = (key, amount) => ctx.api_paymentActivity({ action: 'PAY', plan_id: planId, date: today, account_id: account.account_id,
+      lines: [{ schedule_id: schedule.schedule_id, amount }] }, key + index);
+    const fees = () => plain(ctx.Database.readAll('Transactions').rows).filter((r) => r.plan_id === planId && r.transaction_type === 'FEE').map((r) => r.amount);
+    assert.equal(pay('partial-penny-', partial).ok, true);
+    assert.deepEqual(fees(), expected);
+    assert.equal(pay('closing-penny-', '0.01').ok, true);
+    assert.deepEqual(fees(), [...expected, 0.01]);
+  }
+});
+
 test('เชื่อมรายการซื้อด้วยบัตรที่บันทึกไว้แล้ว และปฏิเสธกรณีไม่ตรงกัน', () => {
   const { ctx, input, card, account, today } = cardFixture();
   const created = ctx.api_createTransaction({
@@ -165,12 +222,14 @@ test('สร้างแผนพร้อมรายการซื้อ: เ
     if (name === 'Transactions') throw new Error('injected purchase write error');
     return append(name, rows);
   };
-  const payload = { ...input, purchase_link: 'NEW' };
+  const payload = { ...input, purchase_link: 'NEW', fee_timing: 'FIRST', fee_amount: 10 };
   assert.equal(ctx.api_createPaymentPlan(payload, 'card-link-recover').ok, false);
   assert.equal(ctx.Database.readAll('Transactions').rows.length, 0);
   ctx.Database.appendRowsIfAbsent = append;
   const retry = ctx.api_createPaymentPlan(payload, 'card-link-recover');
   assert.equal(retry.ok, true);
+  assert.equal(ctx.Database.readAll('Settings').rows.filter((r) => r.setting_key === 'plan.fee_timing.' + retry.data.plan_id).length, 1);
+  assert.equal(ctx.api_paymentPlannerPage().data.plans[0].first_installment_fee, true);
   assert.equal(ctx.Database.readAll('PaymentPlans').rows.length, 1);
   const tx = ctx.Database.readAll('Transactions').rows;
   assert.equal(tx.length, 1);

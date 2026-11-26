@@ -136,7 +136,8 @@ test('Operation: validation error → FAILED และ audit FAILED', () => {
 });
 
 test('Operation: lock ไม่ว่าง → BUSY; key ไม่ถูกต้อง → ปฏิเสธ; ไม่มี actor → ปฏิเสธ', () => {
-  const busy = createDbContext({ lockAvailable: false });
+  const busy = createDbContext();
+  busy.__state.lockAvailable = false;
   assert.throws(() => busy.Operation.run({ operationType: 'X', idempotencyKey: 'key-0006-abc', payload: {}, actor: ACTOR }, () => 1),
     (e) => e.code === 'BUSY');
   const ctx = createDbContext();

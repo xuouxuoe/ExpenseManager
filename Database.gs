@@ -85,6 +85,7 @@ var Database = (function () {
     while (actual.length && actual[actual.length - 1] === '') actual.pop();
     var same = actual.length === expected.length && actual.every(function (h, i) { return h === expected[i]; });
     if (same) return { sheet: sheetName, status: 'OK', dataRows: lastRow - 1 };
+    if (isLegacyHeader(sheetName, actual)) return { sheet: sheetName, status: 'UPGRADE_AVAILABLE', dataRows: lastRow - 1 };
     var dupes = actual.filter(function (h, i) { return h !== '' && actual.indexOf(h) !== i; });
     return {
       sheet: sheetName,
@@ -104,6 +105,7 @@ var Database = (function () {
   }
 
   function formatSheet(sheet, headers) {
+    ensureColumns(sheet, headers.length);
     sheet.setFrozenRows(1);
     var maxRows = Math.max(sheet.getMaxRows(), 2);
     headers.forEach(function (h, i) {
@@ -114,30 +116,46 @@ var Database = (function () {
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
   }
 
+  function ensureColumns(sheet, count) {
+    if (sheet.getMaxColumns && sheet.getMaxColumns() < count) sheet.insertColumnsAfter(sheet.getMaxColumns(), count - sheet.getMaxColumns());
+  }
+
   /**
    * สร้างชีตที่ขาดและเขียน header ให้ชีตที่ว่าง
-   * ไม่ลบชีต ไม่เปลี่ยน header ที่มีอยู่ ไม่แตะแถวข้อมูล; ชีตที่ header ไม่ตรงจะถูกรายงานเท่านั้น
+   * เติมคอลัมน์บัญชีย่อยท้าย header รุ่นก่อนที่รู้จักภายใต้ lock โดยคงข้อมูลเดิม; schema อื่นที่ไม่ตรงจะถูกรายงาน
    */
   function initialize() {
-    resetExecutionCache();
-    var ss = getSpreadsheet();
-    return Object.keys(Config.HEADERS).map(function (name) {
-      var headers = Config.HEADERS[name];
-      var before = inspectSheet(ss, name);
-      if (before.status === 'MISSING') {
-        var created = ss.insertSheet(name);
-        created.getRange(1, 1, 1, headers.length).setValues([headers]);
-        formatSheet(created, headers);
-        return { sheet: name, status: 'CREATED' };
-      }
-      if (before.status === 'EMPTY') {
-        var sheet = ss.getSheetByName(name);
-        sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
-        formatSheet(sheet, headers);
-        return { sheet: name, status: 'HEADERS_WRITTEN' };
-      }
-      return before;
-    });
+    var lock = LockService.getScriptLock();
+    if (!lock.tryLock(Config.LOCK_TIMEOUT_MS)) throw Util.AppError('BUSY', 'ระบบกำลังบันทึกข้อมูล กรุณาลองใหม่');
+    try {
+      resetExecutionCache();
+      var ss = getSpreadsheet();
+      return Object.keys(Config.HEADERS).map(function (name) {
+        var headers = Config.HEADERS[name];
+        var before = inspectSheet(ss, name);
+        if (before.status === 'MISSING') {
+          var created = ss.insertSheet(name);
+          ensureColumns(created, headers.length);
+          created.getRange(1, 1, 1, headers.length).setValues([headers]);
+          formatSheet(created, headers);
+          return { sheet: name, status: 'CREATED' };
+        }
+        if (before.status === 'EMPTY') {
+          var sheet = ss.getSheetByName(name);
+          ensureColumns(sheet, headers.length);
+          sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+          formatSheet(sheet, headers);
+          return { sheet: name, status: 'HEADERS_WRITTEN' };
+        }
+        if (before.status === 'UPGRADE_AVAILABLE') {
+          verifiedSheet(name, true);
+          return { sheet: name, status: 'UPGRADED' };
+        }
+        return before;
+      });
+    } finally {
+      lock.releaseLock();
+    }
   }
 
   // ---------- แปลงค่า ----------
@@ -190,20 +208,38 @@ var Database = (function () {
     return actual.length === expected.length && actual.every(function (h, i) { return h === expected[i]; });
   }
 
+  function isLegacyHeader(name, actual) {
+    return Config.LEGACY_HEADERS[name] && sameHeader(actual, Config.LEGACY_HEADERS[name]);
+  }
+
   function schemaError(sheetName, status) {
     return Util.AppError('SCHEMA_MISMATCH', 'โครงสร้างตาราง ' + sheetName + ' ไม่ตรงกับที่กำหนด (' + status + ') กรุณาเรียก checkDatabase()', { sheet: sheetName, status: status });
   }
 
   /** sheet ที่ตรวจ header แล้ว (อ่านเฉพาะแถว header; ใช้กับการเขียนแบบ append ที่ไม่ต้องอ่านทั้งตาราง) */
-  function verifiedSheet(sheetName) {
+  function verifiedSheet(sheetName, forWrite) {
     var entry = execCache.sheets[sheetName];
-    if (entry) return entry;
+    if (entry && (!entry.legacy || !forWrite)) return entry;
     var headers = headersOf(sheetName);
-    var sheet = getSpreadsheet().getSheetByName(sheetName);
+    var sheet = entry ? entry.sheet : getSpreadsheet().getSheetByName(sheetName);
+    if (!sheet && sheetName === 'SubAccounts' && forWrite) {
+      sheet = getSpreadsheet().insertSheet(sheetName);
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+      formatSheet(sheet, headers);
+    }
     if (!sheet) throw schemaError(sheetName, 'MISSING');
-    var actual = trimHeader(sheet.getRange(1, 1, 1, headers.length + 1).getValues()[0]);
-    if (!sameHeader(actual, headers)) throw schemaError(sheetName, actual.length ? 'MISMATCH' : 'EMPTY');
-    entry = execCache.sheets[sheetName] = { sheet: sheet, lastRow: null };
+    var readWidth = sheet.getMaxColumns ? Math.min(headers.length + 1, sheet.getMaxColumns()) : headers.length + 1;
+    var actual = trimHeader(sheet.getRange(1, 1, 1, readWidth).getValues()[0]);
+    var legacy = !!isLegacyHeader(sheetName, actual);
+    if (legacy && forWrite) {
+      ensureColumns(sheet, headers.length);
+      sheet.getRange(1, actual.length + 1, 1, headers.length - actual.length).setValues([headers.slice(actual.length)]);
+      formatSheet(sheet, headers);
+      actual = headers;
+      legacy = false;
+    }
+    if (!sameHeader(actual, headers) && !legacy) throw schemaError(sheetName, actual.length ? 'MISMATCH' : 'EMPTY');
+    entry = execCache.sheets[sheetName] = { sheet: sheet, lastRow: null, legacy: legacy };
     return entry;
   }
 
@@ -214,10 +250,15 @@ var Database = (function () {
     var headers = headersOf(sheetName);
     var entry = execCache.sheets[sheetName];
     var sheet = entry ? entry.sheet : getSpreadsheet().getSheetByName(sheetName);
+    if (!sheet && sheetName === 'SubAccounts') {
+      table = execCache.tables[sheetName] = { values: [] };
+      return table;
+    }
     if (!sheet) throw schemaError(sheetName, 'MISSING');
     var values = sheet.getDataRange().getValues();
     var actual = trimHeader(values[0] || []);
-    if (!sameHeader(actual, headers)) throw schemaError(sheetName, actual.length ? 'MISMATCH' : 'EMPTY');
+    var legacy = isLegacyHeader(sheetName, actual);
+    if (!sameHeader(actual, headers) && !legacy) throw schemaError(sheetName, actual.length ? 'MISMATCH' : 'EMPTY');
     var width = headers.length;
     var body = values.slice(1).map(function (r) {
       var row = r.slice(0, width);
@@ -225,7 +266,7 @@ var Database = (function () {
       return row;
     });
     while (body.length && body[body.length - 1].every(function (v) { return v === '' || v === null; })) body.pop();
-    execCache.sheets[sheetName] = { sheet: sheet, lastRow: body.length + 1 };
+    execCache.sheets[sheetName] = { sheet: sheet, lastRow: body.length + 1, legacy: !!legacy };
     table = execCache.tables[sheetName] = { values: body };
     return table;
   }
@@ -269,6 +310,10 @@ var Database = (function () {
       return hits;
     }
     var entry = verifiedSheet(sheetName);
+    if (entry.legacy) {
+      loadTable(sheetName);
+      return findRowsByValue(sheetName, column, value);
+    }
     var last = lastRowOf(sheetName);
     if (last < 2) return [];
     var matches = entry.sheet.getRange(2, col + 1, last - 1, 1).createTextFinder(String(value)).matchEntireCell(true).findAll();
@@ -282,7 +327,7 @@ var Database = (function () {
   function appendRows(sheetName, objects) {
     if (!objects || !objects.length) return 0;
     var headers = headersOf(sheetName);
-    var entry = verifiedSheet(sheetName);
+    var entry = verifiedSheet(sheetName, true);
     var start = lastRowOf(sheetName) + 1;
     var values = objects.map(function (o) { return objectToRow(o, headers); });
     entry.sheet.getRange(start, 1, values.length, headers.length).setValues(values);
@@ -308,7 +353,7 @@ var Database = (function () {
   /** เขียนทับแถวตามเลขแถวที่ทราบแล้ว (ใช้คู่กับ findRowsByValue) */
   function writeRowAt(sheetName, rowNumber, object) {
     var headers = headersOf(sheetName);
-    var entry = verifiedSheet(sheetName);
+    var entry = verifiedSheet(sheetName, true);
     var values = objectToRow(object, headers);
     entry.sheet.getRange(rowNumber, 1, 1, headers.length).setValues([values]);
     var table = execCache.tables[sheetName];
@@ -332,7 +377,7 @@ var Database = (function () {
       if (!rowNumber) throw Util.AppError('NOT_FOUND', 'ไม่พบรายการ ' + o[pk] + ' ในตาราง ' + sheetName);
       return { rowNumber: rowNumber, values: objectToRow(o, headers) };
     }).sort(function (a, b) { return a.rowNumber - b.rowNumber; });
-    var sheet = verifiedSheet(sheetName).sheet;
+    var sheet = verifiedSheet(sheetName, true).sheet;
     var start = 0;
     for (var i = 1; i <= targets.length; i++) {
       if (i === targets.length || targets[i].rowNumber !== targets[i - 1].rowNumber + 1) {
@@ -363,7 +408,7 @@ var Database = (function () {
       current.push([cached && cached[colIndex] !== undefined ? cached[colIndex] : '']);
     }
     rowNumbers.forEach(function (n, i) { current[n - first][0] = toCell(values[i], column); });
-    verifiedSheet(sheetName).sheet.getRange(first, colIndex + 1, last - first + 1, 1).setValues(current);
+    verifiedSheet(sheetName, true).sheet.getRange(first, colIndex + 1, last - first + 1, 1).setValues(current);
     current.forEach(function (c, i) { if (table.values[first - 2 + i]) table.values[first - 2 + i][colIndex] = c[0]; });
     return rowNumbers.length;
   }

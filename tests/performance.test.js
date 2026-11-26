@@ -37,8 +37,9 @@ test('createTransaction: อ่านแต่ละชีตไม่เกิ�
   const { calls, result } = measure(ctx, () => ctx.api_createTransaction({ transaction_date: '2026-11-26', transaction_type: 'EXPENSE', from_account_id: acc.account_id,
     category_id: cat.category_id, owner_id: owner.owner_id, item_name: 'ใหม่', amount: 1 }, key()));
   assert.equal(plain(result).ok, true);
-  assert.ok(calls.getSheetByName <= 6, JSON.stringify(calls));
-  assert.ok(calls.getValues <= 6, JSON.stringify(calls));
+  // Display names and SubAccounts each add one cached master-table read.
+  assert.ok(calls.getSheetByName <= 8, JSON.stringify(calls));
+  assert.ok(calls.getValues <= 8, JSON.stringify(calls));
   assert.ok(calls.setValues <= 4, JSON.stringify(calls));
   assert.ok(calls.textFinder <= 1, JSON.stringify(calls));
 });
@@ -54,14 +55,14 @@ test('จำนวนการอ่านไม่โตตามจำนว�
   assert.equal(a.setValues, b.setValues);
 });
 
-test('transactionPage (โหลดหน้าครั้งแรก) อ่าน 4 ชีต ครั้งละครั้ง', () => {
+test('transactionPage อ่าน 6 ชีตรวม Settings และ SubAccounts ครั้งละครั้ง', () => {
   const { ctx } = seeded(10);
   const { calls, result } = measure(ctx, () => ctx.api_transactionPage({}, { includeMasters: true }));
   const data = plain(result).data;
   assert.equal(data.list.total, 10);
   assert.ok(Array.isArray(data.suggestions.recent));
   assert.equal(data.masters.accounts.length, 1);
-  assert.equal(calls.getValues, 4, JSON.stringify(calls));
+  assert.equal(calls.getValues, 6, JSON.stringify(calls));
   assert.equal(calls.setValues, 0);
 });
 
@@ -76,7 +77,7 @@ test('create + page: คืนรายการ ยอดสรุป และ
   assert.equal(result.data.page.list.rows[0].transaction_id, result.data.row.transaction_id);
   assert.equal(result.data.page.list.summary.expense, 85.50);
   assert.equal(result.data.page.suggestions.recent[0].item_name, input.item_name);
-  assert.ok(calls.getValues <= 6, JSON.stringify(calls));
+  assert.ok(calls.getValues <= 8, JSON.stringify(calls));
   assert.ok(calls.setValues <= 4, JSON.stringify(calls));
 
   const replay = measure(ctx, () => ctx.api_createTransaction(input, operationKey, { q: 'nomatch' }, scope));
@@ -115,7 +116,7 @@ test('updateMaster ที่ไม่เปลี่ยนชื่อไม่ 
   const txSheet = ctx.__ss.getSheetByName('Transactions');
   const { calls } = measure(ctx, () => ctx.api_updateMaster('owner', owner.owner_id, { owner_name: 'A' }, key()));
   assert.equal(txSheet.calls.setValues, 0);
-  assert.ok(calls.getValues <= 5, JSON.stringify(calls));
+  assert.ok(calls.getValues <= 7, JSON.stringify(calls));
 });
 
 test('cache ไม่ทำให้ใช้ข้อมูลเก่า: ข้อมูลที่ execution อื่นเขียนก่อนได้ lock ถูกอ่านใหม่', () => {

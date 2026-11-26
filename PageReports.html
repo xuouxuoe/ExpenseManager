@@ -22,6 +22,8 @@
       <label><span class="field-label">เจ้าของรายการ</span><select class="field-input" name="owner_id"></select></label>
       <label><span class="field-label">หมวดหมู่</span><select class="field-input" name="category_id"></select></label>
       <label><span class="field-label">บัญชีหรือบัตร</span><select class="field-input" name="account_id"></select></label>
+      <label><span class="field-label">บัญชีย่อย</span><select class="field-input" name="sub_account_id"></select></label>
+      <label><span class="field-label">มุมมองยอดบัญชี</span><select class="field-input" name="account_view"><option value="MAIN">รวมบัญชีหลัก</option><option value="SUB">แยกบัญชีย่อย</option></select></label>
     </div>
   </form>
 
@@ -41,6 +43,19 @@
         </select>
       </label>
       <button type="button" class="btn btn-secondary" id="fr-download">ดาวน์โหลด CSV</button>
+    </div>
+  </section>
+  <section class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4" aria-labelledby="fr-share-title">
+    <h2 id="fr-share-title" class="font-semibold">รายงานบัญชีย่อยสำหรับส่งต่อ</h2>
+    <p class="text-sm text-slate-600">แสดงชื่อบัญชีย่อย ยอดคงเหลือปัจจุบัน และรายรับรายจ่ายตามช่วงเวลาที่เลือก รายการที่ยังไม่ระบุบัญชีย่อยดูได้ในมุมมองของคุณ</p>
+    <button type="button" class="btn btn-secondary mt-3" id="fr-share-preview">ดูตัวอย่างก่อนดาวน์โหลด</button>
+    <div id="fr-share-result" class="mt-3" hidden>
+      <canvas id="fr-share-canvas" class="max-w-full rounded-xl bg-white" role="img" aria-label="กราฟและตารางยอดบัญชีย่อยสำหรับส่งต่อ"></canvas>
+      <p id="fr-share-text" class="mt-2 text-sm text-slate-700"></p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="btn btn-primary" id="fr-share-png">ดาวน์โหลดภาพ PNG</button>
+        <button type="button" class="btn btn-secondary" id="fr-share-csv">ดาวน์โหลด CSV บัญชีย่อย</button>
+      </div>
     </div>
   </section>
 </section>
@@ -69,6 +84,8 @@
     var requestSeq = 0;
     var chartLibrary = null;
     var instances = [];
+    var shareRows = null;
+    var reportMasters = null;
     var startDate = App.todayIso();
     var ICONS = { CASH: '💵', BANK: '🏦', E_WALLET: '📱', CREDIT_CARD: '💳', CASH_CARD: '🏧', LOAN: '📄' };
     var INCOME_TYPES = ['INCOME', 'REFUND'];
@@ -318,6 +335,10 @@
       document.getElementById('fr-period').textContent = periodLabel(filters);
       filters.month = filters.month.replace('-', '');
       download.disabled = true;
+      shareRows = null;
+      activeFilters = null;
+      document.getElementById('fr-share-preview').disabled = true;
+      document.getElementById('fr-share-result').hidden = true;
       status.textContent = 'กำลังโหลดรายงาน…';
       if (!content.childNodes.length) skeleton();
       if (!chartLibrary) chartLibrary = new Promise(function (resolve) {
@@ -331,12 +352,15 @@
         select('owner_id', data.masters.owners);
         select('category_id', data.masters.categories);
         select('account_id', data.masters.accounts);
+        reportMasters = data.masters;
+        syncReportSubs();
         updateFilterCount();
         render(data);
         if (!window.Chart) chartLibrary.then(function () {
           if (window.Chart && seq === requestSeq) render(data);
         });
         activeFilters = filters;
+        document.getElementById('fr-share-preview').disabled = false;
         status.textContent = '';
         download.disabled = false;
       }, function (err) {
@@ -356,8 +380,85 @@
     });
     form.addEventListener('submit', function (event) { event.preventDefault(); load(); });
     form.elements.namedItem('month').addEventListener('change', load);
-    ['owner_id', 'category_id', 'account_id'].forEach(function (name) {
+    function syncReportSubs() {
+      var parent = form.elements.namedItem('account_id').value;
+      select('sub_account_id', (reportMasters.subAccounts || []).filter(function (s) { return !parent || s.account_id === parent; }));
+    }
+    ['owner_id', 'category_id', 'account_id', 'sub_account_id', 'account_view'].forEach(function (name) {
+      if (name === 'account_id') form.elements.namedItem(name).addEventListener('change', syncReportSubs);
       form.elements.namedItem(name).addEventListener('change', function () { updateFilterCount(); load(); });
+    });
+
+    function saveShareFile(blob, filename) {
+      var url = URL.createObjectURL(blob);
+      var link = el('a', { href: url, download: filename, target: '_self' });
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    document.getElementById('fr-share-preview').addEventListener('click', function (event) {
+      if (!activeFilters) return;
+      var button = event.currentTarget;
+      var seq = requestSeq;
+      App.setBusy(button, true, 'กำลังเตรียมรายงาน…');
+      App.call('api_sharedAccountReport', activeFilters).then(function (data) {
+        if (seq !== requestSeq) return;
+        shareRows = data.accounts;
+        if (!shareRows.length) { App.toast('ยังไม่มีบัญชีย่อยในตัวกรองที่เลือก', 'info'); return; }
+        var canvas = document.getElementById('fr-share-canvas');
+        canvas.width = 1000;
+        canvas.height = 160 + shareRows.length * 140;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#312e81';
+        ctx.font = 'bold 30px sans-serif';
+        ctx.fillText('รายงานบัญชีย่อย', 40, 54);
+        ctx.font = '18px sans-serif';
+        ctx.fillStyle = '#475569';
+        var period = periodLabel({ month: activeFilters.month ? String(activeFilters.month).slice(0, 4) + '-' + String(activeFilters.month).slice(4) : '', year: activeFilters.year });
+        ctx.fillText(period + ' · ยอดคงเหลือปัจจุบัน', 40, 90);
+        var max = Math.max.apply(null, [1].concat(shareRows.map(function (r) { return Math.abs(r.balance); })));
+        shareRows.forEach(function (row, index) {
+          var y = 150 + index * 140;
+          ctx.fillStyle = '#0f172a';
+          ctx.font = 'bold 22px sans-serif';
+          ctx.fillText(row.name, 40, y, 600);
+          ctx.textAlign = 'right';
+          ctx.fillText((row.isAsset ? 'ยอดคงเหลือ ' : 'หนี้คงค้าง ') + money(row.balance) + ' บาท', 960, y, 320);
+          ctx.textAlign = 'left';
+          ctx.fillStyle = '#f1f5f9';
+          ctx.fillRect(40, y + 16, 920, 14);
+          ctx.fillStyle = row.isAsset ? '#6366f1' : '#f59e0b';
+          ctx.fillRect(40, y + 16, 920 * Math.abs(row.balance) / max, 14);
+          ctx.font = '18px sans-serif';
+          ctx.fillStyle = '#475569';
+          ctx.fillText('รายรับ ' + money(row.income) + ' บาท     รายจ่าย ' + money(row.expense) + ' บาท', 40, y + 65);
+        });
+        document.getElementById('fr-share-text').textContent = shareRows.map(function (r) {
+          return r.name + ' ยอด ' + money(r.balance) + ' บาท รายรับ ' + money(r.income) + ' บาท รายจ่าย ' + money(r.expense) + ' บาท';
+        }).join(' · ');
+        document.getElementById('fr-share-result').hidden = false;
+      }, function (err) { App.toast(err.message, 'error'); }).finally(function () { App.setBusy(button, false); });
+    });
+    document.getElementById('fr-share-png').addEventListener('click', function () {
+      if (!shareRows) return;
+      document.getElementById('fr-share-canvas').toBlob(function (blob) { if (blob) saveShareFile(blob, 'sub-accounts.png'); }, 'image/png');
+    });
+    document.getElementById('fr-share-csv').addEventListener('click', function () {
+      if (!shareRows) return;
+      var rows = [['บัญชีย่อย', 'ประเภท', 'ยอดปัจจุบัน', 'รายรับ', 'รายจ่าย']].concat(shareRows.map(function (r) {
+        return [r.name, r.isAsset ? 'สินทรัพย์' : 'หนี้สิน', r.balance, r.income, r.expense];
+      }));
+      var csv = rows.map(function (row) { return row.map(function (value) {
+        if (typeof value === 'number') return String(value);
+        var text = String(value);
+        if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
+        return '"' + text.replace(/"/g, '""') + '"';
+      }).join(','); }).join('\r\n');
+      saveShareFile(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }), 'sub-accounts.csv');
     });
     download.addEventListener('click', function () {
       var kind = document.getElementById('fr-export-kind').value;

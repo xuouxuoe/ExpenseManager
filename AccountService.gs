@@ -10,6 +10,7 @@ var MasterData = (function () {
   var COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
   var TYPES = {
+    subaccount: { sheet: 'SubAccounts', pk: 'sub_account_id', nameField: 'sub_account_name', projectionKey: 'subAccounts' },
     account: { sheet: 'Accounts', pk: 'account_id', nameField: 'account_name', projectionKey: 'accounts' },
     owner: { sheet: 'Owners', pk: 'owner_id', nameField: 'owner_name', projectionKey: 'owners' },
     category: { sheet: 'Categories', pk: 'category_id', nameField: 'category_name', projectionKey: 'categories' }
@@ -44,6 +45,33 @@ var MasterData = (function () {
   function moneyOrBlank(value, field) {
     var satang = Validation.toSatang(value, field, { required: false, allowZero: true });
     return satang === null ? '' : Validation.fromSatang(satang);
+  }
+
+  function displayNames() {
+    var names = Object.create(null);
+    Database.readAll('Settings').rows.forEach(function (r) {
+      if (r.setting_key.indexOf('account.display_name.') === 0) {
+        names[r.setting_key.slice('account.display_name.'.length)] = r.setting_value;
+      }
+    });
+    return names;
+  }
+
+  function displayAccount(row, names) {
+    var alias = (names || displayNames())[row.account_id] || '';
+    return Object.assign({}, row, { real_account_name: row.account_name, display_name: alias, account_name: alias || row.account_name });
+  }
+
+  function saveDisplayName(id, input, now) {
+    if (input.display_name === undefined) return false;
+    var name = safeText(input.display_name, 'display_name', { max: Config.TEXT_LIMITS.NAME });
+    var settingKey = 'account.display_name.' + id;
+    var hit = Database.findRowsByValue('Settings', 'setting_key', settingKey)[0];
+    if ((!hit && !name) || (hit && hit.row.setting_value === name)) return false;
+    var row = { setting_key: settingKey, setting_value: name, description: 'ชื่อบัญชีที่ใช้แสดง', updated_at: now };
+    if (hit) Database.writeRowAt('Settings', hit.rowNumber, row);
+    else Database.appendRows('Settings', [row]);
+    return true;
   }
 
   // ---------- ตรวจ input ตามประเภท (รับเฉพาะ field ที่อนุญาต) ----------
@@ -107,6 +135,14 @@ var MasterData = (function () {
 
   function validateInput(type, input, masters, current) {
     if (!input || typeof input !== 'object') throw fail('REQUIRED', 'input', 'ไม่พบข้อมูลที่ต้องบันทึก');
+    if (type === 'subaccount') {
+      var parent = Validation.requireId(input.account_id, 'account_id');
+      if (!masters.accounts[parent] || (!masters.accounts[parent].isActive && (!current || current.account_id !== parent))) {
+        throw fail('FK_INACTIVE', 'account_id', 'กรุณาเลือกบัญชีหลักที่ใช้งานได้');
+      }
+      if (current && current.account_id !== parent) throw fail('RULE', 'account_id', 'บัญชีย่อยที่สร้างแล้วต้องอยู่ภายใต้บัญชีหลักเดิม');
+      return { account_id: parent, sub_account_name: safeText(input.sub_account_name, 'sub_account_name', { required: true, max: Config.TEXT_LIMITS.NAME }) };
+    }
     if (type === 'account') return validateAccount(input, masters, current ? current.owner_id : '');
     if (type === 'owner') return validateOwner(input);
     return validateCategory(input);
@@ -125,6 +161,7 @@ var MasterData = (function () {
     var dup = rows.some(function (r) {
       if (r[def.pk] === selfId || r.is_active !== true) return false;
       if (type === 'category' && r.category_type !== candidate.category_type) return false;
+      if (type === 'subaccount' && r.account_id !== candidate.account_id) return false;
       return normalizeName(r[def.nameField]) === name;
     });
     if (dup) throw fail('DUPLICATE_NAME', def.nameField, 'มีชื่อนี้อยู่แล้ว กรุณาใช้ชื่ออื่น');
@@ -169,10 +206,13 @@ var MasterData = (function () {
   function listAll(options) {
     var includeInactive = !!(options && options.includeInactive);
     var out = {};
+    var names = displayNames();
     Object.keys(TYPES).forEach(function (type) {
       var def = TYPES[type];
       out[def.sheet.charAt(0).toLowerCase() + def.sheet.slice(1)] = Database.readAll(def.sheet).rows.filter(function (r) {
         return includeInactive || r.is_active === true;
+      }).map(function (r) {
+        return type === 'account' ? displayAccount(r, names) : r;
       });
     });
     return out;
@@ -184,6 +224,7 @@ var MasterData = (function () {
     return Operation.run(requestOf(request, 'CREATE_' + type.toUpperCase(), { type: type, input: input }), function (ctx) {
       var masters = Projection.loadMasters();
       var clean = validateInput(type, input, masters);
+      if (type === 'account' && input.display_name !== undefined) safeText(input.display_name, 'display_name', { max: Config.TEXT_LIMITS.NAME });
       var rows = Database.readAll(def.sheet).rows;
       var id = ctx.id(type);
       if (!rows.some(function (r) { return r[def.pk] === id; })) {
@@ -196,7 +237,9 @@ var MasterData = (function () {
       row.created_at = ctx.now;
       row.updated_at = ctx.now;
       Database.appendRowsIfAbsent(def.sheet, [row]);
-      return findRow(type, id).row;
+      if (type === 'account') saveDisplayName(id, input, ctx.now);
+      var saved = findRow(type, id).row;
+      return type === 'account' ? displayAccount(saved) : saved;
     }).result;
   }
 
@@ -219,13 +262,15 @@ var MasterData = (function () {
       }
       var renamed = clean[def.nameField] !== current[def.nameField];
       var updated = Object.assign({}, current, clean, { updated_at: ctx.now });
+      var displayChanged = type === 'account' && saveDisplayName(id, input, ctx.now);
       Database.updateRows(def.sheet, [updated]);
       // refresh เฉพาะเมื่อชื่อเปลี่ยน หรือเป็นการ replay งานที่ค้าง (อาจ refresh ไม่ครบรอบก่อน)
-      var report = (renamed || ctx.replay) ? Projection.refresh({ masterKeys: [def.projectionKey] }) : { tables: [], orphans: [] };
+      var report = (renamed || displayChanged || ctx.replay) ? Projection.refresh({ masterKeys: [def.projectionKey] }) : { tables: [], orphans: [] };
       if (renamed) {
         Audit.log({ actorId: ctx.actorId, action: 'RENAME_MASTER', entityType: def.sheet, entityId: current[def.pk], operationId: ctx.operationId, result: 'SUCCESS' });
       }
-      return { row: findRow(type, current[def.pk]).row, projection: { changedColumns: report.tables.length, orphans: report.orphans.length } };
+      var saved = findRow(type, current[def.pk]).row;
+      return { row: type === 'account' ? displayAccount(saved) : saved, projection: { changedColumns: report.tables.length, orphans: report.orphans.length } };
     }).result;
   }
 
@@ -236,16 +281,18 @@ var MasterData = (function () {
     return Operation.run(requestOf(request, 'SET_ACTIVE_' + type.toUpperCase(), { type: type, id: id, isActive: active }), function (ctx) {
       var found = findRow(type, id);
       var current = found.row;
-      if (current.is_active === active) return current;
+      if (current.is_active === active) return type === 'account' ? displayAccount(current) : current;
       if (active) assertUniqueName(type, found.rows, current, current[def.pk]);
       var updated = Object.assign({}, current, { is_active: active, updated_at: ctx.now });
       Database.updateRows(def.sheet, [updated]);
-      return findRow(type, current[def.pk]).row;
+      var saved = findRow(type, current[def.pk]).row;
+      return type === 'account' ? displayAccount(saved) : saved;
     }).result;
   }
 
   return {
     TYPES: Object.keys(TYPES),
+    displayNames: displayNames,
     listAll: listAll,
     create: create,
     update: update,

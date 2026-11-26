@@ -4,6 +4,7 @@
  */
 var Projection = (function () {
   var MASTER_SOURCES = {
+    subAccounts: { sheet: 'SubAccounts', id: 'sub_account_id', name: 'sub_account_name' },
     accounts: { sheet: 'Accounts', id: 'account_id', name: 'account_name', type: 'account_type' },
     owners: { sheet: 'Owners', id: 'owner_id', name: 'owner_name' },
     categories: { sheet: 'Categories', id: 'category_id', name: 'category_name', type: 'category_type' }
@@ -12,15 +13,25 @@ var Projection = (function () {
   /** อ่าน Master ทั้งสามตาราง: { accounts: {id: {name, isActive, type}}, owners, categories } */
   function loadMasters() {
     var masters = {};
+    var displayNames = MasterData.displayNames();
     Object.keys(MASTER_SOURCES).forEach(function (key) {
       var src = MASTER_SOURCES[key];
       var map = {};
       Database.readAll(src.sheet).rows.forEach(function (r) {
-        map[r[src.id]] = { name: r[src.name], isActive: r.is_active === true, type: src.type ? r[src.type] : '' };
+        map[r[src.id]] = { name: key === 'accounts' ? (displayNames[r[src.id]] || r[src.name]) : r[src.name], isActive: r.is_active === true, type: src.type ? r[src.type] : '', accountId: r.account_id };
       });
       masters[key] = map;
     });
     return masters;
+  }
+
+  function validateSubAccount(rawId, accountId, masters, currentId) {
+    var id = Validation.requireId(rawId, 'sub_account_id', { required: false });
+    if (!id) return '';
+    var row = masters.subAccounts[id];
+    if (!row || row.accountId !== accountId) throw Util.AppError('VALIDATION_SUB_ACCOUNT', 'บัญชีย่อยต้องอยู่ภายใต้บัญชีหลักที่เลือก');
+    if (!row.isActive && id !== currentId) throw Util.AppError('VALIDATION_SUB_ACCOUNT', 'บัญชีย่อยนี้ถูกปิดใช้งานแล้ว');
+    return id;
   }
 
   /**
@@ -126,6 +137,7 @@ var Projection = (function () {
   }
 
   return {
+    validateSubAccount: validateSubAccount,
     loadMasters: loadMasters,
     apply: apply,
     applyPlanToSchedule: applyPlanToSchedule,

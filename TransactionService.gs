@@ -32,7 +32,8 @@ var Ledger = (function () {
     switch (tx.transaction_type) {
       case 'INCOME': move(tx.to_account_id, a); out.incomeSatang = a; break;
       case 'EXPENSE': move(tx.from_account_id, -a); out.expenseSatang = a; break;
-      case 'TRANSFER': move(tx.from_account_id, -a); move(tx.to_account_id, a); break;
+      case 'TRANSFER':
+      case 'RECLASSIFY': move(tx.from_account_id, -a); move(tx.to_account_id, a); break;
       case 'CREDIT_PURCHASE': move(tx.from_account_id, a); out.expenseSatang = a; break;
       case 'CREDIT_PAYMENT': move(tx.from_account_id, -a); move(tx.to_account_id, -a); break;
       case 'CASH_ADVANCE': move(tx.from_account_id, a); move(tx.to_account_id, a); break;
@@ -89,6 +90,7 @@ var Transactions = (function () {
     INCOME: { from: null, to: ASSET_ONLY, category: 'INCOME' },
     EXPENSE: { from: ASSET_ONLY, to: null, category: 'EXPENSE' },
     TRANSFER: { from: ASSET_ONLY, to: ASSET_ONLY, category: null, distinct: true },
+    RECLASSIFY: { from: ANY, to: ANY, category: null, distinct: true },
     CREDIT_PURCHASE: { from: LIABILITY_ONLY, to: null, category: 'EXPENSE' },
     CREDIT_PAYMENT: { from: ASSET_ONLY, to: LIABILITY_ONLY, category: null },
     CASH_ADVANCE: { from: LIABILITY_ONLY, to: ASSET_ONLY, category: null },
@@ -136,7 +138,10 @@ var Transactions = (function () {
     var rule = RULES[type];
     var from = checkAccount(rule.from, input.from_account_id, 'from_account_id', masters.accounts, cur.from_account_id);
     var to = checkAccount(rule.to, input.to_account_id, 'to_account_id', masters.accounts, cur.to_account_id);
-    if (rule.distinct && from === to) throw fail('RULE', 'to_account_id', 'บัญชีต้นทางและปลายทางต้องไม่ใช่บัญชีเดียวกัน');
+    var fromSub = Projection.validateSubAccount(input.from_sub_account_id === undefined && from === cur.from_account_id ? cur.from_sub_account_id : input.from_sub_account_id, from, masters, cur.from_sub_account_id);
+    var toSub = Projection.validateSubAccount(input.to_sub_account_id === undefined && to === cur.to_account_id ? cur.to_sub_account_id : input.to_sub_account_id, to, masters, cur.to_sub_account_id);
+    if (rule.distinct && from === to && fromSub === toSub) throw fail('RULE', 'to_account_id', 'บัญชีต้นทางและปลายทางต้องไม่ใช่บัญชีเดียวกัน');
+    if (type === 'RECLASSIFY' && from !== to) throw fail('RULE', 'to_account_id', 'การจัดกลุ่มยอดต้องเลือกบัญชีหลักเดียวกันทั้งสองฝั่ง');
     if (rule.exactlyOneAccount && (!!from === !!to)) {
       throw fail('RULE', 'from_account_id', 'รายการปรับยอดต้องระบุบัญชีต้นทางหรือปลายทางอย่างใดอย่างหนึ่ง');
     }
@@ -167,6 +172,8 @@ var Transactions = (function () {
       transaction_type: type,
       from_account_id: from,
       to_account_id: to,
+      from_sub_account_id: fromSub,
+      to_sub_account_id: toSub,
       owner_id: ownerId,
       category_id: categoryId,
       item_name: Validation.requireText(input.item_name, 'item_name', { required: true, max: Config.TEXT_LIMITS.ITEM_NAME }),
@@ -415,7 +422,9 @@ var Transactions = (function () {
       if (r.transaction_date < since || r.transaction_date > today) return;
       if (r.transaction_type === 'ADJUSTMENT') return;
       if (!activeAccount(r.from_account_id) || !activeAccount(r.to_account_id) || !activeCategory(r.category_id) || !activeOwner(r.owner_id)) return;
-      var key = [r.transaction_type, normalize(r.item_name), r.from_account_id, r.to_account_id, r.category_id, r.owner_id].join('|');
+      if ((r.from_sub_account_id && (!masters.subAccounts[r.from_sub_account_id] || !masters.subAccounts[r.from_sub_account_id].isActive)) ||
+          (r.to_sub_account_id && (!masters.subAccounts[r.to_sub_account_id] || !masters.subAccounts[r.to_sub_account_id].isActive))) return;
+      var key = [r.transaction_type, normalize(r.item_name), r.from_account_id, r.to_account_id, r.from_sub_account_id, r.to_sub_account_id, r.category_id, r.owner_id].join('|');
       var g = groups[key];
       if (!g) {
         g = groups[key] = { count: 0, months: {}, last: null };
@@ -435,8 +444,10 @@ var Transactions = (function () {
         transaction_type: r.transaction_type,
         item_name: r.item_name,
         from_account_id: r.from_account_id,
+        from_sub_account_id: r.from_sub_account_id || '',
         from_account_name: r.from_account_id ? masters.accounts[r.from_account_id].name : '',
         to_account_id: r.to_account_id,
+        to_sub_account_id: r.to_sub_account_id || '',
         to_account_name: r.to_account_id ? masters.accounts[r.to_account_id].name : '',
         category_id: r.category_id,
         category_name: r.category_id ? masters.categories[r.category_id].name : '',

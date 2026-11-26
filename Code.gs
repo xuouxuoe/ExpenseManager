@@ -154,12 +154,18 @@ function api_accountBalances() {
 }
 
 function api_paymentPlannerPage() {
-  return handleApi_(function () {
+  return handleApi_(function (actor) {
     var purchases = PaymentPlanner.purchaseCandidates().slice(0, 100).map(function (r) {
       return { transaction_id: r.transaction_id, transaction_date: r.transaction_date, from_account_id: r.from_account_id,
-        owner_id: r.owner_id, category_id: r.category_id, item_name: r.item_name, description: r.description, amount: r.amount };
+        from_sub_account_id: r.from_sub_account_id, owner_id: r.owner_id, category_id: r.category_id, item_name: r.item_name, description: r.description, amount: r.amount };
     });
-    return { plans: PaymentPlanner.list(), masters: MasterData.listAll({ includeInactive: true }), purchases: purchases };
+    return { plans: PaymentPlanner.list(actor), masters: MasterData.listAll({ includeInactive: true }), purchases: purchases };
+  });
+}
+
+function api_setPlanFavorite(planId, favorite, idempotencyKey) {
+  return handleApi_(function (actor) {
+    return PaymentPlanner.setFavorite(planId, favorite, { actor: actor, idempotencyKey: idempotencyKey });
   });
 }
 
@@ -185,6 +191,10 @@ function api_dashboard(filters) {
 
 function api_exportFinanceReport(kind, filters) {
   return handleApi_(function () { return FinanceReports.exportCsv(kind, filters); });
+}
+
+function api_sharedAccountReport(filters) {
+  return handleApi_(function () { return FinanceReports.sharedReport(filters); });
 }
 
 /** สร้างหรือปรับ Pivot เฉพาะใน Spreadsheet ทดสอบ จาก Apps Script editor */

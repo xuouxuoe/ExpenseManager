@@ -108,25 +108,42 @@ var PaymentActivity = (function () {
   }
 
   /**
-   * ส่วนดอกเบี้ย/ค่าธรรมเนียมที่รับรู้ในการชำระครั้งนี้ (สตางค์) ตามสัดส่วนยอดชำระสะสมต่อยอดรวมแผน
-   * เป้าหมายสะสม = floor(ดอกเบี้ยแผน × ชำระสะสม ÷ ยอดรวม) และเท่ากับดอกเบี้ยแผนเมื่อชำระครบ
-   * หักส่วนที่รับรู้ไปแล้ว จึงไม่รับรู้ซ้ำ และกลับรายการชำระแล้วคำนวณใหม่ได้ถูกต้อง
+   * ส่วนดอกเบี้ย/ค่าธรรมเนียมที่รับรู้ในการชำระครั้งนี้ (สตางค์)
+   * FIRST ใช้เฉพาะยอดจัดสรรให้งวด 1 สำหรับค่าธรรมเนียม ส่วนแผนทั่วไปใช้สัดส่วนสะสมทั้งแผน
    */
-  function chargeShares(plan, state, paymentSatang) {
+  function chargeShares(plan, state, paymentSatang, allocations) {
     var live = effective(state.transactions).filter(function (t) { return t.plan_id === plan.plan_id && t.source === 'PLAN'; });
     var payments = new Set(live.filter(function (t) { return t.transaction_type === 'CREDIT_PAYMENT'; }).map(function (t) { return t.transaction_id; }));
     var paid = state.allocations.filter(function (a) { return payments.has(a.transaction_id); })
       .reduce(function (s, a) { return s + sat(a.allocated_amount); }, 0);
     var total = sat(plan.total_amount);
+    if (plan.fee_amount > 0 && PaymentPlanner.hasFirstInstallmentFee(plan.plan_id)) {
+      var first = state.schedules.find(function (r) { return r.plan_id === plan.plan_id && r.installment_no === 1; });
+      var firstLine = allocations.find(function (a) { return a.schedule_id === first.schedule_id; });
+      var feeLeft = sat(plan.fee_amount) - recognized('FEE');
+      var fee = firstLine ? shareOfRemaining(feeLeft, sat(firstLine.allocated_amount), sat(first.remaining_to_pay)) : 0;
+      var interestLeft = sat(plan.interest_amount) - recognized('INTEREST');
+      return { FEE: fee, INTEREST: shareOfRemaining(interestLeft, paymentSatang - fee, total - paid - feeLeft) };
+    }
+
+    function recognized(type) {
+      return live.filter(function (t) { return t.transaction_type === type; }).reduce(function (s, t) { return s + sat(t.amount); }, 0);
+    }
+
     var after = paid + paymentSatang;
     var out = {};
     [['INTEREST', 'interest_amount'], ['FEE', 'fee_amount']].forEach(function (pair) {
       var planned = sat(plan[pair[1]] || 0);
       var target = after >= total ? planned : Number(BigInt(planned) * BigInt(after) / BigInt(total));
-      var done = live.filter(function (t) { return t.transaction_type === pair[0]; }).reduce(function (s, t) { return s + sat(t.amount); }, 0);
-      out[pair[0]] = Math.max(0, target - done);
+      out[pair[0]] = Math.max(0, target - recognized(pair[0]));
     });
     return out;
+  }
+
+  // Allocate only from the unpaid balance. Paying its last satang picks up all rounding residue.
+  function shareOfRemaining(charge, payment, balance) {
+    if (!charge || !payment) return 0;
+    return Number(BigInt(charge) * BigInt(payment) / BigInt(balance));
   }
 
   function requireAsset(accounts, rawId, active) {
@@ -224,6 +241,9 @@ var PaymentActivity = (function () {
         }
         detail[key] = newId;
       });
+      detail.sub_account_id = Projection.validateSubAccount(f.sub_account_id === undefined && detail.account_id === plan.account_id ? plan.sub_account_id : f.sub_account_id,
+        detail.account_id, current, plan.sub_account_id);
+      if (detail.sub_account_id !== (plan.sub_account_id || '')) batch.reclassify = { accountId: plan.account_id, subAccountId: detail.sub_account_id };
       batch.planChanges = detail;
     } else if (action === 'RENEW') {
       var updated = Object.assign({}, plan);
@@ -273,8 +293,10 @@ var PaymentActivity = (function () {
         });
         if (cashNeeded > available) fail('เงินที่ใช้ได้ในบัญชีชำระไม่เพียงพอ');
         var masters = Projection.loadMasters();
+        var payerSub = Projection.validateSubAccount(f.payment_sub_account_id, account, masters, account === plan.account_id ? plan.sub_account_id : '');
         // ข้อมูลหลักของแผนที่ถูกปิดภายหลังยังใช้ชำระแผนเดิมได้
-        var current = { owner_id: plan.owner_id, category_id: plan.category_id, to_account_id: plan.account_id, from_account_id: plan.account_id };
+        var current = { owner_id: plan.owner_id, category_id: plan.category_id, to_account_id: plan.account_id, from_account_id: plan.account_id,
+          from_sub_account_id: plan.sub_account_id, to_sub_account_id: plan.sub_account_id };
         function planTransaction(fields, txId) {
           var tx = Transactions.validate(Object.assign({
             transaction_date: date, owner_id: plan.owner_id, item_name: plan.item_name, note: note
@@ -286,16 +308,19 @@ var PaymentActivity = (function () {
         if (debtMode) {
           // ชำระหนี้บัตร/สินเชื่อ: ลดหนี้ ไม่รับรู้รายจ่ายซ้ำกับ CREDIT_PURCHASE (AGENTS §7.3)
           planTransaction({ transaction_type: 'CREDIT_PAYMENT', from_account_id: account, to_account_id: plan.account_id,
+            from_sub_account_id: payerSub, to_sub_account_id: plan.sub_account_id,
             amount: Validation.fromSatang(total) }, transactionId);
-          var shares = chargeShares(plan, state, total);
+          var shares = chargeShares(plan, state, total, batch.allocations);
           [['INTEREST', 'ดอกเบี้ย: '], ['FEE', 'ค่าธรรมเนียม: ']].forEach(function (pair) {
             if (!shares[pair[0]]) return;
             planTransaction({ transaction_type: pair[0], from_account_id: plan.account_id, category_id: plan.category_id,
+              from_sub_account_id: plan.sub_account_id,
               item_name: (pair[1] + plan.item_name).slice(0, Config.TEXT_LIMITS.ITEM_NAME),
               amount: Validation.fromSatang(shares[pair[0]]), external_ref: transactionId }, ctx.id('payment-' + pair[0].toLowerCase()));
           });
         } else {
           planTransaction({ transaction_type: 'EXPENSE', from_account_id: account, category_id: plan.category_id,
+            from_sub_account_id: payerSub,
             amount: Validation.fromSatang(total) }, transactionId);
         }
       }
@@ -321,6 +346,16 @@ var PaymentActivity = (function () {
       if (batch.transactions.length) Database.appendRowsIfAbsent('Transactions', batch.transactions);
       if (batch.reservations.length) Database.appendRowsIfAbsent('Reservations', batch.reservations);
       if (batch.allocations.length) Database.appendRowsIfAbsent('PaymentAllocations', batch.allocations);
+      if (batch.reclassify) {
+        var names = Projection.loadMasters();
+        var reclassified = Database.readAll('Transactions').rows.filter(function (t) { return t.plan_id === batch.planId; }).map(function (t) {
+          ['from', 'to'].forEach(function (side) {
+            if (t[side + '_account_id'] === batch.reclassify.accountId) t[side + '_sub_account_id'] = batch.reclassify.subAccountId;
+          });
+          return Projection.apply('Transactions', t, names);
+        });
+        Database.updateRows('Transactions', reclassified);
+      }
       if (batch.extension) {
         var extensionCtx = { id: ctx.id, now: batch.at };
         var extra = PaymentPlanner.extension(Object.assign({}, batch.extension.plan), batch.extension.input, extensionCtx, Projection.loadMasters());
