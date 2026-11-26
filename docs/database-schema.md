@@ -238,7 +238,7 @@ OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operati
 | 16 | payment_month | YearMonth | Y | GEN | เดือนชำระ |
 | 17 | due_date | Date | N | GEN | ว่างถ้าไม่ทราบ due_day |
 | 18 | amount_due | Money | Y | GEN (แก้รายงวดได้) | ยอดตามแผน ผลรวมทุกงวดที่ไม่ยกเลิก = total_amount |
-| 19 | amount_saved | Money | Y | DER | SUM(RESERVE) − SUM(RELEASE) |
+| 19 | amount_saved | Money | Y | DER | SUM(RESERVE) − SUM(RELEASE ที่มีผลจริง ตาม business-rules §4.8) |
 | 20 | amount_reserved | Money | Y | DER | amount_saved − SUM(CONSUME) |
 | 21 | amount_paid | Money | Y | DER | ยอดจัดสรรสุทธิของธุรกรรมที่มีผล |
 | 22 | remaining_to_save | Money | Y | DER | MAX(0, remaining_to_pay − amount_reserved) |
@@ -269,7 +269,7 @@ OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operati
 | 4 | account_id | ID | Y | FK → Accounts | บัญชีที่กันเงิน (อาจต่างจากบัญชีของแผน) |
 | 5 | action_type | Enum | Y | INPUT | RESERVE, RELEASE, CONSUME |
 | 6 | amount | Money | Y | INPUT | > 0 |
-| 7 | transaction_id | ID | C | FK → Transactions | บังคับเมื่อ CONSUME |
+| 7 | transaction_id | ID | C | FK → Transactions | บังคับเมื่อ CONSUME; RELEASE อัตโนมัติจากการชำระเก็บรหัสชำระเพื่อคืนเมื่อกลับรายการ |
 | 8 | note | Text(1000) | N | INPUT | |
 | 9 | created_at | Timestamp | Y | SYS | |
 

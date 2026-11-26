@@ -279,7 +279,8 @@ var PaymentPlanner = (function () {
     var today = Util.todayIso();
     var transactions = Database.readAll('Transactions').rows;
     var reversed = new Set(transactions.filter(function (r) { return r.reversal_of; }).map(function (r) { return r.reversal_of; }));
-    var allocated = new Set(Database.readAll('PaymentAllocations').rows.map(function (r) { return r.transaction_id; }));
+    var allocations = Database.readAll('PaymentAllocations').rows;
+    var allocated = new Set(allocations.map(function (r) { return r.transaction_id; }));
     transactions.forEach(function (r) {
       if (r.plan_id && r.transaction_type === 'CREDIT_PURCHASE' && !r.reversal_of) {
         purchaseByPlan[r.plan_id] = { transaction_id: r.transaction_id, transaction_date: r.transaction_date, amount: r.amount };
@@ -291,17 +292,25 @@ var PaymentPlanner = (function () {
         });
       }
     });
-    Database.readAll(SCHEDULES).rows.forEach(function (row) {
+    var allSchedules = Database.readAll(SCHEDULES).rows;
+    allSchedules.forEach(function (row) {
       row.is_overdue = !row.is_cancelled && row.remaining_to_pay > 0 && !!row.due_date && row.due_date < today;
       (schedulesByPlan[row.plan_id] || (schedulesByPlan[row.plan_id] = [])).push(row);
     });
-    var settings = new Map(Database.readAll('Settings').rows.map(function (row) { return [row.setting_key, row.setting_value]; }));
+    var settingRows = Database.readAll('Settings').rows;
+    var settings = new Map(settingRows.map(function (row) { return [row.setting_key, row.setting_value]; }));
+    var state = { accounts: Database.readAll('Accounts').rows, transactions: transactions, allocations: allocations, schedules: allSchedules, settings: settingRows };
     var starPrefix = favoritePrefix(actor);
     return Database.readAll(PLANS).rows.slice().reverse().reduce(function (result, plan) {
       var schedules = schedulesByPlan[plan.plan_id] || [];
       if (schedules.length === plan.installment_count) {
         schedules.sort(function (a, b) { return a.installment_no - b.installment_no; });
+        var position = PaymentActivity.position(plan, state);
+        var settlement = PlanRevision.activeSettlement(plan.plan_id, state);
         result.push({ plan: plan, schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [], purchase: purchaseByPlan[plan.plan_id] || null,
+          position: { principal_remaining: Validation.fromSatang(position.principalRemaining),
+            interest_remaining: Validation.fromSatang(position.interestRemaining), fee_remaining: Validation.fromSatang(position.feeRemaining) },
+          settlement_payment_id: settlement ? settlement.paymentId : '',
           first_installment_fee: settings.get(feeTimingKey(plan.plan_id)) === 'FIRST',
           favorite: settings.get(starPrefix + plan.plan_id) === 'ON' });
       }

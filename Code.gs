@@ -185,6 +185,10 @@ function api_paymentActivity(input, idempotencyKey) {
   });
 }
 
+function api_previewPaymentActivity(input) {
+  return handleApi_(function () { return PaymentActivity.preview(input); });
+}
+
 function api_dashboard(filters) {
   return handleApi_(function () { return FinanceReports.dashboard(filters); });
 }

@@ -287,7 +287,7 @@ PaymentPlans และ PaymentSchedules มีชุดคอลัมน์เ�
 - แผนผ่อนจากการซื้อจริงเชื่อม CREDIT_PURCHASE เพียงครั้งเดียว; แผนรายจ่ายอนาคตไม่สร้างรายจ่ายจนเกิดจริง; ดอกเบี้ย/ค่าธรรมเนียมตามแผนไม่รับรู้ซ้ำเมื่อเกิดจริง
 - Reservations: RESERVE เพิ่มเงินกันไว้, RELEASE ปลดเงิน, CONSUME ใช้เงินกันไว้ชำระจริงและต้องเชื่อม transaction_id; ห้ามกันเกินยอดที่ใช้ได้หรือปลด/ใช้เกินยอดที่กันในบัญชี
 - PaymentAllocations เชื่อมธุรกรรมชำระจริงกับงวด; ผลรวมจัดสรรไม่เกินยอดธุรกรรมหรือยอดค้างของงวด; ยอดที่ยังไม่จัดสรรต้องแสดงแยก; ไม่สร้างธุรกรรมซ้ำจาก allocation
-- amount_saved = SUM(RESERVE) - SUM(RELEASE) (ไม่หัก CONSUME); amount_reserved = amount_saved - SUM(CONSUME ของธุรกรรมที่มีผลจริง) — เมื่อการชำระถูกกลับรายการ CONSUME เดิมไม่ถูกนับ เงินจึงกลับมาเป็นกันไว้ (ตัดสินใจ 2026-11-26); amount_paid = ยอดจัดสรรสุทธิของธุรกรรมที่มีผลจริง
+- amount_saved = SUM(RESERVE) - SUM(RELEASE ที่มีผลจริง) (ไม่หัก CONSUME); amount_reserved = amount_saved - SUM(CONSUME ของธุรกรรมที่มีผลจริง) — เมื่อการชำระถูกกลับรายการ CONSUME และ RELEASE อัตโนมัติที่ผูก transaction_id ของการชำระนั้นไม่ถูกนับ เงินจึงกลับมาเป็นกันไว้ ส่วน RELEASE ที่ผู้ใช้สั่งเองยังมีผลตามเดิม; amount_paid = ยอดจัดสรรสุทธิของธุรกรรมที่มีผลจริง
 - remaining_to_pay = MAX(0, amount_due - amount_paid); remaining_to_save = MAX(0, remaining_to_pay - amount_reserved); งวดยกเลิกไม่นับภาระอนาคต แต่ยังรักษาประวัติจริง
 - เงินที่ใช้ได้จริง = เงินสดและเงินฝากรวม E_WALLET - เงินกันไว้คงเหลือ; แสดงแยกตามบัญชีและรวม; หนี้สินคำนวณจากธุรกรรม ไม่ใช่ SUM งวดซ้ำ
 - saving_year = INT(saving_month/100); saving_month_no = MOD(saving_month,100); payment_year และ payment_month_no ใช้หลักเดียวกัน; is_month_different = saving_month != payment_month

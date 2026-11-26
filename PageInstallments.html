@@ -162,6 +162,8 @@
           <option value="NOTE">แก้หมายเหตุรายงวด</option>
           <option value="EDIT_PLAN">แก้รายละเอียดแผน</option>
           <option value="RENEW">ต่ออายุแผนประจำ</option>
+          <option value="RESCHEDULE">ปรับยอดและเดือนของงวดค้าง</option>
+          <option value="SETTLE">ปิดยอดก่อนกำหนด</option>
           <option value="CANCEL">ยกเลิกงวดหรือแผน</option>
         </select>
       </label>
@@ -274,6 +276,7 @@
     var selectedRecord = null;
     var activitySubmit;
     var retryActivity = null;
+    var revisionReview = null;
 
     var PLAN_TYPES = { INSTALLMENT: 'ผ่อนชำระ', ONE_TIME: 'ชำระครั้งเดียว', RECURRING: 'รายจ่ายประจำ' };
     var PLAN_STATUS = {
@@ -301,6 +304,8 @@
       NOTE: 'หมายเหตุเฉพาะงวด ไม่กระทบยอดหรือสถานะ',
       EDIT_PLAN: 'แก้ชื่อและรายละเอียดของแผน ทุกงวดจะอัปเดตตาม (หมายเหตุรายงวดไม่ถูกเขียนทับ)',
       RENEW: 'เพิ่มงวดต่อจากงวดสุดท้ายของแผนประจำ',
+      RESCHEDULE: 'แก้ยอดและเดือนของงวดที่ค้าง ผลรวมต้องเท่าเดิม ยอดใหม่ต้องครอบคลุมส่วนที่จ่ายไปแล้ว เงินที่กันไว้เกินยอดใหม่จะถูกปลดออก',
+      SETTLE: 'ระบุดอกเบี้ยและค่าธรรมเนียมที่ต้องจ่ายเพิ่มตามยอดปิดจริง ระบบรวมกับเงินต้นคงค้างและปิดงวดที่เหลือ ดูผลก่อนยืนยันได้',
       CANCEL: 'ยกเลิกภาระที่ยังค้าง งวดที่ชำระแล้วและประวัติยังอยู่ครบ'
     };
 
@@ -628,9 +633,9 @@
 
     function planTotals(record) {
       var active = record.schedules.filter(function (r) { return !r.is_cancelled; });
-      var due = active.reduce(function (s, r) { return s + toSatang(r.amount_due); }, 0);
-      var paid = active.reduce(function (s, r) { return s + toSatang(r.amount_paid); }, 0);
+      var paid = record.schedules.reduce(function (s, r) { return s + toSatang(r.amount_paid); }, 0);
       var remaining = active.reduce(function (s, r) { return s + toSatang(r.remaining_to_pay); }, 0);
+      var due = paid + remaining;
       var reserved = active.reduce(function (s, r) { return s + toSatang(r.amount_reserved); }, 0);
       return { active: active, due: due, paid: paid, remaining: remaining, reserved: reserved,
         pct: due ? Math.round(paid / due * 100) : 0,
@@ -691,7 +696,8 @@
             (next.due_date ? ' (' + App.formatDateTh(next.due_date) + ')' : '') + ' · ค้าง ' + baht(next.remaining_to_pay) +
             (next.amount_reserved ? ' · กันไว้ ' + baht(next.amount_reserved) : '') }) : null,
         record.first_installment_fee ? el('p', { class: 'mt-2 text-sm text-slate-600',
-          text: 'ค่าธรรมเนียม ' + baht(plan.fee_amount) + ' รวมอยู่ในงวดที่ 1' }) : null,
+          text: record.settlement_payment_id ? 'ค่าธรรมเนียมรวมหลังปิดยอด ' + baht(plan.fee_amount)
+            : 'ค่าธรรมเนียม ' + baht(plan.fee_amount) + ' รวมอยู่ในงวดที่ 1' }) : null,
         actions,
         details);
     }
@@ -848,6 +854,7 @@
 
     function renderActivity() {
       var action = actionType.value;
+      revisionReview = null;
       var rows = selectedRecord.schedules;
       actionError.textContent = '';
       actionFields.textContent = '';
@@ -855,9 +862,9 @@
       if (action === 'PAY' && isDebtPlan(selectedRecord) && selectedRecord.first_installment_fee) {
         actionHint.textContent = 'เมื่อจ่ายงวดที่ 1 ระบบรับรู้ค่าธรรมเนียมตามส่วนที่จ่าย จ่ายงวดที่ 1 ครบจะรับรู้ค่าธรรมเนียมครบ ' + baht(selectedRecord.plan.fee_amount);
       }
-      var needsReason = action === 'CANCEL' || action === 'REVERSE_PAY';
+      var needsReason = ['CANCEL', 'REVERSE_PAY', 'RESCHEDULE', 'SETTLE'].indexOf(action) >= 0;
       var note = el('textarea', { name: 'note', class: 'field-input', rows: '2', maxlength: '1000', required: needsReason });
-      if (['PAY', 'EDIT_PLAN', 'RENEW', 'REVERSE_PAY'].indexOf(action) < 0) {
+      if (['PAY', 'EDIT_PLAN', 'RENEW', 'REVERSE_PAY', 'RESCHEDULE', 'SETTLE'].indexOf(action) < 0) {
         var schedule = el('select', { name: 'schedule_id', class: 'field-input', required: action !== 'CANCEL' });
         schedule.appendChild(option('', action === 'CANCEL' ? 'ทั้งแผน (เฉพาะงวดที่ยังค้าง)' : 'เลือกงวด'));
         var candidates = rows.filter(function (row) {
@@ -879,7 +886,7 @@
         actionFields.appendChild(labeled('งวด', schedule));
         if (!candidates.length && action !== 'CANCEL') actionError.textContent = action === 'RELEASE' ? 'ยังไม่มีงวดที่กันเงินไว้' : 'ไม่มีงวดที่ทำรายการนี้ได้';
       }
-      if (['RESERVE', 'RELEASE', 'PAY'].indexOf(action) >= 0) {
+      if (['RESERVE', 'RELEASE', 'PAY', 'SETTLE'].indexOf(action) >= 0) {
         var account = el('select', { name: 'account_id', class: 'field-input', required: true });
         account.appendChild(option('', 'เลือกบัญชี'));
         var accounts = masterAccounts.filter(function (row) {
@@ -887,8 +894,8 @@
         });
         accounts.forEach(function (row) { account.appendChild(option(row.account_id, row.account_name)); });
         if (accounts.length === 1) account.value = accounts[0].account_id;
-        actionFields.appendChild(labeled(action === 'PAY' ? 'จ่ายจากบัญชี' : 'บัญชีสินทรัพย์', account));
-        if (action === 'PAY') {
+        actionFields.appendChild(labeled(action === 'PAY' || action === 'SETTLE' ? 'จ่ายจากบัญชี' : 'บัญชีสินทรัพย์', account));
+        if (action === 'PAY' || action === 'SETTLE') {
           var paymentSub = el('select', { name: 'payment_sub_account_id', class: 'field-input' });
           function fillPaymentSub() {
             var selected = account.value === selectedRecord.plan.account_id ? selectedRecord.plan.sub_account_id : '';
@@ -920,10 +927,11 @@
       } else if (action === 'REVERSE_PAY') {
         var payment = el('select', { name: 'transaction_id', class: 'field-input', required: true });
         payment.appendChild(option('', 'เลือกรายการชำระ'));
-        selectedRecord.payments.forEach(function (row) {
+        var reversible = selectedRecord.payments.filter(function (p) { return !selectedRecord.settlement_payment_id || p.transaction_id === selectedRecord.settlement_payment_id; });
+        reversible.forEach(function (row) {
           payment.appendChild(option(row.transaction_id, App.formatDateTh(row.transaction_date) + ' · ' + money(row.amount) + ' บาท'));
         });
-        if (selectedRecord.payments.length === 1) payment.value = selectedRecord.payments[0].transaction_id;
+        if (reversible.length === 1) payment.value = reversible[0].transaction_id;
         actionFields.appendChild(labeled('รายการชำระ', payment));
         actionFields.appendChild(labeled('วันที่กลับรายการ', el('input', { name: 'date', type: 'date', class: 'field-input', value: App.todayIso(), required: true })));
       } else if (action === 'RESERVE' || action === 'RELEASE') {
@@ -948,7 +956,33 @@
       } else {
         actionFields.appendChild(labeled(needsReason ? 'เหตุผล *' : 'หมายเหตุ', note));
       }
+      if (action === 'RESCHEDULE') {
+        rows.filter(function (s) { return !s.is_cancelled && s.remaining_to_pay > 0; }).forEach(function (row) {
+          var box = el('fieldset', { class: 'grid grid-cols-1 gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2', 'data-revision-id': row.schedule_id },
+            el('legend', { class: 'px-1 text-sm font-medium', text: 'งวด ' + row.installment_no + ' · ชำระแล้ว ' + baht(row.amount_paid) }));
+          box.appendChild(labeled('ยอดงวด (บาท)', el('input', { 'data-revision-field': 'amount_due', type: 'number', min: Math.max(.01, row.amount_paid),
+            step: '.01', value: row.amount_due, class: 'field-input', required: true })));
+          box.appendChild(labeled('วันครบกำหนด', el('input', { 'data-revision-field': 'due_day', type: 'number', min: 1, max: 31,
+            value: row.due_date ? Number(row.due_date.slice(8)) : '', class: 'field-input' })));
+          box.appendChild(labeled('เดือนเก็บเงิน', el('input', { 'data-revision-field': 'saving_month', type: 'month', value: month(row.saving_month), class: 'field-input', required: true })));
+          box.appendChild(labeled('เดือนชำระ', el('input', { 'data-revision-field': 'payment_month', type: 'month', value: month(row.payment_month), class: 'field-input', required: true })));
+          actionFields.appendChild(box);
+        });
+      }
+      if (action === 'SETTLE') {
+        var position = selectedRecord.position;
+        actionFields.appendChild(el('p', { class: 'rounded-xl bg-indigo-50 p-3 text-sm text-indigo-900',
+          text: 'เงินต้นคงค้าง ' + baht(position.principal_remaining) }));
+        [['settlement_interest_amount', 'ดอกเบี้ยที่ต้องจ่ายเพิ่ม (บาท)', position.interest_remaining],
+          ['settlement_fee_amount', 'ค่าธรรมเนียมที่ต้องจ่ายเพิ่ม (บาท)', position.fee_remaining]].forEach(function (field) {
+          actionFields.appendChild(labeled(field[1], el('input', { name: field[0], type: 'number', min: 0, step: '.01', value: field[2], class: 'field-input', required: true })));
+        });
+      }
+      if (action === 'RESCHEDULE' || action === 'SETTLE') {
+        actionFields.appendChild(el('div', { id: 'pp-revision-review', class: 'rounded-xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900', hidden: true, role: 'status' }));
+      }
       actionSubmit.textContent = action === 'PAY' ? 'ยืนยันยอดชำระจริง' : (action === 'CANCEL' ? 'ยืนยันยกเลิก' : 'ยืนยัน');
+      if (action === 'RESCHEDULE' || action === 'SETTLE') actionSubmit.textContent = 'ตรวจสอบก่อนยืนยัน';
       actionSubmit.className = 'btn ' + (action === 'CANCEL' || action === 'REVERSE_PAY' ? 'btn-danger' : 'btn-primary');
     }
 
@@ -970,6 +1004,10 @@
       activitySubmit = App.createSubmitter();
       var state = record.plan.plan_status;
       Array.from(actionType.options).forEach(function (row) {
+        if (record.settlement_payment_id && ['NOTE', 'EDIT_PLAN', 'REVERSE_PAY'].indexOf(row.value) < 0) {
+          row.disabled = true;
+          return;
+        }
         if (row.value === 'REVERSE_PAY') row.disabled = !record.payments.length;
         else if (row.value === 'RENEW') row.disabled = state === 'CANCELLED' || record.plan.plan_type !== 'RECURRING';
         else row.disabled = state !== 'ACTIVE' && ['NOTE', 'EDIT_PLAN'].indexOf(row.value) < 0;
@@ -984,6 +1022,13 @@
     }
 
     actionType.addEventListener('change', renderActivity);
+    actionFields.addEventListener('input', function () {
+      if (['RESCHEDULE', 'SETTLE'].indexOf(actionType.value) < 0 || retryActivity) return;
+      revisionReview = null;
+      var review = document.getElementById('pp-revision-review');
+      if (review) review.hidden = true;
+      actionSubmit.textContent = 'ตรวจสอบก่อนยืนยัน';
+    });
     actionClose.addEventListener('click', function () { if (!retryActivity && !actionSubmit.disabled) actionDialog.close(); });
     actionDialog.addEventListener('cancel', function (event) { if (retryActivity || actionSubmit.disabled) event.preventDefault(); });
     actionForm.addEventListener('submit', function (event) {
@@ -991,6 +1036,38 @@
       if (actionSubmit.disabled) return;
       var payload = retryActivity || Object.fromEntries(new FormData(actionForm));
       payload.plan_id = selectedRecord.plan.plan_id;
+      if (!retryActivity && payload.action === 'RESCHEDULE') {
+        payload.schedule_changes = Array.from(actionFields.querySelectorAll('[data-revision-id]')).map(function (box) {
+          var change = { schedule_id: box.getAttribute('data-revision-id') };
+          ['amount_due', 'saving_month', 'payment_month', 'due_day'].forEach(function (key) {
+            var value = box.querySelector('[data-revision-field="' + key + '"]').value;
+            change[key] = key.indexOf('_month') >= 0 ? value.replace('-', '') : value;
+          });
+          return change;
+        });
+      }
+      var revision = ['RESCHEDULE', 'SETTLE'].indexOf(payload.action) >= 0;
+      if (revision && !retryActivity && !revisionReview) {
+        App.setBusy(actionSubmit, true, 'กำลังตรวจสอบ…');
+        var previewInputs = Array.from(actionForm.querySelectorAll('input, select, textarea, button')).filter(function (node) { return node !== actionSubmit; });
+        previewInputs.forEach(function (node) { node.disabled = true; });
+        App.call('api_previewPaymentActivity', payload).then(function (data) {
+          revisionReview = { payload: payload, version: data.version };
+          var review = document.getElementById('pp-revision-review');
+          review.textContent = payload.action === 'SETTLE' ?
+            'ยอดปิดแผนที่จ่ายจริง ' + baht(data.settlement_amount) + ' · ดอกเบี้ยเพิ่ม ' + baht(data.interest_amount) +
+              ' · ค่าธรรมเนียมเพิ่ม ' + baht(data.fee_amount) + ' · ยอดรวมแผนหลังปิด ' + baht(data.total_amount) :
+            'ปรับงวดที่ค้าง ' + data.changed_schedules + ' งวด ผลรวมเท่าเดิม · ปลดเงินกันไว้ส่วนเกิน ' + baht(data.released_amount);
+          review.hidden = false;
+          actionError.textContent = '';
+        }, function (err) { actionError.textContent = err.message; }).finally(function () {
+          previewInputs.forEach(function (node) { node.disabled = false; });
+          App.setBusy(actionSubmit, false);
+          actionSubmit.textContent = revisionReview ? (payload.action === 'SETTLE' ? 'ยืนยันบันทึกปิดยอด' : 'ยืนยันปรับตารางงวด') : 'ตรวจสอบก่อนยืนยัน';
+        });
+        return;
+      }
+      if (revision && !retryActivity) payload = Object.assign({}, revisionReview.payload, { preview_version: revisionReview.version });
       if (payload.action === 'PAY' && !retryActivity) {
         payload.lines = Array.from(actionFields.querySelectorAll('[data-payment-schedule]')).filter(function (input) { return input.value; })
           .map(function (input) { return { schedule_id: input.getAttribute('data-payment-schedule'), amount: input.value }; });
@@ -1010,11 +1087,18 @@
         App.toast('อัปเดตแผนแล้ว', 'success');
         load();
       }, function (err) {
+        if (err.code === 'VALIDATION_PLAN_CHANGED') {
+          revisionReview = null;
+          actionSubmit.textContent = 'ตรวจสอบก่อนยืนยัน';
+          var review = document.getElementById('pp-revision-review');
+          if (review) review.hidden = true;
+        }
         retryActivity = ['NETWORK', 'BUSY', 'INTERNAL_ERROR'].indexOf(err.code) >= 0 ? payload : null;
         actionError.textContent = retryActivity ? err.message + ' กดยืนยันอีกครั้งเพื่อส่งคำขอเดิม' : err.message;
       }).finally(function () {
         inputs.forEach(function (input) { input.disabled = !!retryActivity; });
         App.setBusy(actionSubmit, false);
+        if (revision && !retryActivity && !revisionReview) actionSubmit.textContent = 'ตรวจสอบก่อนยืนยัน';
       });
     });
 

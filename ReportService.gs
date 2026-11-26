@@ -133,9 +133,14 @@ var FinanceReports = (function () {
     }, 0);
     var saved = d.reservations.reduce(function (sum, row) {
       var schedule = scheduleById.get(row.schedule_id);
-      if (!schedule || !d.byMaster(schedule, row.account_id) || !d.byMonth(dateMonth(row.reservation_date))) return sum;
-      if (row.action_type === 'RESERVE') return sum + sat(row.amount);
-      return row.action_type === 'RELEASE' ? sum - sat(row.amount) : sum;
+      if (!schedule || !d.byMaster(schedule, row.account_id)) return sum;
+      if (row.action_type === 'RESERVE' && d.byMonth(dateMonth(row.reservation_date))) sum += sat(row.amount);
+      if (row.action_type === 'RELEASE') {
+        if (d.byMonth(dateMonth(row.reservation_date))) sum -= sat(row.amount);
+        var reverse = row.transaction_id && reversed.get(row.transaction_id);
+        if (reverse && d.byMonth(dateMonth(reverse.transaction_date))) sum += sat(row.amount);
+      }
+      return sum;
     }, 0);
     var needToSave = 0;
     var scheduled = 0;

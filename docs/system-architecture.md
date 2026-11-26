@@ -55,6 +55,8 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | AccountService.gs | `MasterData.listAll/create/update/setActive` สำหรับ Accounts/Owners/Categories; refresh projection ทุกครั้งที่แก้ไข (idempotent) |
 | TransactionService.gs | `Transactions.create/update/reverse/list/accountBalances` และ `Ledger.effectsOf/balances` ตาม business-rules §3 |
 | InstallmentService.gs | ตัวอย่างและสร้างแผนรายจ่ายในอนาคตใน PaymentPlans และ PaymentSchedules |
+| PaymentActivity.gs | กัน/ปลดเงิน ชำระ/กลับรายการ ยกเลิก ต่ออายุ ปรับงวดและปิดยอด ผ่าน Operation.run และ recovery checkpoint |
+| PlanRevision.gs | คำนวณเงินต้นคงค้าง ตรวจการปรับงวด สร้าง/คืน snapshot ปิดยอด และ version ของแผนกับงวด เป็น pure helpers ไม่เขียนฐานข้อมูล |
 | ReservationService.gs | RESERVE/RELEASE/CONSUME |
 | PaymentAllocationService.gs | จัดสรรธุรกรรมให้งวด |
 | DashboardService.gs / ReportService.gs | อ่านข้อมูล/summary, Export CSV |
