@@ -3,6 +3,7 @@ var PaymentPlanner = (function () {
   var PLANS = 'PaymentPlans';
   var SCHEDULES = 'PaymentSchedules';
   var MAX_INSTALLMENTS = 360;
+  var LINK_MODES = ['NONE', 'NEW', 'EXISTING'];
 
   function error(field, message) {
     return Util.AppError('VALIDATION_PLAN', message, { field: field });
@@ -64,7 +65,68 @@ var PaymentPlanner = (function () {
     // ตรวจขอบเขตก่อนเขียนลงชีต
     Validation.addMonths(plan.first_saving_month, count - 1);
     Validation.addMonths(plan.first_payment_month, count - 1);
-    return { plan: plan, amounts: amounts };
+    return { plan: plan, amounts: amounts, link: purchaseLink(f, plan, masters) };
+  }
+
+  /**
+   * เชื่อมแผนกับรายการซื้อด้วยบัตร/สินเชื่อ (CREDIT_PURCHASE) ได้หนึ่งรายการต่อแผน (AGENTS §7.3)
+   * purchase_link: NONE (ค่าเริ่มต้น) | NEW (สร้างรายการซื้อใหม่ = เงินต้น ณ วันที่ซื้อ)
+   *              | EXISTING (เชื่อมรายการซื้อที่บันทึกไว้แล้ว: purchase_transaction_id)
+   * ดอกเบี้ย/ค่าธรรมเนียมของแผนไม่รับรู้ตอนซื้อ แต่รับรู้ตามสัดส่วนเมื่อชำระจริง (PaymentActivity)
+   */
+  function purchaseLink(f, plan, masters) {
+    var mode = Validation.isBlank(f.purchase_link) ? 'NONE' : Validation.requireEnum(f.purchase_link, LINK_MODES, 'purchase_link');
+    if (mode === 'NONE') return null;
+    var account = masters.accounts[plan.account_id];
+    if (!account || Ledger.LIABILITY.indexOf(account.type) < 0) {
+      throw error('purchase_link', 'เชื่อมรายการซื้อได้เฉพาะแผนที่ใช้บัตรเครดิต บัตรกดเงินสด หรือสินเชื่อ');
+    }
+    if (plan.plan_type === 'RECURRING') throw error('purchase_link', 'แผนรายจ่ายประจำเชื่อมรายการซื้อไม่ได้');
+    if (!Validation.toSatang(plan.principal_amount, 'principal_amount', { allowZero: true })) {
+      throw error('principal_amount', 'แผนที่เชื่อมรายการซื้อต้องมีเงินต้นมากกว่า 0');
+    }
+    if (plan.purchase_date > Util.todayIso()) throw error('purchase_date', 'วันที่ซื้อต้องไม่เป็นวันในอนาคต');
+    if (mode === 'NEW') {
+      var tx = Transactions.validate({
+        transaction_date: plan.purchase_date, transaction_type: 'CREDIT_PURCHASE', from_account_id: plan.account_id,
+        owner_id: plan.owner_id, category_id: plan.category_id, item_name: plan.item_name, description: plan.description,
+        amount: plan.principal_amount, external_ref: plan.external_ref, note: ''
+      }, masters);
+      tx.source = 'PLAN';
+      return { mode: mode, transaction: tx };
+    }
+    var id = Validation.requireId(f.purchase_transaction_id, 'purchase_transaction_id');
+    var candidate = purchaseCandidates().filter(function (r) { return r.transaction_id === id; })[0];
+    if (!candidate) throw error('purchase_transaction_id', 'ไม่พบรายการซื้อด้วยบัตรที่ยังไม่เชื่อมแผน');
+    if (candidate.from_account_id !== plan.account_id) throw error('purchase_transaction_id', 'รายการซื้อต้องใช้บัตรเดียวกับแผน');
+    if (Validation.toSatang(candidate.amount, 'amount') !== Validation.toSatang(plan.principal_amount, 'principal_amount')) {
+      throw error('principal_amount', 'เงินต้นของแผนต้องเท่ากับยอดรายการซื้อ ' + candidate.amount + ' บาท');
+    }
+    if (candidate.transaction_date !== plan.purchase_date) throw error('purchase_date', 'วันที่ซื้อของแผนต้องตรงกับรายการซื้อ');
+    return { mode: mode, transaction_id: id };
+  }
+
+  /** รายการ CREDIT_PURCHASE ที่ยังไม่เชื่อมแผนและไม่ถูกกลับรายการ (ใหม่สุดก่อน) */
+  function purchaseCandidates() {
+    var rows = Database.readAll('Transactions').rows;
+    var reversed = new Set(rows.filter(function (r) { return r.reversal_of; }).map(function (r) { return r.reversal_of; }));
+    return rows.filter(function (r) {
+      return r.transaction_type === 'CREDIT_PURCHASE' && !r.reversal_of && !r.plan_id && !reversed.has(r.transaction_id);
+    }).sort(function (a, b) { return a.transaction_date < b.transaction_date ? 1 : a.transaction_date > b.transaction_date ? -1 : 0; });
+  }
+
+  /** เขียนการเชื่อมรายการซื้อแบบ replay ได้ */
+  function writeLink(link, plan) {
+    if (!link) return;
+    if (link.mode === 'NEW') {
+      Database.appendRowsIfAbsent('Transactions', [link.transaction]);
+      return;
+    }
+    var row = Database.readAll('Transactions').rows.filter(function (r) { return r.transaction_id === link.transaction_id; })[0];
+    if (!row) throw Util.AppError('NOT_FOUND', 'ไม่พบรายการซื้อที่เลือก');
+    if (row.plan_id === plan.plan_id) return;
+    if (row.plan_id) throw error('purchase_transaction_id', 'รายการซื้อนี้ถูกเชื่อมกับแผนอื่นแล้ว');
+    Database.updateRows('Transactions', [Object.assign({}, row, { plan_id: plan.plan_id, updated_at: plan.created_at })]);
   }
 
   function schedulesOf(plan, amounts, masters, today) {
@@ -104,7 +166,11 @@ var PaymentPlanner = (function () {
   function preview(input) {
     var masters = Projection.loadMasters();
     var draft = normalize(input, masters);
-    return { plan: draft.plan, schedules: schedulesOf(draft.plan, draft.amounts, masters, Util.todayIso()) };
+    var purchase = draft.link ? {
+      mode: draft.link.mode, transaction_date: draft.plan.purchase_date, amount: draft.plan.principal_amount,
+      account_name: draft.plan.account_name, transaction_id: draft.link.transaction_id || ''
+    } : null;
+    return { plan: draft.plan, schedules: schedulesOf(draft.plan, draft.amounts, masters, Util.todayIso()), purchase: purchase };
   }
 
   function create(input, request) {
@@ -122,6 +188,13 @@ var PaymentPlanner = (function () {
         draft.plan.created_at = ctx.now;
         draft.plan.updated_at = ctx.now;
         draft.today = Util.todayIso();
+        if (draft.link && draft.link.mode === 'NEW') {
+          var tx = Object.assign(draft.link.transaction, {
+            transaction_id: ctx.id('purchase'), plan_id: draft.plan.plan_id, reversal_of: '',
+            created_at: ctx.now, updated_at: ctx.now
+          });
+          Projection.apply('Transactions', tx, masters);
+        }
         ctx.checkpoint(draft);
       }
 
@@ -142,6 +215,12 @@ var PaymentPlanner = (function () {
       })) {
         throw Util.AppError('INTERNAL_ERROR', 'ตรวจสอบงวดที่บันทึกไม่สำเร็จ กรุณาลองใหม่');
       }
+      writeLink(draft.link, plan);
+      if (draft.link && Database.readAll('Transactions').rows.filter(function (r) {
+        return r.plan_id === plan.plan_id && r.transaction_type === 'CREDIT_PURCHASE';
+      }).length !== 1) {
+        throw Util.AppError('INTERNAL_ERROR', 'ตรวจสอบรายการซื้อที่เชื่อมแผนไม่สำเร็จ กรุณาลองใหม่');
+      }
       return { plan_id: plan.plan_id };
     }).result;
   }
@@ -149,12 +228,17 @@ var PaymentPlanner = (function () {
   function list() {
     var schedulesByPlan = {};
     var paymentsByPlan = {};
+    var purchaseByPlan = {};
     var today = Util.todayIso();
     var transactions = Database.readAll('Transactions').rows;
     var reversed = new Set(transactions.filter(function (r) { return r.reversal_of; }).map(function (r) { return r.reversal_of; }));
     var allocated = new Set(Database.readAll('PaymentAllocations').rows.map(function (r) { return r.transaction_id; }));
     transactions.forEach(function (r) {
-      if (r.plan_id && r.source === 'PLAN' && r.transaction_type === 'EXPENSE' && allocated.has(r.transaction_id) && !reversed.has(r.transaction_id)) {
+      if (r.plan_id && r.transaction_type === 'CREDIT_PURCHASE' && !r.reversal_of) {
+        purchaseByPlan[r.plan_id] = { transaction_id: r.transaction_id, transaction_date: r.transaction_date, amount: r.amount };
+      }
+      if (r.plan_id && r.source === 'PLAN' && (r.transaction_type === 'EXPENSE' || r.transaction_type === 'CREDIT_PAYMENT') &&
+          allocated.has(r.transaction_id) && !reversed.has(r.transaction_id)) {
         (paymentsByPlan[r.plan_id] || (paymentsByPlan[r.plan_id] = [])).push({
           transaction_id: r.transaction_id, transaction_date: r.transaction_date, amount: r.amount
         });
@@ -168,7 +252,7 @@ var PaymentPlanner = (function () {
       var schedules = schedulesByPlan[plan.plan_id] || [];
       if (schedules.length === plan.installment_count) {
         schedules.sort(function (a, b) { return a.installment_no - b.installment_no; });
-        result.push({ plan: plan, schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [] });
+        result.push({ plan: plan, schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [], purchase: purchaseByPlan[plan.plan_id] || null });
       }
       return result;
     }, []);
@@ -202,5 +286,5 @@ var PaymentPlanner = (function () {
     });
   }
 
-  return { preview: preview, create: create, list: list, extension: extension };
+  return { preview: preview, create: create, list: list, extension: extension, purchaseCandidates: purchaseCandidates };
 })();

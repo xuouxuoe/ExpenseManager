@@ -2,6 +2,7 @@
 var PaymentActivity = (function () {
   var ACTIONS = ['RESERVE', 'RELEASE', 'PAY', 'REVERSE_PAY', 'CANCEL', 'NOTE', 'EDIT_PLAN', 'RENEW'];
   var TYPE = 'PAYMENT_ACTIVITY';
+  var PAYMENT_TYPES = ['EXPENSE', 'CREDIT_PAYMENT'];
 
   function sat(value) {
     return Validation.toSatang(value, 'amount', { allowZero: true });
@@ -81,6 +82,53 @@ var PaymentActivity = (function () {
     return remainingCount;
   }
 
+  function effective(transactions) {
+    var reversed = new Set(transactions.filter(function (t) { return t.reversal_of; }).map(function (t) { return t.reversal_of; }));
+    return transactions.filter(function (t) { return !t.reversal_of && !reversed.has(t.transaction_id); });
+  }
+
+  /**
+   * แผนที่ชำระแบบหนี้ (CREDIT_PAYMENT): บัญชีของแผนเป็นหนี้สิน และเชื่อมรายการซื้อ (CREDIT_PURCHASE) หรือเป็นสินเชื่อ (LOAN)
+   * แผนอื่นชำระเป็น EXPENSE จากบัญชีสินทรัพย์
+   */
+  function isDebtPlan(plan, state) {
+    var account = state.accounts.find(function (a) { return a.account_id === plan.account_id; });
+    if (!account || !Ledger.isLiability(account.account_type)) return false;
+    return account.account_type === 'LOAN' || effective(state.transactions).some(function (t) {
+      return t.plan_id === plan.plan_id && t.transaction_type === 'CREDIT_PURCHASE';
+    });
+  }
+
+  /** ดอกเบี้ย/ค่าธรรมเนียมที่รับรู้พร้อมการชำระหนึ่งครั้ง */
+  function companionsOf(transactions, planId, paymentId) {
+    return effective(transactions).filter(function (t) {
+      return t.plan_id === planId && t.source === 'PLAN' && t.external_ref === paymentId &&
+        (t.transaction_type === 'INTEREST' || t.transaction_type === 'FEE');
+    });
+  }
+
+  /**
+   * ส่วนดอกเบี้ย/ค่าธรรมเนียมที่รับรู้ในการชำระครั้งนี้ (สตางค์) ตามสัดส่วนยอดชำระสะสมต่อยอดรวมแผน
+   * เป้าหมายสะสม = floor(ดอกเบี้ยแผน × ชำระสะสม ÷ ยอดรวม) และเท่ากับดอกเบี้ยแผนเมื่อชำระครบ
+   * หักส่วนที่รับรู้ไปแล้ว จึงไม่รับรู้ซ้ำ และกลับรายการชำระแล้วคำนวณใหม่ได้ถูกต้อง
+   */
+  function chargeShares(plan, state, paymentSatang) {
+    var live = effective(state.transactions).filter(function (t) { return t.plan_id === plan.plan_id && t.source === 'PLAN'; });
+    var payments = new Set(live.filter(function (t) { return t.transaction_type === 'CREDIT_PAYMENT'; }).map(function (t) { return t.transaction_id; }));
+    var paid = state.allocations.filter(function (a) { return payments.has(a.transaction_id); })
+      .reduce(function (s, a) { return s + sat(a.allocated_amount); }, 0);
+    var total = sat(plan.total_amount);
+    var after = paid + paymentSatang;
+    var out = {};
+    [['INTEREST', 'interest_amount'], ['FEE', 'fee_amount']].forEach(function (pair) {
+      var planned = sat(plan[pair[1]] || 0);
+      var target = after >= total ? planned : Number(BigInt(planned) * BigInt(after) / BigInt(total));
+      var done = live.filter(function (t) { return t.transaction_type === pair[0]; }).reduce(function (s, t) { return s + sat(t.amount); }, 0);
+      out[pair[0]] = Math.max(0, target - done);
+    });
+    return out;
+  }
+
   function requireAsset(accounts, rawId, active) {
     var id = Validation.requireId(rawId, 'account_id');
     var account = accounts.find(function (r) { return r.account_id === id; });
@@ -137,21 +185,25 @@ var PaymentActivity = (function () {
     if (action === 'REVERSE_PAY') {
       var originalId = Validation.requireId(f.transaction_id, 'transaction_id');
       var original = state.transactions.find(function (t) { return t.transaction_id === originalId && t.plan_id === id; });
-      if (!original || original.reversal_of || original.source !== 'PLAN' || original.transaction_type !== 'EXPENSE' ||
+      if (!original || original.reversal_of || original.source !== 'PLAN' || PAYMENT_TYPES.indexOf(original.transaction_type) < 0 ||
           !state.allocations.some(function (r) { return r.transaction_id === originalId; }) ||
           state.transactions.some(function (r) { return r.reversal_of === originalId; })) fail('ไม่พบธุรกรรมชำระที่กลับรายการได้');
       if (date < original.transaction_date || !note) fail('กรุณาระบุเหตุผลและวันที่ที่ไม่ก่อนวันชำระ');
-      var reversal = Object.assign({}, original, {
-        transaction_id: ctx.id('reverse-payment'),
-        transaction_date: date,
-        reversal_of: originalId,
-        item_name: ('กลับรายการ: ' + original.item_name).slice(0, Config.TEXT_LIMITS.ITEM_NAME),
-        external_ref: '',
-        note: note,
-        created_at: ctx.now,
-        updated_at: ctx.now
+      var reverseMasters = Projection.loadMasters();
+      // กลับรายการชำระพร้อมดอกเบี้ย/ค่าธรรมเนียมที่รับรู้ในการชำระครั้งนั้น (external_ref = รหัสธุรกรรมชำระ)
+      [original].concat(companionsOf(state.transactions, id, originalId)).forEach(function (source, n) {
+        var reversal = Object.assign({}, source, {
+          transaction_id: ctx.id(n ? 'reverse-payment-' + n : 'reverse-payment'),
+          transaction_date: date,
+          reversal_of: source.transaction_id,
+          item_name: ('กลับรายการ: ' + source.item_name).slice(0, Config.TEXT_LIMITS.ITEM_NAME),
+          external_ref: '',
+          note: note,
+          created_at: ctx.now,
+          updated_at: ctx.now
+        });
+        batch.transactions.push(Projection.apply('Transactions', reversal, reverseMasters));
       });
-      batch.transactions.push(Projection.apply('Transactions', reversal, Projection.loadMasters()));
     } else if (action === 'EDIT_PLAN') {
       var detail = { note: note };
       ['item_name', 'description'].forEach(function (key) {
@@ -200,9 +252,7 @@ var PaymentActivity = (function () {
         if (action === 'RELEASE' && amount > (accountReservations(row)[account] || 0)) fail('ยอดปลดเงินเกินที่กันไว้ในบัญชีนี้');
         reservation(row, account, action, amount);
       } else {
-        if (state.transactions.some(function (t) { return t.plan_id === id && t.transaction_type === 'CREDIT_PURCHASE'; })) {
-          fail('แผนที่มีธุรกรรมซื้อด้วยบัตรต้องชำระผ่านขั้นตอนชำระหนี้');
-        }
+        var debtMode = isDebtPlan(plan, state);
         var transactionId = ctx.id('payment');
         var cashNeeded = 0;
         var total = 0;
@@ -223,13 +273,31 @@ var PaymentActivity = (function () {
         });
         if (cashNeeded > available) fail('เงินที่ใช้ได้ในบัญชีชำระไม่เพียงพอ');
         var masters = Projection.loadMasters();
-        var tx = Transactions.validate({
-          transaction_date: date, transaction_type: 'EXPENSE', from_account_id: account, owner_id: plan.owner_id,
-          category_id: plan.category_id, item_name: plan.item_name, amount: Validation.fromSatang(total), note: note
-        }, masters);
-        batch.transactions.push(Projection.apply('Transactions', Object.assign(tx, {
-          transaction_id: transactionId, plan_id: id, source: 'PLAN', reversal_of: '', created_at: ctx.now, updated_at: ctx.now
-        }), masters));
+        // ข้อมูลหลักของแผนที่ถูกปิดภายหลังยังใช้ชำระแผนเดิมได้
+        var current = { owner_id: plan.owner_id, category_id: plan.category_id, to_account_id: plan.account_id, from_account_id: plan.account_id };
+        function planTransaction(fields, txId) {
+          var tx = Transactions.validate(Object.assign({
+            transaction_date: date, owner_id: plan.owner_id, item_name: plan.item_name, note: note
+          }, fields), masters, current);
+          batch.transactions.push(Projection.apply('Transactions', Object.assign(tx, {
+            transaction_id: txId, plan_id: id, source: 'PLAN', reversal_of: '', created_at: ctx.now, updated_at: ctx.now
+          }), masters));
+        }
+        if (debtMode) {
+          // ชำระหนี้บัตร/สินเชื่อ: ลดหนี้ ไม่รับรู้รายจ่ายซ้ำกับ CREDIT_PURCHASE (AGENTS §7.3)
+          planTransaction({ transaction_type: 'CREDIT_PAYMENT', from_account_id: account, to_account_id: plan.account_id,
+            amount: Validation.fromSatang(total) }, transactionId);
+          var shares = chargeShares(plan, state, total);
+          [['INTEREST', 'ดอกเบี้ย: '], ['FEE', 'ค่าธรรมเนียม: ']].forEach(function (pair) {
+            if (!shares[pair[0]]) return;
+            planTransaction({ transaction_type: pair[0], from_account_id: plan.account_id, category_id: plan.category_id,
+              item_name: (pair[1] + plan.item_name).slice(0, Config.TEXT_LIMITS.ITEM_NAME),
+              amount: Validation.fromSatang(shares[pair[0]]), external_ref: transactionId }, ctx.id('payment-' + pair[0].toLowerCase()));
+          });
+        } else {
+          planTransaction({ transaction_type: 'EXPENSE', from_account_id: account, category_id: plan.category_id,
+            amount: Validation.fromSatang(total) }, transactionId);
+        }
       }
     }
     return batch;

@@ -567,7 +567,8 @@
     }
 
     function canEdit(r) { return !r.reversal_of && !r.is_reversed && !r.plan_id; }
-    function canReverse(r) { return !r.reversal_of && !r.is_reversed; }
+    // รายการที่เชื่อมแผน (ซื้อด้วยบัตร/ชำระงวด/ดอกเบี้ย) จัดการผ่านหน้าแผนชำระเท่านั้น
+    function canReverse(r) { return !r.reversal_of && !r.is_reversed && !r.plan_id; }
 
     function renderRow(r) {
       var meta = TYPES[r.transaction_type] || { label: r.transaction_type, icon: '•' };

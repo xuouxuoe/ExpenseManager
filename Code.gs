@@ -155,7 +155,11 @@ function api_accountBalances() {
 
 function api_paymentPlannerPage() {
   return handleApi_(function () {
-    return { plans: PaymentPlanner.list(), masters: MasterData.listAll({ includeInactive: true }) };
+    var purchases = PaymentPlanner.purchaseCandidates().slice(0, 100).map(function (r) {
+      return { transaction_id: r.transaction_id, transaction_date: r.transaction_date, from_account_id: r.from_account_id,
+        owner_id: r.owner_id, category_id: r.category_id, item_name: r.item_name, description: r.description, amount: r.amount };
+    });
+    return { plans: PaymentPlanner.list(), masters: MasterData.listAll({ includeInactive: true }), purchases: purchases };
   });
 }
 

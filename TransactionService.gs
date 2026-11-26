@@ -289,8 +289,8 @@ var Transactions = (function () {
       var original = findById(rows, id);
       if (!Validation.isBlank(original.reversal_of)) throw fail('RULE', 'transaction_id', 'รายการกลับรายการกลับซ้ำไม่ได้');
       if (reversedIds(rows)[original.transaction_id]) throw fail('RULE', 'transaction_id', 'รายการนี้ถูกกลับรายการแล้ว');
-      if (original.plan_id && Database.findRowsByValue('PaymentAllocations', 'transaction_id', original.transaction_id).length) {
-        throw fail('RULE', 'transaction_id', 'ธุรกรรมนี้จัดสรรให้งวดชำระแล้ว ต้องจัดการผ่านแผนชำระ');
+      if (!Validation.isBlank(original.plan_id)) {
+        throw fail('RULE', 'transaction_id', 'รายการนี้เชื่อมกับแผนชำระ ต้องจัดการผ่านแผนชำระ');
       }
       var reason = Validation.requireText(input && input.reason, 'reason', { required: true, max: Config.TEXT_LIMITS.NOTE, multiline: true });
       var date = Validation.isBlank(input && input.transaction_date) ? Util.todayIso() : Validation.requireDate(input.transaction_date, 'transaction_date');
