@@ -38,8 +38,8 @@
 2. **Backup ก่อนทุกครั้ง** — ทำสำเนา Spreadsheet เดิมทั้งไฟล์ (Drive copy) และบันทึก file id ของสำเนา
 3. **Dry run ก่อนเสมอ** — ผลลัพธ์ dry run เขียนลง Spreadsheet รายงานแยก ไม่เขียนลง V2
 4. **ไม่สร้างข้อมูลเทียม** — ไม่สร้างยอด วันที่ หรือธุรกรรมย้อนหลังจากสถานะอย่างเดียว (เช่น "จ่ายแล้ว" ที่ไม่มีวันที่/ยอด); ส่งเข้า Review Queue
-5. **ID ใหม่ทั้งหมดเป็น UUID**; เก็บ ID/เลขแถวเดิมใน `external_ref` เพื่อสืบย้อน (`V1:<sheet>:<legacy_id หรือ row>`)
-6. **Deterministic** — ID ใหม่สร้างจาก legacy key แบบคงที่ (เช่น UUID v5 จาก namespace + legacy key) เพื่อให้รันซ้ำได้ผลเหมือนเดิมและไม่สร้างซ้ำ
+5. **ID ใหม่ทั้งหมดเป็น running number ต่อตาราง** (จองผ่าน IdSequence); เก็บ ID/เลขแถวเดิมใน `external_ref` เพื่อสืบย้อน (`V1:<sheet>:<legacy_id หรือ row>`)
+6. **รันซ้ำได้** — ก่อนจองเลขใหม่ค้นแถวที่มี `external_ref` ของ legacy key เดิม ถ้ามีแล้วใช้ ID เดิม เพื่อให้รันซ้ำได้ผลเหมือนเดิมและไม่สร้างซ้ำ
 7. **ชื่อเป็น projection** — เติม `*_name` จาก Master V2 ผ่าน ProjectionService ไม่คัดลอกชื่อจาก V1 ตรง ๆ
 8. **Derived fields คำนวณใหม่ใน V2** — ไม่คัดลอก status/ยอดคงเหลือจาก V1 แต่ใช้เปรียบเทียบเพื่อตรวจความต่าง
 
@@ -67,7 +67,7 @@
 
 | V2 column | V1 column | กฎแปลง |
 |---|---|---|
-| account_id | ? (id/แถว) | UUID v5 จาก legacy key |
+| account_id | ? (id/แถว) | running number ใหม่ (สืบย้อนด้วย external_ref) |
 | account_name | ? ชื่อบัตร | trim; ถ้าซ้ำกันให้เข้า Review |
 | account_type | ? ประเภท | map เป็น CREDIT_CARD / CASH_CARD / BANK / CASH / E_WALLET / LOAN; ไม่ทราบ → Review (ค่าเริ่มต้นที่เสนอ: CREDIT_CARD) |
 | account_subtype | — | ว่าง |
@@ -86,7 +86,7 @@
 
 | V2 column | แหล่ง | กฎแปลง |
 |---|---|---|
-| owner_id / category_id | ค่าข้อความที่ไม่ซ้ำ หรือตาราง V1 ถ้ามี | UUID v5 จากชื่อที่ normalize (trim, ช่องว่างเดี่ยว) |
+| owner_id / category_id | ค่าข้อความที่ไม่ซ้ำ หรือตาราง V1 ถ้ามี | running number ใหม่ ต่อชื่อที่ normalize (trim, ช่องว่างเดี่ยว) |
 | owner_name / category_name | ค่าข้อความ | ชื่อที่สะกดต่างแต่หมายถึงสิ่งเดียวกัน (เช่น "แม่" / "คุณแม่") → Review ให้ผู้ใช้ merge |
 | category_type | — | EXPENSE (หมวดจากแผนผ่อนเป็นรายจ่าย) |
 | is_active | — | TRUE |
@@ -96,7 +96,7 @@
 
 | V2 column | V1 column | กฎแปลง |
 |---|---|---|
-| plan_id | ? | UUID v5 |
+| plan_id | ? | running number ใหม่ |
 | purchase_date | ? วันที่ซื้อ | แปลงเป็น YYYY-MM-DD; ปี พ.ศ. (> 2400) → ลบ 543; แปลงไม่ได้ → ว่าง + Review |
 | plan_type | — | INSTALLMENT ถ้าจำนวนงวด > 1, ONE_TIME ถ้า = 1 |
 | account_id | ? บัตร | lookup Accounts; ไม่พบ → Review |
@@ -118,7 +118,7 @@
 
 | V2 column | V1 column | กฎแปลง |
 |---|---|---|
-| schedule_id | ? | UUID v5 |
+| schedule_id | ? | running number ใหม่ |
 | plan_id | ? FK ไปแผน | ไม่พบแผน → Review (orphan) |
 | Business info + purchase_date, plan_type, installment_count | — | คัดลอกจาก PaymentPlans ตาม BR (ไม่ใช้ค่าจากแถว V1) |
 | installment_no | ? งวดที่ / "n/m" | แยก "1/6" → installment_no = 1; m ต้องเท่ากับ installment_count ของแผน |
@@ -136,7 +136,7 @@
 
 | V2 column | V1 column | กฎแปลง |
 |---|---|---|
-| transaction_id | ? | UUID v5 |
+| transaction_id | ? | running number ใหม่ |
 | transaction_date | ? วันที่จ่าย | ต้องมี; ไม่มี → Review (ไม่สร้างธุรกรรม) |
 | transaction_type | — | CREDIT_PAYMENT เมื่อชำระหนี้บัตร; EXPENSE เมื่อจ่ายตรงจากบัญชีสินทรัพย์ (ตัดสินจากบัญชีต้นทาง; ไม่ชัด → Review) |
 | from_account_id | ? บัญชีที่จ่าย | ไม่มี → Review |

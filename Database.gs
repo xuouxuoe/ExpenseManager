@@ -195,7 +195,38 @@ var Database = (function () {
   var execCache = { sheets: {}, tables: {} };
 
   function resetExecutionCache() {
+    // ตัวนับที่จองแล้วต้องไม่หายเมื่อล้าง cache (อ่านค่าล่าสุดจาก Script Properties ใหม่หลังได้ lock)
+    if (typeof IdSequence !== 'undefined') IdSequence.reset();
     execCache = { sheets: {}, tables: {} };
+  }
+
+  // ---------- Write hook ----------
+  // Operation.run ใช้ hook นี้บันทึกตัวนับและเลขที่จองไว้ลง journal ก่อนเขียนข้อมูลธุรกิจ (replay ได้เลขเดิม)
+  var writeHook = null;
+
+  function setWriteHook(fn) {
+    writeHook = fn || null;
+  }
+
+  function beforeWrite(sheetName) {
+    if (writeHook) writeHook(sheetName);
+  }
+
+  /** รหัสของไฟล์ Spreadsheet ปัจจุบัน (ใช้แยกตัวนับ running number ระหว่าง Production / TEST) */
+  function spreadsheetKey() {
+    var ss = getSpreadsheet();
+    return ss && typeof ss.getId === 'function' ? String(ss.getId()) : 'default';
+  }
+
+  /** เลข running number สูงสุดที่มีอยู่แล้วในตาราง (ใช้เมื่อยังไม่มีตัวนับ) */
+  function maxNumericId(sheetName) {
+    var pk = Config.PRIMARY_KEYS[sheetName];
+    var max = 0;
+    readAll(sheetName).rows.forEach(function (r) {
+      var v = String(r[pk] === undefined || r[pk] === null ? '' : r[pk]).trim();
+      if (/^[0-9]{1,15}$/.test(v)) max = Math.max(max, Number(v));
+    });
+    return max;
   }
 
   function trimHeader(row) {
@@ -222,7 +253,7 @@ var Database = (function () {
     if (entry && (!entry.legacy || !forWrite)) return entry;
     var headers = headersOf(sheetName);
     var sheet = entry ? entry.sheet : getSpreadsheet().getSheetByName(sheetName);
-    if (!sheet && sheetName === 'SubAccounts' && forWrite) {
+    if (!sheet && Config.AUTO_CREATE_SHEETS.indexOf(sheetName) >= 0 && forWrite) {
       sheet = getSpreadsheet().insertSheet(sheetName);
       sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
       formatSheet(sheet, headers);
@@ -250,7 +281,7 @@ var Database = (function () {
     var headers = headersOf(sheetName);
     var entry = execCache.sheets[sheetName];
     var sheet = entry ? entry.sheet : getSpreadsheet().getSheetByName(sheetName);
-    if (!sheet && sheetName === 'SubAccounts') {
+    if (!sheet && Config.AUTO_CREATE_SHEETS.indexOf(sheetName) >= 0) {
       table = execCache.tables[sheetName] = { values: [] };
       return table;
     }
@@ -326,6 +357,7 @@ var Database = (function () {
   /** เพิ่มหลายแถวด้วย setValues ครั้งเดียว (ไม่อ่านทั้งตาราง) */
   function appendRows(sheetName, objects) {
     if (!objects || !objects.length) return 0;
+    beforeWrite(sheetName);
     var headers = headersOf(sheetName);
     var entry = verifiedSheet(sheetName, true);
     var start = lastRowOf(sheetName) + 1;
@@ -352,6 +384,7 @@ var Database = (function () {
 
   /** เขียนทับแถวตามเลขแถวที่ทราบแล้ว (ใช้คู่กับ findRowsByValue) */
   function writeRowAt(sheetName, rowNumber, object) {
+    beforeWrite(sheetName);
     var headers = headersOf(sheetName);
     var entry = verifiedSheet(sheetName, true);
     var values = objectToRow(object, headers);
@@ -366,6 +399,7 @@ var Database = (function () {
    */
   function updateRows(sheetName, objects) {
     if (!objects || !objects.length) return 0;
+    beforeWrite(sheetName);
     var headers = headersOf(sheetName);
     var pk = Config.PRIMARY_KEYS[sheetName];
     var pkIndex = headers.indexOf(pk);
@@ -399,6 +433,7 @@ var Database = (function () {
     var colIndex = headers.indexOf(column);
     if (colIndex < 0) throw Util.AppError('UNKNOWN_COLUMN', 'ไม่พบคอลัมน์ ' + column);
     if (!rowNumbers.length) return 0;
+    beforeWrite(sheetName);
     var table = loadTable(sheetName);
     var first = rowNumbers[0];
     var last = rowNumbers[rowNumbers.length - 1];
@@ -422,6 +457,9 @@ var Database = (function () {
     checkSchema: checkSchema,
     initialize: initialize,
     resetExecutionCache: resetExecutionCache,
+    setWriteHook: setWriteHook,
+    spreadsheetKey: spreadsheetKey,
+    maxNumericId: maxNumericId,
     lastRowNumber: lastRowOf,
     readAll: readAll,
     findRowsByValue: findRowsByValue,
@@ -433,4 +471,50 @@ var Database = (function () {
     toCell: toCell,
     fromCell: fromCell
   };
+})();
+
+/**
+ * IdSequence — running number แยกต่อตาราง เริ่มที่ 1 (เก็บเป็นข้อความตัวเลข เช่น "1", "2")
+ * ตัวนับเก็บใน Script Properties แยกตามไฟล์ Spreadsheet; ต้องเรียก next() ภายใน lock (Operation.run)
+ * เลขที่จองแล้วไม่ถูกใช้ซ้ำ แต่อาจมีช่องว่างได้เมื่อคำขอล้มเหลวหลังจองเลข
+ */
+var IdSequence = (function () {
+  var PREFIX = 'ID_SEQ_';
+  var cache = {};
+  var dirty = {};
+
+  function propertyKey(sheetName) {
+    return PREFIX + Database.spreadsheetKey() + '_' + sheetName;
+  }
+
+  function next(sheetName) {
+    if (!Config.PRIMARY_KEYS[sheetName] || sheetName === 'Settings') {
+      throw Util.AppError('UNKNOWN_SHEET', 'ตาราง ' + sheetName + ' ไม่ใช้ running number');
+    }
+    var key = propertyKey(sheetName);
+    if (!(key in cache)) {
+      var raw = PropertiesService.getScriptProperties().getProperty(key);
+      var stored = raw === null || raw === undefined || String(raw).trim() === '' ? NaN : Number(raw);
+      cache[key] = isFinite(stored) && stored >= 0 ? Math.floor(stored) : Database.maxNumericId(sheetName);
+    }
+    cache[key] += 1;
+    dirty[key] = true;
+    return String(cache[key]);
+  }
+
+  /** บันทึกตัวนับที่เปลี่ยนลง Script Properties (ต้องทำก่อนเขียนแถวที่ใช้เลขนั้น) */
+  function flush() {
+    var keys = Object.keys(dirty);
+    if (!keys.length) return;
+    var props = PropertiesService.getScriptProperties();
+    keys.forEach(function (k) { props.setProperty(k, String(cache[k])); });
+    dirty = {};
+  }
+
+  function reset() {
+    flush();
+    cache = {};
+  }
+
+  return { next: next, flush: flush, reset: reset };
 })();

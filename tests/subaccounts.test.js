@@ -43,7 +43,7 @@ test('โอนจัดกลุ่มภายในบัญชีเดี�
     { name: 'บัญชี B', balance: 500, income: 0, expense: 0, isAsset: true }
   ]);
   assert.ok(!JSON.stringify(share).includes('PRIVATE'));
-  assert.ok(!JSON.stringify(share).includes(bank.account_id));
+  assert.ok(share.accounts.every((r) => Object.keys(r).every((k) => !/_id$/.test(k))), 'ไม่ส่งรหัสบัญชีในรายงานที่แชร์');
   assert.equal(ctx.api_sharedAccountReport({ sub_account_id: a.sub_account_id }).data.accounts.length, 1);
   assert.equal(ctx.api_reverseTransaction(expense.transaction_id, { reason: 'คืนยอด' }, key()).ok, true);
   assert.equal(report().accounts.find((r) => r.sub_account_id === a.sub_account_id).balance, 300);

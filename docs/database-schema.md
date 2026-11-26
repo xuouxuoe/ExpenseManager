@@ -8,7 +8,7 @@
 
 ## 1. หลักการ
 
-1. **ID เป็นรหัสอ้างอิงหลัก** ระหว่างตารางเสมอ (UUID แบบข้อความ) ห้ามใช้ชื่อหรือเลขแถวเป็น FK
+1. **ID เป็นรหัสอ้างอิงหลัก** ระหว่างตารางเสมอ (running number ต่อตาราง เริ่มที่ 1 (ข้อความตัวเลข เช่น `1`, `2`)) ห้ามใช้ชื่อหรือเลขแถวเป็น FK
 2. **Name ใช้แสดงผล ค้นหา กรอง และ Pivot** — คอลัมน์ `*_name` ที่อยู่คู่กับ `*_id` ในตารางธุรกรรม/แผน/งวด เป็น **Projection** ที่ Backend เติมจาก Master Data อัตโนมัติ ผู้ใช้ไม่ต้องกรอกและ API ไม่รับค่าเหล่านี้จาก Client
 3. Master Data (Accounts, Owners, Categories) เป็น Source of Truth ของชื่อ เมื่อเปลี่ยนชื่อ Backend refresh Projection ทุกตารางโดยไม่เปลี่ยน ID
 4. หนึ่งแถวต่อหนึ่ง record, หนึ่งคอลัมน์ต่อหนึ่ง attribute, header เป็น snake_case ไม่ซ้ำ, ห้าม merge cell หรือแถวรวมยอด
@@ -18,7 +18,7 @@
 
 | Kind | ความหมาย | ใครเขียน |
 |---|---|---|
-| KEY | Primary key (UUID) | Backend สร้างล่วงหน้า |
+| KEY | Primary key (running number ต่อตาราง) | Backend จองเลขล่วงหน้าภายใน lock |
 | FK | อ้างอิง ID ของตารางอื่น ต้องมีอยู่จริง | ผู้ใช้เลือกจากรายการ, Backend ตรวจสอบ |
 | INPUT | ข้อมูลที่ผู้ใช้กรอกหรือแก้ไขได้ | ผู้ใช้ผ่าน API ที่ตรวจสอบแล้ว |
 | PROJ | Projection: สำเนาข้อมูลจาก Master หรือจาก PaymentPlans เพื่อรายงาน | Backend เท่านั้น ห้ามแก้ตรง |
@@ -30,7 +30,7 @@
 
 | Type | รูปแบบ | ตัวอย่าง |
 |---|---|---|
-| ID | ข้อความ UUID v4 | `3f2a…` |
+| ID | ข้อความตัวเลข running number ต่อตาราง เริ่มที่ 1 ไม่เติมศูนย์ (`^[1-9][0-9]*$`) อาจเว้นช่วงเมื่อคำขอล้มเหลวหลังจองเลข | `1`, `27` |
 | Text(n) | ข้อความ ความยาวไม่เกิน n ตัวอักษร ตัดช่องว่างหัวท้าย ป้องกัน Formula Injection | `iPhone 17` |
 | Date | ข้อความ `YYYY-MM-DD` (ค.ศ.) ไม่ทราบให้ว่าง | `2026-11-25` |
 | Timestamp | ISO 8601 พร้อม timezone | `2026-11-25T22:30:00+07:00` |
@@ -76,7 +76,8 @@ Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`t
 | Settings | หนึ่งค่าตั้งค่า | Config |
 | AuditLogs | หนึ่งเหตุการณ์ตรวจสอบ | Append-only |
 | OperationJournal | หนึ่งคำขอเขียนข้อมูล | Idempotency / Recovery |
-| Budgets | — | ระยะถัดไป (ยังไม่กำหนด schema) |
+| Budgets | หนึ่งงบใช้จ่ายของหนึ่งเดือน | Config (อนุมัติ 2026-11-26) |
+| BudgetCategories | หนึ่งหมวดที่นับเข้างบหนึ่งงบ | Bridge |
 | Pivot_Saving / Pivot_Payment / Pivot_Transactions | — | รายงาน ไม่ใช่ข้อมูลต้นฉบับ |
 
 ## 3. Canonical headers
@@ -94,22 +95,24 @@ PaymentAllocations: allocation_id, transaction_id, schedule_id, allocated_amount
 Settings: setting_key, setting_value, description, updated_at
 AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operation_id, result
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
+Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
+BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
 ```
 
-จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10
+จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 11, BudgetCategories 5
 
 ### บัญชีย่อยสำหรับรายงาน (อนุมัติ 2026-11-26)
 
 | ตาราง | คอลัมน์เพิ่ม | ชนิดและความหมาย |
 |---|---|---|
-| SubAccounts | sub_account_id | UUID, primary key |
+| SubAccounts | sub_account_id | ID, primary key |
 | SubAccounts | sub_account_name | Text(100), ชื่อที่ใช้แสดงในรายงานสำหรับส่งต่อ |
-| SubAccounts | account_id | UUID, FK → Accounts, กำหนดบัญชีหลักเมื่อสร้างและคงความสัมพันธ์นี้ไว้ |
+| SubAccounts | account_id | ID, FK → Accounts, กำหนดบัญชีหลักเมื่อสร้างและคงความสัมพันธ์นี้ไว้ |
 | SubAccounts | is_active | Boolean, ปิดใช้งานแทนการลบ |
 | SubAccounts | created_at, updated_at | Timestamp |
-| Transactions | from_sub_account_id, to_sub_account_id | UUID หรือว่าง, FK → SubAccounts ต้องอยู่ในบัญชีหลักของฝั่งนั้น |
+| Transactions | from_sub_account_id, to_sub_account_id | ID หรือว่าง, FK → SubAccounts ต้องอยู่ในบัญชีหลักของฝั่งนั้น |
 | Transactions | from_sub_account_name, to_sub_account_name | Text(100), projection ของชื่อบัญชีย่อย |
-| PaymentPlans / PaymentSchedules | sub_account_id | UUID หรือว่าง, FK → SubAccounts, งวดคัดลอกจากแผน |
+| PaymentPlans / PaymentSchedules | sub_account_id | ID หรือว่าง, FK → SubAccounts, งวดคัดลอกจากแผน |
 | PaymentPlans / PaymentSchedules | sub_account_name | Text(100), projection ของชื่อบัญชีย่อย |
 
 คอลัมน์ใหม่ของตารางเดิมต่อท้าย header เดิมเพื่อรักษาตำแหน่งข้อมูลเดิม รองรับอ่าน header รุ่นก่อนโดยเติมค่าว่างในหน่วยความจำ การเขียนตารางนั้นครั้งแรกภายใต้ operation lock จะเติมเฉพาะ header ที่ขาดและจัดรูปแบบคอลัมน์ กรณี schema อื่นที่ไม่ตรงยังถูกปฏิเสธตามเดิม ชีต SubAccounts สร้างเมื่อ initialize หรือสร้างบัญชีย่อยครั้งแรก ยอดยกมาอยู่ในกลุ่มยังไม่ระบุบัญชีย่อย
@@ -311,6 +314,28 @@ OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operati
 | OperationJournal | result_ref | Text | SYS | |
 | OperationJournal | created_at | Timestamp | SYS | |
 | OperationJournal | updated_at | Timestamp | SYS | |
+
+### 4.10 Budgets / BudgetCategories (อนุมัติ 2026-11-26)
+
+| Sheet | Column | Type | Kind | คำอธิบาย |
+|---|---|---|---|---|
+| Budgets | budget_id | ID | KEY | |
+| Budgets | budget_month | Integer YYYYMM | INPUT | เดือนของงบ |
+| Budgets | budget_name | Text(100) | INPUT | เช่น ค่าใช้จ่ายรายวัน |
+| Budgets | owner_id | ID | INPUT | FK → Owners ว่าง = งบรวมทุกคน |
+| Budgets | owner_name | Text | PROJ | |
+| Budgets | amount | Money | INPUT | งบทั้งเดือน > 0 |
+| Budgets | weekly_amount | Money | INPUT | งบต่อสัปดาห์ ว่าง/0 = แบ่งตามจำนวนวัน |
+| Budgets | note | Text(1000) | INPUT | |
+| Budgets | is_active | Boolean | INPUT | แก้หมวดของงบ = ปิดงบเดิมแล้วสร้างงบใหม่ (เก็บประวัติ) |
+| Budgets | created_at / updated_at | Timestamp | SYS | |
+| BudgetCategories | budget_category_id | ID | KEY | |
+| BudgetCategories | budget_id | ID | FK → Budgets | |
+| BudgetCategories | category_id | ID | INPUT | FK → Categories ประเภท EXPENSE |
+| BudgetCategories | category_name | Text | PROJ | |
+| BudgetCategories | created_at | Timestamp | SYS | |
+
+ทั้งสองชีตถูกสร้างอัตโนมัติเมื่อบันทึกงบครั้งแรก (เหมือน SubAccounts) และอ่านเป็นตารางว่างถ้ายังไม่มี `initializeDatabase()` / `initializeTestDatabase()` ก็สร้างให้ได้โดยไม่แตะข้อมูลเดิม
 
 ## 5. Projection map
 

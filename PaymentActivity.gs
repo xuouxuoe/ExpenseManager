@@ -192,7 +192,7 @@ var PaymentActivity = (function () {
       }
     }
     if (action === 'SETTLE') {
-      settlement = PlanRevision.settle(plan, rows, state, f, position(plan, state), ctx.id('payment'));
+      settlement = PlanRevision.settle(plan, rows, state, f, position(plan, state), ctx.id('Transactions', 'payment'));
       PlanRevision.applySettlement(plan, rows, settlement, false);
       derive(rows, state, date);
       f = Object.assign({}, f, { lines: [{ schedule_id: settlement.anchorId, amount: Validation.fromSatang(settlement.amount) }] });
@@ -225,7 +225,7 @@ var PaymentActivity = (function () {
       if (!amount) return;
       if (event === 'RELEASE') released[account] = (released[account] || 0) + amount;
       batch.reservations.push({
-        reservation_id: ctx.id('reservation-' + batch.reservations.length), reservation_date: date,
+        reservation_id: ctx.id('Reservations', 'reservation-' + batch.reservations.length), reservation_date: date,
         schedule_id: row.schedule_id, account_id: account, action_type: event, amount: Validation.fromSatang(amount),
         transaction_id: transaction || '', note: note, created_at: ctx.now
       });
@@ -264,7 +264,7 @@ var PaymentActivity = (function () {
       // กลับรายการชำระพร้อมดอกเบี้ย/ค่าธรรมเนียมที่รับรู้ในการชำระครั้งนั้น (external_ref = รหัสธุรกรรมชำระ)
       [original].concat(companionsOf(state.transactions, id, originalId)).forEach(function (source, n) {
         var reversal = Object.assign({}, source, {
-          transaction_id: ctx.id(n ? 'reverse-payment-' + n : 'reverse-payment'),
+          transaction_id: ctx.id('Transactions', n ? 'reverse-payment-' + n : 'reverse-payment'),
           transaction_date: date,
           reversal_of: source.transaction_id,
           item_name: ('กลับรายการ: ' + source.item_name).slice(0, Config.TEXT_LIMITS.ITEM_NAME),
@@ -297,7 +297,14 @@ var PaymentActivity = (function () {
       });
       detail.sub_account_id = Projection.validateSubAccount(f.sub_account_id === undefined && detail.account_id === plan.account_id ? plan.sub_account_id : f.sub_account_id,
         detail.account_id, current, plan.sub_account_id);
-      if (detail.sub_account_id !== (plan.sub_account_id || '')) batch.reclassify = { accountId: plan.account_id, subAccountId: detail.sub_account_id };
+      // เจ้าของ/หมวดหมู่/บัญชีย่อยเป็นการจัดประเภท ไม่เปลี่ยนยอด: ธุรกรรมของแผน (รวมรายการกลับรายการ) เปลี่ยนตาม
+      // เพื่อให้รายงานตรงกับแผน (ผู้ใช้อนุมัติ 2026-11-26, business-rules §4.3)
+      var changedOwner = detail.owner_id !== plan.owner_id;
+      var changedCategory = detail.category_id !== plan.category_id;
+      if (changedOwner || changedCategory || detail.sub_account_id !== (plan.sub_account_id || '')) {
+        batch.reclassify = { accountId: plan.account_id, subAccountId: detail.sub_account_id,
+          ownerId: changedOwner ? detail.owner_id : '', categoryId: changedCategory ? detail.category_id : '' };
+      }
       batch.planChanges = detail;
     } else if (action === 'RENEW') {
       var updated = Object.assign({}, plan);
@@ -327,7 +334,7 @@ var PaymentActivity = (function () {
         reservation(row, account, action, amount);
       } else {
         var debtMode = isDebtPlan(plan, state);
-        var transactionId = ctx.id('payment');
+        var transactionId = ctx.id('Transactions', 'payment');
         var cashNeeded = 0;
         var total = 0;
         targets.forEach(function (schedule, i) {
@@ -342,7 +349,7 @@ var PaymentActivity = (function () {
           if (amount === outstanding) Object.keys(held).sort().forEach(function (accountId) {
             reservation(schedule, accountId, 'RELEASE', held[accountId] - (accountId === account ? used : 0), transactionId);
           });
-          batch.allocations.push({ allocation_id: ctx.id('allocation-' + i), transaction_id: transactionId,
+          batch.allocations.push({ allocation_id: ctx.id('PaymentAllocations', 'allocation-' + i), transaction_id: transactionId,
             schedule_id: schedule.schedule_id, allocated_amount: Validation.fromSatang(amount), created_at: ctx.now });
         });
         if (cashNeeded > available) fail('เงินที่ใช้ได้ในบัญชีชำระไม่เพียงพอ');
@@ -370,7 +377,7 @@ var PaymentActivity = (function () {
             planTransaction({ transaction_type: pair[0], from_account_id: plan.account_id, category_id: plan.category_id,
               from_sub_account_id: plan.sub_account_id,
               item_name: (pair[1] + plan.item_name).slice(0, Config.TEXT_LIMITS.ITEM_NAME),
-              amount: Validation.fromSatang(shares[pair[0]]), external_ref: transactionId }, ctx.id('payment-' + pair[0].toLowerCase()));
+              amount: Validation.fromSatang(shares[pair[0]]), external_ref: transactionId }, ctx.id('Transactions', 'payment-' + pair[0].toLowerCase()));
           });
         } else {
           planTransaction({ transaction_type: 'EXPENSE', from_account_id: account, category_id: plan.category_id,
@@ -385,7 +392,7 @@ var PaymentActivity = (function () {
 
   function preview(input) {
     if (!input || ['RESCHEDULE', 'SETTLE'].indexOf(input.action) < 0) fail('กรุณาเลือกการปรับงวดหรือปิดยอด');
-    var batch = prepare(input, { preview: true, now: Util.nowIso(), id: function (label) { return Util.deterministicUuid('plan-preview', label); } }, read());
+    var batch = prepare(input, { preview: true, now: Util.nowIso(), id: function (sheetName, label) { return 'preview-' + sheetName + '-' + label; } }, read());
     return { version: batch.previewVersion, settlement_amount: batch.settlement ? Validation.fromSatang(batch.settlement.amount) : null,
       total_amount: batch.settlement ? batch.settlement.money[3] : null,
       interest_amount: batch.settlement ? Validation.fromSatang(batch.settlement.interest) : null,
@@ -395,15 +402,32 @@ var PaymentActivity = (function () {
         .reduce(function (sum, r) { return sum + sat(r.amount); }, 0)) };
   }
 
+  /** Single-plan activities and month batches share one journal type, so a pending one blocks the other. */
+  function rejectOtherPending(ctx) {
+    var journal = Database.findRowsByValue('OperationJournal', 'operation_type', TYPE);
+    if (journal.some(function (match) {
+      var row = match.row;
+      return row.operation_id !== ctx.operationId && (row.status === 'PENDING' || row.status === 'NEEDS_RECOVERY') && row.recovery_data;
+    })) throw Util.AppError('BUSY', 'มีการอัปเดตแผนค้าง กรุณาลองส่งคำขอเดิมที่ค้างก่อน');
+  }
+
+  function appendFinancialRows(batch) {
+    if (batch.transactions.length) {
+      // The checkpoint may predate a master rename made while this request was pending.
+      var currentNames = Projection.loadMasters();
+      Database.appendRowsIfAbsent('Transactions', batch.transactions.map(function (t) {
+        return Projection.apply('Transactions', t, currentNames);
+      }));
+    }
+    if (batch.reservations.length) Database.appendRowsIfAbsent('Reservations', batch.reservations);
+    if (batch.allocations.length) Database.appendRowsIfAbsent('PaymentAllocations', batch.allocations);
+  }
+
   function change(input, request) {
     return Operation.run({
       operationType: TYPE, idempotencyKey: request.idempotencyKey, actor: request.actor, payload: input
     }, function (ctx) {
-      var journal = Database.findRowsByValue('OperationJournal', 'operation_type', TYPE);
-      if (journal.some(function (match) {
-        var row = match.row;
-        return row.operation_id !== ctx.operationId && (row.status === 'PENDING' || row.status === 'NEEDS_RECOVERY') && row.recovery_data;
-      })) throw Util.AppError('BUSY', 'มีการอัปเดตแผนค้าง กรุณาลองส่งคำขอเดิมที่ค้างก่อน');
+      rejectOtherPending(ctx);
 
       var batch = ctx.recoveryData;
       if (!batch) {
@@ -414,22 +438,16 @@ var PaymentActivity = (function () {
         Database.appendRowsIfAbsent('Settings', [{ setting_key: PlanRevision.settlementKey(batch.settlement.paymentId),
           setting_value: Util.stableStringify(batch.settlement), description: 'ประวัติปรับแผนเมื่อปิดยอดก่อนกำหนด', updated_at: batch.at }]);
       }
-      if (batch.transactions.length) {
-        // The checkpoint may predate a master rename made while this request was pending.
-        var currentNames = Projection.loadMasters();
-        Database.appendRowsIfAbsent('Transactions', batch.transactions.map(function (t) {
-          return Projection.apply('Transactions', t, currentNames);
-        }));
-      }
-      if (batch.reservations.length) Database.appendRowsIfAbsent('Reservations', batch.reservations);
-      if (batch.allocations.length) Database.appendRowsIfAbsent('PaymentAllocations', batch.allocations);
+      appendFinancialRows(batch);
       if (batch.reclassify) {
         var names = Projection.loadMasters();
         var reclassified = Database.readAll('Transactions').rows.filter(function (t) { return t.plan_id === batch.planId; }).map(function (t) {
           ['from', 'to'].forEach(function (side) {
             if (t[side + '_account_id'] === batch.reclassify.accountId) t[side + '_sub_account_id'] = batch.reclassify.subAccountId;
           });
-          return Projection.apply('Transactions', t, names);
+          if (batch.reclassify.ownerId) t.owner_id = batch.reclassify.ownerId;
+          // CREDIT_PAYMENT ไม่มีหมวดหมู่ตามกฎบัญชี จึงเปลี่ยนเฉพาะรายการที่มีหมวดอยู่แล้ว
+          if (batch.reclassify.categoryId && t.category_id) t.category_id = batch.reclassify.categoryId;          return Projection.apply('Transactions', t, names);
         });
         Database.updateRows('Transactions', reclassified);
       }
@@ -468,5 +486,197 @@ var PaymentActivity = (function () {
     }).result;
   }
 
-  return { change: change, balances: balances, preview: preview, position: position };
+  // ---------- บันทึกหลายงวดข้ามแผนในคำขอเดียว (มุมมองรายเดือน) ----------
+
+  var BATCH_ACTIONS = ['PAY', 'RESERVE'];
+  var MAX_BATCH_ITEMS = 30;
+
+  /** Recovery data must fit one journal cell: names are re-projected on write and blanks restore as ''. */
+  function compact(row) {
+    var out = {};
+    Object.keys(row).forEach(function (key) {
+      if (row[key] === '' || row[key] === null || row[key] === undefined || /_name$/.test(key) && key !== 'item_name') return;
+      out[key] = row[key];
+    });
+    return out;
+  }
+
+  /**
+   * items: [{ schedule_id, account_id, amount }] — plan_id มาจากงวดในฐานข้อมูล ไม่เชื่อค่าจาก client
+   * PAY รวมงวดของแผนเดียวกันที่จ่ายจากบัญชีเดียวกันเป็นธุรกรรมเดียว (เหมือนชำระหลายงวดในหน้าต่างเดิม)
+   * แต่ละกลุ่มใช้ prepare() เดิม และเห็นผลของกลุ่มก่อนหน้า (ยอดเงินที่ใช้ได้ เงินกันไว้ การจัดสรร)
+   */
+  function prepareBatch(input, ctx, state) {
+    var f = input || {};
+    var action = Validation.requireEnum(f.action, BATCH_ACTIONS, 'action');
+    var date = Validation.requireDate(f.date, 'transaction_date', { required: false }) || Util.todayIso();
+    var note = Validation.requireText(f.note, 'note', { max: Config.TEXT_LIMITS.NOTE, multiline: true });
+    if (!Array.isArray(f.items) || !f.items.length) fail('กรุณาเลือกรายการอย่างน้อยหนึ่งรายการ');
+    if (f.items.length > MAX_BATCH_ITEMS) fail('บันทึกได้ไม่เกิน ' + MAX_BATCH_ITEMS + ' รายการต่อครั้ง');
+    var seen = Object.create(null);
+    var groups = [];
+    var byKey = Object.create(null);
+    f.items.forEach(function (item) {
+      var scheduleId = Validation.requireId(item && item.schedule_id, 'schedule_id');
+      if (seen[scheduleId]) fail('งวดที่เลือกซ้ำกัน');
+      seen[scheduleId] = true;
+      var schedule = state.schedules.find(function (r) { return r.schedule_id === scheduleId; });
+      if (!schedule) fail('ไม่พบงวดที่เลือก');
+      var accountId = Validation.requireId(item.account_id, 'account_id');
+      var key = action === 'PAY' ? schedule.plan_id + '|' + accountId : scheduleId;
+      if (!byKey[key]) groups.push(byKey[key] = { planId: schedule.plan_id, accountId: accountId, lines: [] });
+      byKey[key].lines.push({ schedule_id: scheduleId, amount: item.amount });
+    });
+
+    var merged = { batch: true, action: action, planIds: [], date: date, at: ctx.now, transactions: [], reservations: [], allocations: [] };
+    groups.forEach(function (group, index) {
+      var groupCtx = { now: ctx.now, id: function (sheetName, label) { return ctx.id(sheetName, 'batch-' + index + '-' + label); } };
+      var request = action === 'PAY'
+        ? { action: 'PAY', plan_id: group.planId, date: date, note: note, account_id: group.accountId, lines: group.lines }
+        : { action: 'RESERVE', plan_id: group.planId, date: date, note: note, account_id: group.accountId,
+          schedule_id: group.lines[0].schedule_id, amount: group.lines[0].amount };
+      var one;
+      try {
+        one = prepare(request, groupCtx, state);
+      } catch (e) {
+        // บอกว่ารายการไหนทำให้ทั้งชุดไม่ผ่าน (ยังไม่มีการเขียนข้อมูลในขั้นนี้)
+        var plan = state.plans.find(function (p) { return p.plan_id === group.planId; });
+        if (Util.isAppError(e) && plan) e.message = plan.item_name + ': ' + e.message;
+        throw e;
+      }
+      state.transactions = state.transactions.concat(one.transactions);
+      state.reservations = state.reservations.concat(one.reservations);
+      state.allocations = state.allocations.concat(one.allocations);
+      merged.transactions = merged.transactions.concat(one.transactions.map(compact));
+      merged.reservations = merged.reservations.concat(one.reservations.map(compact));
+      merged.allocations = merged.allocations.concat(one.allocations);
+      if (merged.planIds.indexOf(group.planId) < 0) merged.planIds.push(group.planId);
+    });
+    return merged;
+  }
+
+  /** คำนวณยอด/สถานะของงวดและแผนที่ได้รับผลจากชุดการบันทึกใหม่ แล้วเขียนกลับครั้งเดียว */
+  function refreshPlans(batch) {
+    var state = read();
+    var plans = [];
+    var schedules = [];
+    batch.planIds.forEach(function (planId) {
+      var plan = state.plans.find(function (p) { return p.plan_id === planId; });
+      var rows = state.schedules.filter(function (r) { return r.plan_id === planId; });
+      var stillDue = derive(rows, state, batch.date);
+      if (plan.plan_status === 'ACTIVE' && !stillDue) plan.plan_status = 'COMPLETED';
+      plan.updated_at = batch.at;
+      rows.forEach(function (row) { row.updated_at = batch.at; });
+      plans.push(plan);
+      schedules = schedules.concat(rows);
+    });
+    Database.updateRows('PaymentSchedules', schedules);
+    Database.updateRows('PaymentPlans', plans);
+  }
+
+  // ---------- ย้ายเงินกันไว้ระหว่างบัญชี ----------
+
+  /**
+   * input: { from_account_id, to_account_id, date, note, transfer (boolean), items: [{ schedule_id, amount }] }
+   * ปลดเงินกันไว้ในบัญชีต้นทาง แล้วกันใหม่ในบัญชีปลายทางด้วยยอดเท่ากัน (ไม่สร้างรายรับรายจ่าย)
+   * transfer = true บันทึก TRANSFER ต้นทาง → ปลายทางด้วยยอดรวม (ย้ายเงินจริง)
+   * RELEASE/RESERVE ของการย้ายไม่ผูก transaction_id: การกลับรายการโอนภายหลังไม่ทำให้เงินกันไว้นับซ้ำสองบัญชี
+   */
+  function prepareMove(input, ctx, state) {
+    var f = input || {};
+    var from = requireAsset(state.accounts, f.from_account_id, false);
+    var to = requireAsset(state.accounts, f.to_account_id, true);
+    if (from === to) fail('บัญชีต้นทางและปลายทางต้องต่างกัน');
+    var date = Validation.requireDate(f.date, 'transaction_date', { required: false }) || Util.todayIso();
+    if (date > Util.todayIso()) fail('วันที่เหตุการณ์ต้องไม่เป็นวันในอนาคต');
+    var note = Validation.requireText(f.note, 'note', { max: Config.TEXT_LIMITS.NOTE, multiline: true });
+    var transfer = f.transfer === true || f.transfer === 'true';
+    if (!Array.isArray(f.items) || !f.items.length) fail('กรุณาเลือกงวดที่จะย้ายเงินกันไว้');
+    if (f.items.length > MAX_BATCH_ITEMS) fail('ย้ายได้ไม่เกิน ' + MAX_BATCH_ITEMS + ' งวดต่อครั้ง');
+    var held = balances(state.reservations, state.transactions).schedules;
+    var seen = Object.create(null);
+    var total = 0;
+    var batch = { batch: true, action: 'MOVE', planIds: [], date: date, at: ctx.now, transactions: [], reservations: [], allocations: [] };
+    var rows = f.items.map(function (item) {
+      var scheduleId = Validation.requireId(item && item.schedule_id, 'schedule_id');
+      if (seen[scheduleId]) fail('งวดที่เลือกซ้ำกัน');
+      seen[scheduleId] = true;
+      var row = state.schedules.find(function (r) { return r.schedule_id === scheduleId; });
+      if (!row) fail('ไม่พบงวดที่เลือก');
+      var plan = state.plans.find(function (p) { return p.plan_id === row.plan_id; });
+      if (row.is_cancelled || !plan || plan.plan_status === 'CANCELLED') fail(row.item_name + ': งวดหรือแผนถูกยกเลิกแล้ว');
+      var amount = Validation.toSatang(item.amount, 'amount');
+      var inFrom = ((held[scheduleId] || {}).accounts || {})[from] || 0;
+      if (amount > inFrom) fail(row.item_name + ': ยอดที่ย้ายเกินเงินที่กันไว้ในบัญชีต้นทาง (' + Validation.fromSatang(inFrom) + ' บาท)');
+      total += amount;
+      if (batch.planIds.indexOf(row.plan_id) < 0) batch.planIds.push(row.plan_id);
+      return { row: row, plan: plan, amount: amount };
+    });
+    if (transfer) {
+      var masters = Projection.loadMasters();
+      var first = rows[0].plan;
+      var tx = Transactions.validate({ transaction_date: date, transaction_type: 'TRANSFER', from_account_id: from, to_account_id: to,
+        owner_id: first.owner_id, item_name: 'ย้ายเงินกันไว้', amount: Validation.fromSatang(total), note: note },
+        masters, { owner_id: first.owner_id, from_account_id: from });
+      batch.transactions.push(Projection.apply('Transactions', Object.assign(tx, {
+        transaction_id: ctx.id('Transactions', 'move-transfer'), plan_id: '', source: 'MANUAL', reversal_of: '', created_at: ctx.now, updated_at: ctx.now
+      }), masters));
+    }
+    // ปลายทางต้องมีเงินที่ใช้ได้พอ (รวมเงินที่โอนเข้ามาในชุดนี้)
+    var ledger = Ledger.balances(state.accounts, state.transactions.concat(batch.transactions));
+    var reservedByAccount = balances(state.reservations, state.transactions).accounts;
+    var available = (ledger[to] || 0) - (reservedByAccount[to] || 0);
+    if (total > available) {
+      fail('เงินที่ใช้ได้ในบัญชีปลายทางไม่พอ (' + (transfer ? 'หลังโอนแล้วใช้ได้ ' : 'ใช้ได้ ') + Validation.fromSatang(Math.max(0, available)) + ' บาท)' +
+        (transfer ? ' ลดยอดที่ย้าย หรือบันทึกรายรับเข้าบัญชีปลายทางก่อน' : ' ติ๊ก “บันทึกการโอนเงินจริงด้วย” ถ้าโอนเงินไปแล้ว'));
+    }
+    rows.forEach(function (item, i) {
+      [['RELEASE', from], ['RESERVE', to]].forEach(function (pair) {
+        batch.reservations.push({ reservation_id: ctx.id('Reservations', 'move-' + i + '-' + pair[0].toLowerCase()), reservation_date: date,
+          schedule_id: item.row.schedule_id, account_id: pair[1], action_type: pair[0], amount: Validation.fromSatang(item.amount),
+          transaction_id: '', note: note || 'ย้ายเงินกันไว้', created_at: ctx.now });
+      });
+    });
+    batch.total = Validation.fromSatang(total);
+    batch.transactions = batch.transactions.map(compact);
+    return batch;
+  }
+
+  function moveReserve(input, request) {
+    return Operation.run({
+      operationType: TYPE, idempotencyKey: request.idempotencyKey, actor: request.actor, payload: { move: input }
+    }, function (ctx) {
+      rejectOtherPending(ctx);
+      var batch = ctx.recoveryData;
+      if (!batch) {
+        batch = prepareMove(input, ctx, read());
+        ctx.checkpoint(batch);
+      }
+      appendFinancialRows(batch);
+      refreshPlans(batch);
+      return { action: 'MOVE', plan_ids: batch.planIds, items: batch.reservations.length / 2, total: batch.total, transfer: batch.transactions.length > 0 };
+    }).result;
+  }
+
+  function monthBatch(input, request) {
+    return Operation.run({
+      operationType: TYPE, idempotencyKey: request.idempotencyKey, actor: request.actor, payload: { batch: input }
+    }, function (ctx) {
+      rejectOtherPending(ctx);
+      var batch = ctx.recoveryData;
+      if (!batch) {
+        batch = prepareBatch(input, ctx, read());
+        ctx.checkpoint(batch);
+      }
+      appendFinancialRows(batch);
+      refreshPlans(batch);
+      var total = (batch.action === 'PAY' ? batch.allocations.map(function (a) { return a.allocated_amount; })
+        : batch.reservations.filter(function (r) { return r.action_type === 'RESERVE'; }).map(function (r) { return r.amount; }))
+        .reduce(function (sum, amount) { return sum + sat(amount); }, 0);
+      return { action: batch.action, plan_ids: batch.planIds, items: batch.action === 'PAY' ? batch.allocations.length
+        : batch.reservations.filter(function (r) { return r.action_type === 'RESERVE'; }).length, total: Validation.fromSatang(total) };
+    }).result;
+  }
+
+  return { change: change, monthBatch: monthBatch, moveReserve: moveReserve, balances: balances, preview: preview, position: position };
 })();

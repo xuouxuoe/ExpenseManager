@@ -111,6 +111,38 @@
       return Number(n).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    /**
+     * ปุ่ม ⓘ เปิด/ปิดคำอธิบายใต้ปุ่ม (ไม่ใช้ tooltip เพื่อให้ใช้บนจอสัมผัสและคีย์บอร์ดได้)
+     * info = { title, points: ['ข้อความ'], fixes: [['ปัญหา/ข้อความ error', 'วิธีแก้']] }
+     */
+    var infoSeq = 0;
+    function infoButton(info) {
+      var panelId = 'info-panel-' + (++infoSeq);
+      var button = el('button', { type: 'button', class: 'info-btn', 'aria-expanded': 'false', 'aria-controls': panelId,
+        'aria-label': 'คำอธิบาย: ' + info.title, title: 'คำอธิบาย' }, 'i');
+      var panel = el('div', { id: panelId, class: 'info-panel', role: 'note', hidden: true },
+        el('p', { class: 'info-title', text: info.title }));
+      if (info.points && info.points.length) {
+        var ul = el('ul', { class: 'info-points' });
+        info.points.forEach(function (p) { ul.appendChild(el('li', { text: p })); });
+        panel.appendChild(ul);
+      }
+      if (info.fixes && info.fixes.length) {
+        panel.appendChild(el('p', { class: 'info-subtitle', text: 'ถ้าเกิดปัญหา แก้ที่ไหน' }));
+        var dl = el('dl', { class: 'info-fixes' });
+        info.fixes.forEach(function (f) { dl.appendChild(el('dt', { text: f[0] })); dl.appendChild(el('dd', { text: f[1] })); });
+        panel.appendChild(dl);
+      }
+      function toggle(open) {
+        panel.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+      }
+      button.addEventListener('click', function () { toggle(panel.hidden); });
+      panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); toggle(false); button.focus(); } });
+      button.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) { e.stopPropagation(); e.preventDefault(); toggle(false); } });
+      return { button: button, panel: panel };
+    }
+
     function setBusy(button, busy, busyLabel) {
       if (busy) {
         button.dataset.label = button.textContent;
@@ -195,7 +227,8 @@
       confirm: confirmAction,
       debounce: debounce,
       formatMoney: formatMoney,
-      setBusy: setBusy
+      setBusy: setBusy,
+      infoButton: infoButton
     };
   })();
 </script>

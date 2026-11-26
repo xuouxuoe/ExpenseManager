@@ -138,10 +138,11 @@ function formatBangkok(date, pattern) {
 
 /**
  * สร้าง context ที่โหลดไฟล์ .gs ทั้งหมดใน root
- * options: { properties, activeEmail, effectiveEmail, lockAvailable }
+ * options: { properties, sharedProperties, activeEmail, effectiveEmail, lockAvailable }
  */
 function createContext(options = {}) {
-  const props = Object.assign({}, options.properties || {});
+  // sharedProperties: ใช้ Script Properties ชุดเดียวกับอีก context (จำลองหลาย execution ของสคริปต์เดียว)
+  const props = options.sharedProperties || Object.assign({}, options.properties || {});
   const sharedLock = options.sharedLock || { held: false };
   const state = {
     activeEmail: options.activeEmail === undefined ? 'owner@example.com' : options.activeEmail,

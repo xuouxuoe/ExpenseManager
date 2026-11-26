@@ -12,27 +12,28 @@
   <body class="min-h-screen bg-slate-50 text-slate-800 antialiased">
     <a href="#main" target="_self" class="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:shadow">ข้ามไปเนื้อหา</a>
 
-    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div class="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
+    <header class="app-header sticky top-0 z-30 shadow-md">
+      <div class="mx-auto flex app-container items-center justify-between gap-3 px-4 py-3">
         <div class="flex items-center gap-2">
-          <span class="grid h-9 w-9 place-items-center rounded-xl bg-indigo-600 text-lg font-bold text-white" aria-hidden="true">฿</span>
+          <span class="grid h-9 w-9 place-items-center rounded-xl bg-white text-lg font-bold text-indigo-700" aria-hidden="true">฿</span>
           <div>
-            <p class="text-base font-semibold leading-tight">Expense Manager</p>
-            <p class="text-xs text-slate-500">บันทึกรายรับรายจ่าย</p>
+            <p class="text-base font-semibold leading-tight text-white">Expense Manager</p>
+            <p class="text-xs text-indigo-200">บันทึกรายรับรายจ่าย</p>
           </div>
         </div>
       </div>
-      <nav aria-label="เมนูหลัก" class="mx-auto max-w-5xl overflow-x-auto px-2">
+      <nav aria-label="เมนูหลัก" class="mx-auto app-container overflow-x-auto px-2">
         <ul class="flex gap-1 whitespace-nowrap pb-2 text-sm">
           <li><a href="#reports" target="_self" class="nav-item" data-nav="reports">ภาพรวมและรายงาน</a></li>
           <li><a href="#transactions" target="_self" class="nav-item" data-nav="transactions">รายการ</a></li>
           <li><a href="#installments" target="_self" class="nav-item" data-nav="installments">แผนชำระ</a></li>
+          <li><a href="#budgets" target="_self" class="nav-item" data-nav="budgets">งบใช้จ่าย</a></li>
           <li><a href="#accounts" target="_self" class="nav-item" data-nav="accounts">บัญชีและข้อมูลหลัก</a></li>
         </ul>
       </nav>
     </header>
 
-    <main id="main" class="mx-auto max-w-5xl px-4 pb-24 pt-4">
+    <main id="main" class="mx-auto app-container px-4 pb-24 pt-4">
       <?!= include('Scripts'); ?>
       <div data-page="transactions" hidden>
         <?!= include('PageTransactions'); ?>
@@ -40,8 +41,12 @@
       <div data-page="accounts" hidden>
         <?!= include('PageAccounts'); ?>
       </div>
+      <div data-page="budgets" hidden>
+        <?!= include('PageBudgets'); ?>
+      </div>
       <div data-page="installments" hidden>
         <?!= include('PageInstallments'); ?>
+        <?!= include('PageMonthly'); ?>
       </div>
       <div data-page="reports" hidden>
         <?!= include('PageReports'); ?>

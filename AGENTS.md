@@ -74,7 +74,7 @@
 - appsscript.json
 - Code.gs
 - Config.gs
-- Util.gs (AppError, UUID, เวลา Asia/Bangkok, hash)
+- Util.gs (AppError, เวลา Asia/Bangkok, hash)
 - Database.gs
 - AuthService.gs
 - ValidationService.gs
@@ -207,7 +207,8 @@
 | Settings | หนึ่งค่าตั้งค่า |
 | AuditLogs | หนึ่งเหตุการณ์ตรวจสอบ |
 | OperationJournal | หนึ่งคำขอเขียนข้อมูลเพื่อป้องกันซ้ำและกู้คืน |
-| Budgets | ทางเลือกภายหลัง |
+| Budgets | หนึ่งงบใช้จ่ายรายเดือน (อนุมัติ 2026-11-26) |
+| BudgetCategories | หนึ่งหมวดที่นับเข้างบ |
 | Pivot_Saving / Pivot_Payment / Pivot_Transactions | รายงาน |
 
 ### 7.1 Canonical headers (เรียงตามลำดับ) — อนุมัติแล้ว 2026-11-25
@@ -225,6 +226,8 @@ PaymentAllocations: allocation_id, transaction_id, schedule_id, allocated_amount
 Settings: setting_key, setting_value, description, updated_at
 AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operation_id, result
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
+Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
+BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
 ```
 
 รายละเอียด type, ความหมาย และ Kind ของทุกคอลัมน์อยู่ใน docs/database-schema.md ซึ่งต้องตรงกับรายการนี้เสมอ
@@ -259,7 +262,7 @@ PaymentPlans และ PaymentSchedules มีชุดคอลัมน์เ�
 
 ### 7.2 Types and integrity
 
-- UUID เป็น text PK สำหรับ *_id หลัก; Settings ใช้ setting_key; FK ต้องมีอยู่จริง; external_ref เป็น text ไม่ใช่ PK; ห้ามใช้เลขแถวเป็น PK
+- *_id หลักเป็น running number แยกต่อตาราง เริ่มที่ 1 เก็บเป็นข้อความตัวเลข (อนุมัติ 2026-11-27 แทน UUID; ตัวนับอยู่ใน Script Properties แยกตามไฟล์ Spreadsheet, จองภายใน lock และบันทึกเลขที่จองใน OperationJournal ก่อนเขียน เลขไม่ซ้ำแต่อาจเว้นช่วงเมื่อคำขอล้มเหลว); Settings ใช้ setting_key; FK ต้องมีอยู่จริง; external_ref เป็น text ไม่ใช่ PK; ห้ามใช้เลขแถวเป็น PK
 - วันที่ธุรกิจเป็น YYYY-MM-DD (ค.ศ.) แบบข้อความ ISO ที่ตรวจสอบได้; timestamp เป็น ISO 8601 พร้อม timezone; ใช้ Asia/Bangkok สำหรับเดือนธุรกิจ
 - ทุก field ปีเดือน (*_month ที่หมายถึงปีเดือน) เป็น Integer YYYYMM เช่น 202611; ตรวจสอบ 6 หลักและเดือน 01–12; ปีและเดือนแยกเป็น Integer; installment_no, installment_count, remaining_installments เป็น Integer; วันตัดรอบ/ครบกำหนด 1–31 หรือว่าง
 - จำนวนเงินเป็น Number หน่วยบาท 2 ตำแหน่ง; คำนวณด้วย integer satang; boolean เป็น TRUE/FALSE; enum เป็น text; วันที่ไม่ทราบให้ว่าง ไม่สร้างวันที่เทียม

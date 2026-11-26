@@ -75,7 +75,7 @@ test('สร้าง Owner / Category / Account และ list เฉพาะ�
 
 test('ไม่รับ field ที่ client ไม่ควรกำหนด (id, is_active, created_at)', () => {
   const { M, req } = setup();
-  const fakeId = '11111111-1111-4111-8111-111111111111';
+  const fakeId = '999';
   const owner = M.create('owner', { owner_name: 'แม่', owner_id: fakeId, is_active: false, created_at: '1999' }, req());
   assert.notEqual(owner.owner_id, fakeId);
   assert.equal(owner.is_active, true);
@@ -123,7 +123,7 @@ test('ห้ามบันทึกเลขบัตรเต็มในช�
 test('Account อ้างอิง owner ที่ไม่มีอยู่/ปิดใช้งาน ถูกปฏิเสธ; แต่บัญชีเดิมยังแก้ไขได้', () => {
   const { M, req } = setup();
   const owner = M.create('owner', { owner_name: 'ป้า' }, req());
-  throwsCode(() => M.create('account', { account_name: 'A', account_type: 'CASH', owner_id: '22222222-2222-4222-8222-222222222222' }, req()), 'VALIDATION_FK_NOT_FOUND');
+  throwsCode(() => M.create('account', { account_name: 'A', account_type: 'CASH', owner_id: '999' }, req()), 'VALIDATION_FK_NOT_FOUND');
   const acc = M.create('account', { account_name: 'กระเป๋าป้า', account_type: 'CASH', owner_id: owner.owner_id }, req());
   M.setActive('owner', owner.owner_id, false, req());
   throwsCode(() => M.create('account', { account_name: 'B', account_type: 'CASH', owner_id: owner.owner_id }, req()), 'VALIDATION_FK_INACTIVE');

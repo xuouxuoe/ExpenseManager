@@ -226,13 +226,13 @@ var PaymentPlanner = (function () {
       if (!draft) {
         draft = normalize(input, masters);
         draft.favorite = input.favorite !== undefined && Validation.requireBoolean(input.favorite, 'favorite');
-        draft.plan.plan_id = ctx.id('plan');
+        draft.plan.plan_id = ctx.id(PLANS, 'plan');
         draft.plan.created_at = ctx.now;
         draft.plan.updated_at = ctx.now;
         draft.today = Util.todayIso();
         if (draft.link && draft.link.mode === 'NEW') {
           var tx = Object.assign(draft.link.transaction, {
-            transaction_id: ctx.id('purchase'), plan_id: draft.plan.plan_id, reversal_of: '',
+            transaction_id: ctx.id('Transactions', 'purchase'), plan_id: draft.plan.plan_id, reversal_of: '',
             created_at: ctx.now, updated_at: ctx.now
           });
           Projection.apply('Transactions', tx, masters);
@@ -243,7 +243,7 @@ var PaymentPlanner = (function () {
       var plan = Projection.apply(PLANS, draft.plan, masters);
       var schedules = schedulesOf(plan, draft.amounts, masters, draft.today);
       schedules.forEach(function (schedule) {
-        schedule.schedule_id = ctx.id('schedule-' + schedule.installment_no);
+        schedule.schedule_id = ctx.id(SCHEDULES, 'schedule-' + schedule.installment_no);
         schedule.plan_id = plan.plan_id;
         schedule.created_at = plan.created_at;
         schedule.updated_at = plan.updated_at;
@@ -294,21 +294,28 @@ var PaymentPlanner = (function () {
       }
     });
     var allSchedules = Database.readAll(SCHEDULES).rows;
+    // เงินกันไว้คงเหลือแยกตามบัญชี เพื่อให้หน้ารายเดือนเลือกบัญชีที่จ่ายให้ใช้เงินกันไว้ได้ถูกบัญชี
+    var held = PaymentActivity.balances(Database.readAll('Reservations').rows, transactions).schedules;
     allSchedules.forEach(function (row) {
       row.is_overdue = !row.is_cancelled && row.remaining_to_pay > 0 && !!row.due_date && row.due_date < today;
+      var accounts = (held[row.schedule_id] || {}).accounts || {};
+      row.reserved_accounts = Object.keys(accounts).filter(function (id) { return accounts[id] > 0; })
+        .map(function (id) { return { account_id: id, amount: Validation.fromSatang(accounts[id]) }; });
       (schedulesByPlan[row.plan_id] || (schedulesByPlan[row.plan_id] = [])).push(row);
     });
     var settingRows = Database.readAll('Settings').rows;
     var settings = new Map(settingRows.map(function (row) { return [row.setting_key, row.setting_value]; }));
     var state = { accounts: Database.readAll('Accounts').rows, transactions: transactions, allocations: allocations, schedules: allSchedules, settings: settingRows };
     var starPrefix = favoritePrefix(actor);
-    return Database.readAll(PLANS).rows.slice().reverse().reduce(function (result, plan) {
+    var planRows = Database.readAll(PLANS).rows;
+    var planNo = planNumbers(planRows);
+    return planRows.slice().reverse().reduce(function (result, plan) {
       var schedules = schedulesByPlan[plan.plan_id] || [];
       if (schedules.length === plan.installment_count) {
         schedules.sort(function (a, b) { return a.installment_no - b.installment_no; });
         var position = PaymentActivity.position(plan, state);
         var settlement = PlanRevision.activeSettlement(plan.plan_id, state);
-        result.push({ plan: plan, schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [], purchase: purchaseByPlan[plan.plan_id] || null,
+        result.push({ plan: plan, plan_no: planNo[plan.plan_id], schedules: schedules, payments: paymentsByPlan[plan.plan_id] || [], purchase: purchaseByPlan[plan.plan_id] || null,
           position: { principal_remaining: Validation.fromSatang(position.principalRemaining),
             interest_remaining: Validation.fromSatang(position.interestRemaining), fee_remaining: Validation.fromSatang(position.feeRemaining) },
           settlement_payment_id: settlement ? settlement.paymentId : '',
@@ -317,6 +324,20 @@ var PaymentPlanner = (function () {
       }
       return result;
     }, []);
+  }
+
+  /**
+   * เลขแผนสำหรับแสดงผล (#เลขแผน-งวด) — ไม่ใช่รหัสหลักและไม่เก็บในชีต
+   * เรียงตามเวลาที่สร้าง (created_at ละเอียดระดับวินาที) แล้วตามลำดับแถวที่ต่อท้าย ซึ่งเป็นลำดับการสร้างจริงเมื่อเวลาเท่ากัน
+   * ห้ามใช้ plan_id ตัดสินลำดับ เพราะเป็นค่าสุ่ม ทำให้แผนใหม่แทรกก่อนแผนเก่าที่สร้างในวินาทีเดียวกัน
+   * เลขคงที่เพราะระบบไม่ลบแผน (ยกเลิกยังเก็บแถว) และแผนใหม่ได้เลขถัดไปเสมอ
+   */
+  function planNumbers(plans) {
+    var out = Object.create(null);
+    plans.map(function (plan, index) { return { plan: plan, index: index }; }).sort(function (a, b) {
+      return String(a.plan.created_at).localeCompare(String(b.plan.created_at)) || a.index - b.index;
+    }).forEach(function (item, n) { out[item.plan.plan_id] = n + 1; });
+    return out;
   }
 
   function extension(plan, input, ctx, masters) {
@@ -339,7 +360,7 @@ var PaymentPlanner = (function () {
     return schedulesOf(extensionPlan, Validation.splitSatang(amount, count), masters, Util.todayIso()).map(function (row) {
       row.installment_no += oldCount;
       row.installment_count = plan.installment_count;
-      row.schedule_id = ctx.id('renewal-' + row.installment_no);
+      row.schedule_id = ctx.id('PaymentSchedules', 'renewal-' + row.installment_no);
       row.plan_id = plan.plan_id;
       row.created_at = ctx.now;
       row.updated_at = ctx.now;

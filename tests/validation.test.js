@@ -106,8 +106,13 @@ test('Formula Injection: ข้อความขึ้นต้นด้วย 
 });
 
 test('requireId / requireEnum / requireDay', () => {
-  const id = '3F2A1B4C-1111-4222-8333-444455556666';
-  assert.equal(V.requireId(id, 'id'), id.toLowerCase());
+  assert.equal(V.requireId('1', 'id'), '1');
+  assert.equal(V.requireId(' 42 ', 'id'), '42');
+  assert.equal(V.requireId(7, 'id'), '7');
+  throwsCode(() => V.requireId('0', 'id'), 'VALIDATION_FORMAT');
+  throwsCode(() => V.requireId('01', 'id'), 'VALIDATION_FORMAT');
+  throwsCode(() => V.requireId('1.5', 'id'), 'VALIDATION_FORMAT');
+  throwsCode(() => V.requireId('3f2a1b4c-1111-4222-8333-444455556666', 'id'), 'VALIDATION_FORMAT');
   throwsCode(() => V.requireId('row-5', 'id'), 'VALIDATION_FORMAT');
   assert.equal(V.requireEnum('installment', ['INSTALLMENT'], 'plan_type'), 'INSTALLMENT');
   throwsCode(() => V.requireEnum('X', ['INSTALLMENT'], 'plan_type'), 'VALIDATION_ENUM');

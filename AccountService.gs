@@ -226,7 +226,7 @@ var MasterData = (function () {
       var clean = validateInput(type, input, masters);
       if (type === 'account' && input.display_name !== undefined) safeText(input.display_name, 'display_name', { max: Config.TEXT_LIMITS.NAME });
       var rows = Database.readAll(def.sheet).rows;
-      var id = ctx.id(type);
+      var id = ctx.id(def.sheet, type);
       if (!rows.some(function (r) { return r[def.pk] === id; })) {
         clean.is_active = true;
         assertUniqueName(type, rows, clean, id);
@@ -272,7 +272,7 @@ var MasterData = (function () {
       var report = (renamed || displayChanged || ctx.replay) ? Projection.refresh({ masterKeys: [def.projectionKey] }) : { tables: [], orphans: [] };
       if (recordRename) {
         Audit.log({ actorId: ctx.actorId, action: 'RENAME_MASTER', entityType: def.sheet, entityId: current[def.pk],
-          operationId: ctx.operationId, result: 'SUCCESS', auditId: ctx.id('master-rename-audit'), deduplicate: ctx.replay });
+          operationId: ctx.operationId, result: 'SUCCESS', auditId: ctx.id('AuditLogs', 'master-rename-audit'), deduplicate: ctx.replay });
       }
       var saved = findRow(type, current[def.pk]).row;
       return { row: type === 'account' ? displayAccount(saved) : saved, projection: { changedColumns: report.tables.length, orphans: report.orphans.length } };

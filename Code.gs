@@ -22,7 +22,7 @@ function doGet() {
 }
 
 /** ใช้ใน template เท่านั้น: รวมไฟล์ HTML ที่อนุญาต */
-var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageTransactions', 'PageInstallments', 'PageReports'];
+var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports'];
 
 function include(name) {
   if (INCLUDABLE_FILES_.indexOf(name) < 0) throw new Error('include: ไม่อนุญาตไฟล์ ' + name);
@@ -104,7 +104,8 @@ function api_reverseTransaction(id, input, idempotencyKey, filters) {
 }
 
 function transactionPage_(filters) {
-  return { list: Transactions.list(filters), suggestions: Transactions.suggestions({ limit: 8 }) };
+  return { list: Transactions.list(filters), suggestions: Transactions.suggestions({ limit: 8 }), accounts: Transactions.accountSummary(),
+    budgets: Budgets.list(Number(Util.todayIso().slice(0, 7).replace('-', ''))) };
 }
 
 /** เมื่อเขียนสำเร็จแล้ว ผลอ่านหน้าที่มีปัญหาไม่เปลี่ยนสถานะการบันทึก */
@@ -185,12 +186,68 @@ function api_paymentActivity(input, idempotencyKey) {
   });
 }
 
+/** กันเงินหรือชำระหลายงวดข้ามแผนในคำขอเดียว แล้วคืนรายการแผนล่าสุดเพื่อไม่ต้องโหลดหน้าใหม่ */
+function api_monthlyBatch(input, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var result = PaymentActivity.monthBatch(input, { idempotencyKey: idempotencyKey, actor: actor });
+    return { result: result, plans: PaymentPlanner.list(actor) };
+  });
+}
+
+/** ย้ายเงินกันไว้ระหว่างบัญชี (ปลด + กันใหม่ + โอนจริงถ้าเลือก) ในคำขอเดียว แล้วคืนรายการแผนล่าสุด */
+function api_moveReserve(input, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var result = PaymentActivity.moveReserve(input, { idempotencyKey: idempotencyKey, actor: actor });
+    return { result: result, plans: PaymentPlanner.list(actor) };
+  });
+}
+
 function api_previewPaymentActivity(input) {
   return handleApi_(function () { return PaymentActivity.preview(input); });
 }
 
 function api_dashboard(filters) {
-  return handleApi_(function () { return FinanceReports.dashboard(filters); });
+  return handleApi_(function () {
+    var out = FinanceReports.dashboard(filters);
+    // งบใช้จ่ายของเดือนปัจจุบันเสมอ (การ์ด "งบใช้จ่ายเดือนนี้")
+    out.budgets = Budgets.list(Number(Util.todayIso().slice(0, 7).replace('-', '')));
+    return out;
+  });
+}
+
+// ---------- งบใช้จ่าย ----------
+
+function budgetPage_(month) {
+  return { month: Number(month), budgets: Budgets.list(month) };
+}
+
+function api_budgetPage(month) {
+  return handleApi_(function () {
+    var out = budgetPage_(month);
+    out.masters = MasterData.listAll({ includeInactive: true });
+    return out;
+  });
+}
+
+function api_saveBudget(input, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var result = Budgets.save(input, { idempotencyKey: idempotencyKey, actor: actor });
+    return { result: result, page: budgetPage_(input && input.budget_month) };
+  });
+}
+
+function api_setBudgetActive(budgetId, active, idempotencyKey, month) {
+  return handleApi_(function (actor) {
+    var result = Budgets.setActive(budgetId, active, { idempotencyKey: idempotencyKey, actor: actor });
+    return { result: result, page: budgetPage_(month) };
+  });
+}
+
+function api_copyBudgets(fromMonth, toMonth, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var result = Budgets.copyMonth(fromMonth, toMonth, { idempotencyKey: idempotencyKey, actor: actor });
+    return { result: result, page: budgetPage_(toMonth) };
+  });
 }
 
 function api_exportFinanceReport(kind, filters) {

@@ -3,7 +3,8 @@
  * ทุกฟังก์ชัน require* โยน AppError code 'VALIDATION_*' เมื่อข้อมูลไม่ถูกต้อง
  */
 var Validation = (function () {
-  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  // รหัสหลักเป็น running number ต่อตาราง เริ่มที่ 1 (เก็บเป็นข้อความตัวเลข)
+  var ID_RE = /^[1-9][0-9]{0,14}$/;
   var DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
   var MONEY_RE = /^(-?)(\d{1,13})(?:\.(\d{1,2}))?$/;
   var FORMULA_PREFIX_RE = /^[=+\-@\t\r]/;
@@ -71,8 +72,8 @@ var Validation = (function () {
       throw fail('REQUIRED', field, 'กรุณาระบุ ' + field);
     }
     var id = String(value).trim();
-    if (!UUID_RE.test(id)) throw fail('FORMAT', field, field + ' ไม่ใช่รหัสที่ถูกต้อง');
-    return id.toLowerCase();
+    if (!ID_RE.test(id)) throw fail('FORMAT', field, field + ' ไม่ใช่รหัสที่ถูกต้อง');
+    return id;
   }
 
   function requireEnum(value, allowed, field, options) {

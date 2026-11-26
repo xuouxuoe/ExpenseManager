@@ -238,7 +238,7 @@ var Transactions = (function () {
   /** input.allow_duplicate = true เพื่อยืนยันบันทึกแม้พบรายการที่อาจซ้ำ */
   function create(input, request) {
     return Operation.run(requestOf(request, 'CREATE_TRANSACTION', input), function (ctx) {
-      var id = ctx.id('transaction');
+      var id = ctx.id(SHEET, 'transaction');
       var rows = Database.readAll(SHEET).rows;
       var existing = rows.filter(function (r) { return r.transaction_id === id; })[0];
       if (existing) return existing; // replay หลังเขียนสำเร็จแล้ว
@@ -289,7 +289,7 @@ var Transactions = (function () {
    */
   function reverse(id, input, request) {
     return Operation.run(requestOf(request, 'REVERSE_TRANSACTION', { id: id, input: input }), function (ctx) {
-      var newId = ctx.id('reversal');
+      var newId = ctx.id(SHEET, 'reversal');
       var rows = Database.readAll(SHEET).rows;
       var existing = rows.filter(function (r) { return r.transaction_id === newId; })[0];
       if (existing) return existing;
@@ -386,6 +386,27 @@ var Transactions = (function () {
   }
 
   /** ยอดคงเหลือทุกบัญชี (บาท) */
+  /**
+   * ยอดของแต่ละบัญชีสำหรับแถบยอดในหน้ารายการ (คำนวณจากธุรกรรม ไม่เก็บในชีต)
+   * สินทรัพย์: คงเหลือ, กันไว้, ใช้ได้ = คงเหลือ − กันไว้; หนี้สิน: หนี้คงค้าง
+   * แสดงบัญชีที่ใช้งาน และบัญชีที่ปิดใช้งานแต่ยังมียอด
+   */
+  function accountSummary() {
+    var accounts = Database.readAll('Accounts').rows;
+    var transactions = Database.readAll(SHEET).rows;
+    var bal = Ledger.balances(accounts, transactions);
+    var held = PaymentActivity.balances(Database.readAll('Reservations').rows, transactions).accounts;
+    var names = MasterData.displayNames();
+    return accounts.filter(function (a) { return a.is_active === true || bal[a.account_id]; }).map(function (a) {
+      var id = a.account_id;
+      var asset = Ledger.isAsset(a.account_type);
+      var reserved = asset ? (held[id] || 0) : 0;
+      return { account_id: id, name: names[id] || a.account_name, type: a.account_type, is_asset: asset, is_active: a.is_active === true,
+        balance: Validation.fromSatang(bal[id] || 0), reserved: Validation.fromSatang(reserved),
+        available: asset ? Validation.fromSatang((bal[id] || 0) - reserved) : null };
+    });
+  }
+
   function accountBalances() {
     var accounts = Database.readAll('Accounts').rows;
     var bal = Ledger.balances(accounts, Database.readAll(SHEET).rows);
@@ -487,6 +508,7 @@ var Transactions = (function () {
     reverse: reverse,
     list: list,
     accountBalances: accountBalances,
+    accountSummary: accountSummary,
     suggestions: suggestions
   };
 })();

@@ -41,3 +41,13 @@ test('ไม่มี HTML id ซ้ำกันข้ามไฟล์ที�
   const dupes = Object.entries(ids).filter(([, files]) => files.length > 1);
   assert.deepEqual(dupes, []);
 });
+
+test('ทุก <script> ในไฟล์ .html ไม่มี syntax error (กันสคริปต์ทั้งหน้าเสียจากโค้ดผิดจุดเดียว)', () => {
+  const dir = path.join(__dirname, '..');
+  fs.readdirSync(dir).filter((f) => f.endsWith('.html')).forEach((file) => {
+    const html = fs.readFileSync(path.join(dir, file), 'utf8');
+    [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].forEach((m, i) => {
+      assert.doesNotThrow(() => new Function(m[1]), `${file} script #${i}`);
+    });
+  });
+});

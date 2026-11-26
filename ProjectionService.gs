@@ -132,6 +132,9 @@ var Projection = (function () {
       });
     }
     refreshNames('PaymentSchedules', schedules);
+    // งบใช้จ่าย: ชีตอาจยังไม่ถูกสร้าง (สร้างเมื่อบันทึกงบครั้งแรก) จึงอ่านเป็นตารางว่าง
+    refreshNames('Budgets', Database.readAll('Budgets'));
+    refreshNames('BudgetCategories', Database.readAll('BudgetCategories'));
 
     return report;
   }

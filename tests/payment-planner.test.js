@@ -123,7 +123,10 @@ test('เขียนงวดล้มเหลว กู้คืนโดย�
   assert.equal(ctx.api_paymentPlannerPage().data.plans.length, 0);
   const journal = ctx.Database.readAll('OperationJournal').rows.find((entry) => entry.idempotency_key === key);
   assert.equal(journal.status, 'NEEDS_RECOVERY');
-  assert.equal(JSON.parse(journal.recovery_data).plan.plan_id, row.plan_id);
+  // recovery_data เก็บเลข ID ที่จองไว้ (__ids) คู่กับข้อมูลกู้คืน (__data)
+  const recovery = JSON.parse(journal.recovery_data);
+  assert.equal(recovery.__data.plan.plan_id, row.plan_id);
+  assert.equal(recovery.__ids['PaymentPlans:plan'], row.plan_id);
   ctx.MasterData.setActive('account', account.account_id, false, { actor, idempotencyKey: 'planner-inactivate-account' });
   ctx.Database.appendRowsIfAbsent = append;
   const retry = ctx.api_createPaymentPlan(input, key);

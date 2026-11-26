@@ -119,7 +119,8 @@ test('รายงาน 10,000 ธุรกรรม: ยอดตรง จำ
   assert.equal(result.data.accounts[0].balance, -100);
   assert.equal(result.data.recent.length, 8);
   const calls = countCalls(ctx.__ss);
-  assert.ok(calls.getValues <= 9, JSON.stringify(calls));
+  // +1 read: Budgets for the "งบใช้จ่ายเดือนนี้" card (BudgetCategories only when budgets exist).
+  assert.ok(calls.getValues <= 10, JSON.stringify(calls));
   assert.equal(calls.setValues, 0);
   const csv = csvRows(ctx.api_exportFinanceReport('TRANSACTIONS', { year: 2026 }).data);
   assert.equal(csv.length, 5000);

@@ -37,7 +37,8 @@ var FinanceReports = (function () {
     var accounts = [];
     var groups = Object.create(null);
     var types = Object.create(null);
-    function key(parent, sub) { return sub || 'unassigned-' + parent; }
+    // คีย์ต้องไม่เป็นตัวเลขล้วน: object ใน JS เรียงคีย์ตัวเลขก่อนเสมอ ทำให้ลำดับบัญชีย่อยเปลี่ยน
+    function key(parent, sub) { return sub ? 'sub-' + sub : 'unassigned-' + parent; }
     function add(parent, sub) {
       var id = key(parent.account_id, sub && sub.sub_account_id);
       types[id] = parent.account_type;
@@ -97,6 +98,83 @@ var FinanceReports = (function () {
     }) };
   }
 
+  /**
+   * ภาพรวมรายเดือน/รายปีสำหรับแดชบอร์ด (ใช้ตัวกรองเจ้าของ/หมวด/บัญชีเดียวกัน)
+   * current/previous: เดือนก่อนหน้าหรือปีก่อนหน้า; trend: 6 เดือนถึงเดือนที่เลือก หรือ 12 เดือนของปี
+   * plan: ต่อเดือนของ trend — ยอดตามแผนตามเดือนชำระ คงค้างชำระ และยังต้องเก็บตามเดือนเก็บ (ไม่รวมงวดยกเลิก)
+   */
+  function overview(d, f) {
+    var month = Validation.requireYearMonth(f.month, 'month', { required: false });
+    var year = Validation.requireInt(f.year, 'year', { required: false, min: 1900, max: 2200 });
+    var mode = month ? 'MONTH' : year ? 'YEAR' : 'ALL';
+    var byMonth = Object.create(null);
+    d.allTransactions.forEach(function (row) {
+      if (!d.byMaster(row)) return;
+      var effect = Ledger.effectsOf(row, d.types);
+      var ym = dateMonth(row.transaction_date);
+      var b = byMonth[ym] || (byMonth[ym] = { income: 0, expense: 0 });
+      b.income += effect.incomeSatang;
+      b.expense += effect.expenseSatang;
+    });
+    function sum(months) {
+      var t = months.reduce(function (acc, ym) {
+        var b = byMonth[ym];
+        if (b) { acc.income += b.income; acc.expense += b.expense; }
+        return acc;
+      }, { income: 0, expense: 0 });
+      return { income: baht(t.income), expense: baht(t.expense), net: baht(t.income - t.expense) };
+    }
+    function yearMonths(y) { var out = []; for (var m = 1; m <= 12; m++) out.push(y * 100 + m); return out; }
+    var trendMonths = [];
+    var current = null;
+    var previous = null;
+    if (mode === 'MONTH') {
+      for (var i = 5; i >= 0; i--) trendMonths.push(Validation.addMonths(month, -i));
+      current = sum([month]);
+      previous = sum([Validation.addMonths(month, -1)]);
+    } else if (mode === 'YEAR') {
+      trendMonths = yearMonths(year);
+      current = sum(trendMonths);
+      previous = sum(yearMonths(year - 1));
+    }
+    var plan = Object.create(null);
+    trendMonths.forEach(function (ym) { plan[ym] = { month: ym, scheduled: 0, outstanding: 0, toSave: 0 }; });
+    // ยอดตามแผนต่อเจ้าของต่อเดือนชำระ (ใช้ owner_name ล่าสุดจาก projection ของงวด)
+    var owners = Object.create(null);
+    var monthIndex = Object.create(null);
+    trendMonths.forEach(function (ym, i) { monthIndex[ym] = i; });
+    d.schedules.forEach(function (r) {
+      var pay = plan[r.payment_month];
+      if (pay) {
+        var o = owners[r.owner_id] || (owners[r.owner_id] = { owner_id: r.owner_id, name: r.owner_name || 'ไม่ระบุเจ้าของ',
+          scheduled: trendMonths.map(function () { return 0; }), outstanding: trendMonths.map(function () { return 0; }) });
+        o.scheduled[monthIndex[r.payment_month]] += sat(r.amount_due);
+        o.outstanding[monthIndex[r.payment_month]] += sat(r.remaining_to_pay);
+      }
+      if (pay) { pay.scheduled += sat(r.amount_due); pay.outstanding += sat(r.remaining_to_pay); }
+      var save = plan[r.saving_month];
+      if (save) save.toSave += sat(r.remaining_to_save);
+    });
+    return {
+      mode: mode, month: month || null, year: year || null, current: current, previous: previous,
+      trend: trendMonths.map(function (ym) {
+        var b = byMonth[ym] || { income: 0, expense: 0 };
+        return { month: ym, income: baht(b.income), expense: baht(b.expense), net: baht(b.income - b.expense) };
+      }),
+      plan: trendMonths.map(function (ym) {
+        var p = plan[ym];
+        return { month: ym, scheduled: baht(p.scheduled), paid: baht(p.scheduled - p.outstanding), outstanding: baht(p.outstanding), toSave: baht(p.toSave) };
+      }),
+      planByOwner: Object.keys(owners).map(function (id) {
+        var o = owners[id];
+        var total = o.scheduled.reduce(function (s, v) { return s + v; }, 0);
+        return { owner_id: o.owner_id, name: o.name, total: baht(total),
+          outstanding_total: baht(o.outstanding.reduce(function (s, v) { return s + v; }, 0)),
+          scheduled: o.scheduled.map(baht), outstanding: o.outstanding.map(baht) };
+      }).sort(function (a, b) { return b.total - a.total || a.name.localeCompare(b.name); })
+    };
+  }
+
   function dashboard(filters) {
     var d = data(filters);
     var monthly = Object.create(null);
@@ -146,6 +224,22 @@ var FinanceReports = (function () {
     var scheduled = 0;
     var outstanding = 0;
     var planOutstanding = 0;
+    // งานของเดือนปัจจุบัน (รวมงวดค้างจากเดือนก่อน) สำหรับการ์ดลิงก์ไปมุมมองรายเดือน
+    var thisMonth = dateMonth(Util.todayIso());
+    var monthPlan = { month: thisMonth, payCount: 0, pay: 0, saveCount: 0, save: 0, overdue: 0 };
+    d.schedules.forEach(function (r) {
+      if (r.payment_month <= thisMonth && sat(r.remaining_to_pay) > 0) {
+        monthPlan.payCount++;
+        monthPlan.pay += sat(r.remaining_to_pay);
+        if (r.payment_month < thisMonth || r.is_overdue) monthPlan.overdue++;
+      }
+      if (r.saving_month <= thisMonth && sat(r.remaining_to_save) > 0) {
+        monthPlan.saveCount++;
+        monthPlan.save += sat(r.remaining_to_save);
+      }
+    });
+    monthPlan.pay = baht(monthPlan.pay);
+    monthPlan.save = baht(monthPlan.save);
     d.schedules.forEach(function (r) {
       if (d.byMonth(r.saving_month)) needToSave += sat(r.remaining_to_save);
       if (d.byMonth(r.payment_month)) {
@@ -177,6 +271,8 @@ var FinanceReports = (function () {
       }),
       categories: Object.keys(categories).sort().map(function (name) { return { name: name, amount: baht(categories[name]) }; }),
       accountTotals: accountTotals,
+      monthPlan: monthPlan,
+      overview: overview(d, filters || {}),
       accounts: filters && filters.account_view === 'SUB' ? subAccountBalances(d, filters) : d.accounts.map(function (row) {
         var id = row.account_id;
         var asset = Ledger.isAsset(row.account_type);

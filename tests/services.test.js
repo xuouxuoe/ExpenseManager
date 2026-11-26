@@ -6,7 +6,7 @@ const plain = (x) => JSON.parse(JSON.stringify(x));
 const { createContext, createDbContext } = require('./gas-shim');
 
 const ACTOR = { actorId: 'owner@example.com' };
-const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const id = (n) => String(n);
 
 // ---------------- Auth ----------------
 
@@ -64,13 +64,13 @@ test('Util.toClientError ไม่เปิดเผยรายละเอี�
 // ---------------- Operation ----------------
 
 function ownerRow(ctxOp, label, name) {
-  return { owner_id: ctxOp.id(label), owner_name: name, is_active: true, created_at: ctxOp.now, updated_at: ctxOp.now };
+  return { owner_id: ctxOp.id('Owners', label), owner_name: name, is_active: true, created_at: ctxOp.now, updated_at: ctxOp.now };
 }
 
 test('Operation: COMMITTED + audit + retry ด้วย key เดิมไม่เขียนซ้ำ (TC-TX-07, TC-PP-16)', () => {
   const ctx = createDbContext();
   let calls = 0;
-  const work = (op) => { calls++; ctx.Database.appendRowsIfAbsent('Owners', [ownerRow(op, 'owner', 'พ่อ')]); return { ownerId: op.id('owner') }; };
+  const work = (op) => { calls++; ctx.Database.appendRowsIfAbsent('Owners', [ownerRow(op, 'owner', 'พ่อ')]); return { ownerId: op.id('Owners', 'owner') }; };
   const req = { operationType: 'CREATE_OWNER', idempotencyKey: 'key-0001-abc', payload: { name: 'พ่อ' }, actor: ACTOR };
   const first = ctx.Operation.run(req, work);
   const second = ctx.Operation.run(req, work);
@@ -296,4 +296,48 @@ test('Projection.refresh: FK กำพร้าถูกรายงาน แ�
   assert.equal(report.orphans.length, 1);
   assert.equal(report.orphans[0].column, 'from_account_id');
   assert.equal(ctx.Database.readAll('Transactions').rows[0].from_account_name, 'ชื่อเดิม');
+});
+
+// ---------------- Running number IDs ----------------
+
+test('ID เป็น running number ต่อตาราง เริ่มที่ 1 และไม่ใช้เลขซ้ำแม้คำขอล้มเหลว', () => {
+  const ctx = createDbContext();
+  const req = (k) => ({ idempotencyKey: 'running-id-' + k, actor: ACTOR });
+  const owner = ctx.MasterData.create('owner', { owner_name: 'พ่อ' }, req('owner-1'));
+  const owner2 = ctx.MasterData.create('owner', { owner_name: 'แม่' }, req('owner-2'));
+  const cat = ctx.MasterData.create('category', { category_name: 'อาหาร', category_type: 'EXPENSE' }, req('cat-1'));
+  const acc = ctx.MasterData.create('account', { account_name: 'เงินสด', account_type: 'CASH', opening_balance: 1000 }, req('acc-1'));
+  assert.deepEqual([owner.owner_id, owner2.owner_id, cat.category_id, acc.account_id], ['1', '2', '1', '1']);
+  const input = { transaction_date: '2026-11-27', transaction_type: 'EXPENSE', from_account_id: acc.account_id,
+    category_id: cat.category_id, owner_id: owner.owner_id, item_name: 'ข้าว', amount: 50 };
+  const t1 = ctx.Transactions.create(input, req('tx-1'));
+  assert.equal(t1.transaction_id, '1');
+  const journal = ctx.Database.readAll('OperationJournal').rows;
+  assert.deepEqual(plain(journal.map((r) => r.operation_id)), ['1', '2', '3', '4', '5']);
+  assert.deepEqual(plain(ctx.Database.readAll('AuditLogs').rows.map((r) => r.audit_id)), ['1', '2', '3', '4', '5']);
+
+  // เขียนล้มเหลวหลังจองเลข: คำขออื่นได้เลขถัดไป ส่วน retry key เดิมได้เลขเดิม ไม่ซ้ำกัน
+  const append = ctx.Database.appendRowsIfAbsent;
+  ctx.Database.appendRowsIfAbsent = (name, rows) => {
+    if (name === 'Transactions') throw new Error('injected write error');
+    return append(name, rows);
+  };
+  assert.throws(() => ctx.Transactions.create({ ...input, item_name: 'ค้าง' }, req('tx-pending')), /injected/);
+  ctx.Database.appendRowsIfAbsent = append;
+  const other = ctx.Transactions.create({ ...input, item_name: 'อื่น' }, req('tx-other'));
+  assert.equal(other.transaction_id, '3');
+  const retried = ctx.Transactions.create({ ...input, item_name: 'ค้าง' }, req('tx-pending'));
+  assert.equal(retried.transaction_id, '2');
+  const ids = ctx.Database.readAll('Transactions').rows.map((r) => r.transaction_id);
+  assert.deepEqual(plain(ids), ['1', '3', '2']);
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test('ตัวนับแยกตามไฟล์ Spreadsheet และเริ่มต่อจากเลขสูงสุดในตารางเมื่อยังไม่มีตัวนับ', () => {
+  const ctx = createDbContext();
+  ctx.Database.appendRows('Owners', [{ owner_id: '7', owner_name: 'เดิม', is_active: true, created_at: 'x', updated_at: 'x' }]);
+  const owner = ctx.MasterData.create('owner', { owner_name: 'ใหม่' }, { idempotencyKey: 'running-id-seed', actor: ACTOR });
+  assert.equal(owner.owner_id, '8');
+  const keys = Object.keys(ctx.__props).filter((k) => k.indexOf('ID_SEQ_') === 0);
+  assert.ok(keys.some((k) => /_Owners$/.test(k) && ctx.__props[k] === '8'), JSON.stringify(keys));
 });

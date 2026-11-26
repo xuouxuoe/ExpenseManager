@@ -55,14 +55,18 @@ test('จำนวนการอ่านไม่โตตามจำนว�
   assert.equal(a.setValues, b.setValues);
 });
 
-test('transactionPage อ่าน 6 ชีตรวม Settings และ SubAccounts ครั้งละครั้ง', () => {
+test('transactionPage อ่าน 8 ชีตรวม Settings, SubAccounts, Reservations และ Budgets ครั้งละครั้ง', () => {
   const { ctx } = seeded(10);
   const { calls, result } = measure(ctx, () => ctx.api_transactionPage({}, { includeMasters: true }));
   const data = plain(result).data;
   assert.equal(data.list.total, 10);
   assert.ok(Array.isArray(data.suggestions.recent));
   assert.equal(data.masters.accounts.length, 1);
-  assert.equal(calls.getValues, 6, JSON.stringify(calls));
+  assert.equal(data.accounts.length, 1);
+  assert.equal(data.accounts[0].available, data.accounts[0].balance - data.accounts[0].reserved);
+  // +1 read: Reservations for the per-account balance strip (reserved / available).
+  // +1 read: Budgets for this month's budget hints (BudgetCategories only when the month has budgets).
+  assert.equal(calls.getValues, 8, JSON.stringify(calls));
   assert.equal(calls.setValues, 0);
 });
 
@@ -77,7 +81,12 @@ test('create + page: คืนรายการ ยอดสรุป และ
   assert.equal(result.data.page.list.rows[0].transaction_id, result.data.row.transaction_id);
   assert.equal(result.data.page.list.summary.expense, 85.50);
   assert.equal(result.data.page.suggestions.recent[0].item_name, input.item_name);
-  assert.ok(calls.getValues <= 8, JSON.stringify(calls));
+  // The balance strip in the same response reflects the new expense without another round trip.
+  assert.equal(result.data.page.accounts.find((a) => a.account_id === acc.account_id).balance,
+    plain(ctx.Transactions.accountBalances())[acc.account_id]);
+  // +1 read: Reservations for the per-account balance strip.
+  // +1 Reservations (balance strip), +1 Budgets (budget hints).
+  assert.ok(calls.getValues <= 10, JSON.stringify(calls));
   assert.ok(calls.setValues <= 4, JSON.stringify(calls));
 
   const replay = measure(ctx, () => ctx.api_createTransaction(input, operationKey, { q: 'nomatch' }, scope));
@@ -124,7 +133,7 @@ test('cache ไม่ทำให้ใช้ข้อมูลเก่า: ข
   ctx.Database.readAll('Owners'); // เติม cache
   // จำลองอีก execution เพิ่มเจ้าของชื่อ "B" ลงชีตโดยตรง
   const sheet = ctx.__ss.getSheetByName('Owners');
-  sheet.data.push(['00000000-0000-4000-8000-0000000000bb', 'B', true, 'x', 'x']);
+  sheet.data.push(['99', 'B', true, 'x', 'x']);
   assert.throws(() => ctx.MasterData.create('owner', { owner_name: 'b' }, { idempotencyKey: key(), actor: ACTOR }),
     (e) => e.code === 'VALIDATION_DUPLICATE_NAME');
 });

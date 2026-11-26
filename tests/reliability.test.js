@@ -138,19 +138,20 @@ for (const kind of ['transaction', 'plan', 'payment', 'reverse', 'settle', 'rena
 test('สอง execution แย่ง lock: คำขอที่สองได้ BUSY แล้ว retry ได้หนึ่งรายการต่อ key', () => {
   const sharedLock = { held: false };
   const first = createDbContext({ sharedLock });
-  const second = createContext({ sharedLock, properties: { ALLOWED_EMAILS: 'owner@example.com' } });
+  // สอง execution ใช้ Script Properties ชุดเดียวกัน (ตัวนับ running number อยู่ในนั้น)
+  const second = createContext({ sharedLock, sharedProperties: first.__props });
   second.Database.setSpreadsheetForTesting(first.__ss);
   const req = (key) => ({ operationType: 'LOCK_TEST', actor: { actorId: 'owner@example.com' }, idempotencyKey: key, payload: {} });
   let nested = 0;
   const other = () => second.Operation.run(req('reliable-lock-second'), (op) => {
     nested++;
-    second.Database.appendRowsIfAbsent('Owners', [{ owner_id: op.id('owner'), owner_name: 'สอง', is_active: true }]);
+    second.Database.appendRowsIfAbsent('Owners', [{ owner_id: op.id('Owners', 'owner'), owner_name: 'สอง', is_active: true }]);
     return 'second';
   });
   first.Operation.run(req('reliable-lock-first'), (op) => {
     assert.throws(other, (e) => e.code === 'BUSY');
     assert.equal(nested, 0);
-    first.Database.appendRowsIfAbsent('Owners', [{ owner_id: op.id('owner'), owner_name: 'หนึ่ง', is_active: true }]);
+    first.Database.appendRowsIfAbsent('Owners', [{ owner_id: op.id('Owners', 'owner'), owner_name: 'หนึ่ง', is_active: true }]);
     return 'first';
   });
   assert.equal(other().result, 'second');

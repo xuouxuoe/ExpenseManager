@@ -46,8 +46,9 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | Module | หน้าที่ |
 |---|---|
 | Config.gs | ชื่อชีต, canonical headers, enum, ค่าคงที่ |
-| Util.gs | AppError, UUID, deterministic UUID, เวลา Asia/Bangkok, SHA-256 |
-| OperationService.gs | `Operation.run()` (LockService + idempotency + OperationJournal) และ `Audit.log()` |
+| Util.gs | AppError, เวลา Asia/Bangkok, SHA-256 |
+| OperationService.gs | `Operation.run()` (LockService + idempotency + OperationJournal + `ctx.id(sheet, label)`) และ `Audit.log()` |
+| Database.gs `IdSequence` | running number ต่อตาราง: ตัวนับใน Script Properties คีย์ `ID_SEQ_<spreadsheetId>_<Sheet>` (ไม่มีคีย์ → เริ่มจากเลขสูงสุดในตาราง) |
 | Database.gs | อ่าน/เขียนแบบ batch, map header→index, ตรวจ header ตรง canonical, initializeDatabase() แบบไม่ทำลายข้อมูล |
 | AuthService.gs | ตรวจผู้ใช้ Google และสิทธิ์ |
 | ValidationService.gs | ตรวจ type, enum, YYYYMM, เงิน, FK, Formula Injection |
@@ -56,6 +57,10 @@ Pivot_* (report views; ไม่อยู่ในเส้นทางบัน
 | TransactionService.gs | `Transactions.create/update/reverse/list/accountBalances` และ `Ledger.effectsOf/balances` ตาม business-rules §3 |
 | InstallmentService.gs | ตัวอย่างและสร้างแผนรายจ่ายในอนาคตใน PaymentPlans และ PaymentSchedules |
 | PaymentActivity.gs | กัน/ปลดเงิน ชำระ/กลับรายการ ยกเลิก ต่ออายุ ปรับงวดและปิดยอด ผ่าน Operation.run และ recovery checkpoint |
+| PaymentActivity.gs `monthBatch` | บันทึก PAY/RESERVE หลายงวดข้ามแผนใน Operation เดียว เรียก `prepare()` ทีละกลุ่มโดยส่ง state ที่รวมผลกลุ่มก่อนหน้า เก็บ checkpoint แบบย่อ (ตัดคอลัมน์ `*_name` และค่าว่าง แล้วเติมชื่อใหม่ตอนเขียน) |
+| PageMonthly.html | มุมมองรายเดือน (include ในหน้าแผนชำระ) รับข้อมูลผ่านเหตุการณ์ `planner:data` และอัปเดตหน้าแผนด้วย `PlannerBridge.apply()` จากผลของ `api_monthlyBatch` โดยไม่โหลดซ้ำ |
+| BudgetService.gs | `Budgets.list/save/setActive/copyMonth` งบใช้จ่าย: คำนวณสัปดาห์ ยกยอด และยอดต่อวันจากธุรกรรม (ไม่เก็บยอดในชีต) เขียนผ่าน Operation.run |
+| PageBudgets.html | หน้า "งบใช้จ่าย" (เมนูหลัก #budgets) โหลดเมื่อเปิดหน้า |
 | PlanRevision.gs | คำนวณเงินต้นคงค้าง ตรวจการปรับงวด สร้าง/คืน snapshot ปิดยอด และ version ของแผนกับงวด เป็น pure helpers ไม่เขียนฐานข้อมูล |
 | ReservationService.gs | RESERVE/RELEASE/CONSUME |
 | PaymentAllocationService.gs | จัดสรรธุรกรรมให้งวด |
@@ -85,13 +90,14 @@ ProjectionService เป็นจุดเดียวที่เขียน�
 ### 3.2.1 การยืนยันงานและ Audit เมื่อ retry (Phase 6)
 
 - Operation.run เขียนผลธุรกิจเสร็จ ตรวจ/serialize ผลลัพธ์ แล้วเขียน success Audit ก่อนบันทึก COMMITTED หากเสียการเชื่อมต่อในช่วง Audit หรือ commit งานยังอยู่ในสถานะค้าง หรือ commit สำเร็จแต่ client ไม่ทราบผล จึงต้องส่ง key/payload เดิม
-- Audit ID ของ operation success และ rename คงที่ตาม operation_id; เมื่อ replay ค้นเหตุการณ์ด้วย operation_id/action/actor/entity/result ผ่าน TextFinder เพื่อไม่สร้างซ้ำและรองรับ Audit ID แบบสุ่มรุ่นเก่า ไม่เพิ่มการค้น Audit ในเส้นทางคำขอใหม่ตามปกติ
+- ID ทุกตารางเป็น running number: `ctx.id(sheet, label)` จองเลขถัดไปภายใน lock และจำตาม label; ก่อนเขียนชีตธุรกิจครั้งแรก (write hook ใน Database) ระบบบันทึกตัวนับลง Script Properties แล้วบันทึกเลขที่จองไว้ใน `recovery_data` (`{"__ids": {...}, "__data": ...}`) ของ journal เมื่อ replay จึงได้เลขเดิม แถว journal ของคำขอใหม่ถูกเพิ่มเมื่อมีการเขียนครั้งแรกหรือเมื่อจบงาน
+- Audit ID ของ rename จองผ่าน `ctx.id` จึงคงที่เมื่อ retry; operation success Audit ใช้เลขถัดไป เมื่อ replay ค้นเหตุการณ์ด้วย operation_id/action/actor/entity/result ผ่าน TextFinder เพื่อไม่สร้างซ้ำและรองรับ Audit ID แบบสุ่มรุ่นเก่า ไม่เพิ่มการค้น Audit ในเส้นทางคำขอใหม่ตามปกติ
 - เมื่อ retry งาน COMMITTED เดิม ให้ตรวจและเติม operation success Audit ที่หายก่อนคืนผลที่เก็บไว้ โดยไม่เรียก business work ซ้ำ ไม่สแกนซ่อมทุก operation อัตโนมัติ และไม่สร้างย้อนหลังเหตุการณ์ rename รุ่นเก่าที่ไม่มี checkpoint ให้พิสูจน์
 - Google Sheets ยังไม่มี ACID ข้ามชีต การทดสอบในเครื่องยืนยันเฉพาะ outage หนึ่งครั้งก่อน/หลังแต่ละ write และการแย่ง lock จำลอง ยังไม่ใช่หลักฐาน concurrency หรือ outage ต่อเนื่องบน Google จริง
 
 ### 3.3 สร้างแผน (operation_type `CREATE_PLAN`)
 
-1. สร้าง plan_id และ schedule_id ทั้งหมดล่วงหน้า, บันทึก OperationJournal `PENDING`
+1. จอง plan_id และ schedule_id ทั้งหมดล่วงหน้า (running number), บันทึก OperationJournal `PENDING` พร้อมเลขที่จองไว้
 2. บันทึกแผนที่ตรวจแล้ว ยอดรายงวด และวันอ้างอิงใน recovery_data ก่อนเขียนข้อมูลธุรกิจ
 3. เขียน PaymentPlans 1 แถว แล้วเขียน PaymentSchedules ด้วย batch เดียว คัดลอกข้อมูลธุรกิจด้วย ProjectionService
 4. ตรวจจำนวนงวด รหัส และยอดรายงวดเทียบกับแผนที่ตรวจผลรวมแล้วก่อนตั้ง `COMMITTED`

@@ -16,7 +16,7 @@
     <button type="button" role="tab" id="tab-category" data-type="category" aria-controls="master-panel" aria-selected="false" tabindex="-1" class="master-tab">หมวดหมู่</button>
   </div>
 
-  <div class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+  <div id="master-tools" class="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
     <div class="flex-1">
       <label for="master-search" class="sr-only">ค้นหาตามชื่อ</label>
       <input id="master-search" type="search" class="field-input" placeholder="ค้นหาตามชื่อ…" autocomplete="off">
@@ -48,6 +48,11 @@
 <style>
   .master-tab { min-height: 2.5rem; border-radius: .625rem; color: #475569; font-weight: 500; }
   .master-tab[aria-selected="true"] { background: #fff; color: #4338ca; font-weight: 600; box-shadow: 0 1px 2px rgba(15,23,42,.08); }
+  .icon-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.75rem, 1fr)); gap: .375rem; }
+  .icon-choice { min-height: 2.75rem; border: 1px solid #e2e8f0; border-radius: .75rem; background: #fff; font-size: 1.375rem; line-height: 1; }
+  .icon-choice:hover { border-color: #a5b4fc; background: #eef2ff; }
+  .icon-choice:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .icon-choice[aria-pressed="true"] { border-color: #4f46e5; background: #e0e7ff; box-shadow: 0 0 0 2px #c7d2fe; }
 </style>
 
 <script>
@@ -243,6 +248,48 @@
         el('p', { class: 'field-error hidden', id: 'mf-' + id + '-error' }));
     }
 
+    var CATEGORY_ICONS = {
+      EXPENSE: [['🍜', 'อาหาร'], ['☕', 'เครื่องดื่ม'], ['🛒', 'ของใช้/ซูเปอร์มาร์เก็ต'], ['🏠', 'ที่อยู่อาศัย'], ['💡', 'ค่าไฟ'],
+        ['🚰', 'ค่าน้ำ'], ['📶', 'อินเทอร์เน็ต'], ['📱', 'โทรศัพท์'], ['🚗', 'รถยนต์'], ['⛽', 'น้ำมัน'], ['🚌', 'เดินทาง'],
+        ['🏥', 'สุขภาพ'], ['💊', 'ยา'], ['🎓', 'การศึกษา'], ['👶', 'ลูก'], ['🐶', 'สัตว์เลี้ยง'], ['👕', 'เสื้อผ้า'],
+        ['💄', 'ความงาม'], ['🎮', 'บันเทิง'], ['✈️', 'ท่องเที่ยว'], ['🎁', 'ของขวัญ'], ['🛡️', 'ประกัน'], ['💳', 'บัตร/ผ่อนชำระ'],
+        ['🧾', 'ภาษี/ค่าธรรมเนียม'], ['🙏', 'ทำบุญ'], ['🔧', 'ซ่อมแซม'], ['📦', 'อื่น ๆ']],
+      INCOME: [['💰', 'เงินเดือน'], ['💼', 'งานเสริม'], ['📈', 'ลงทุน/ปันผล'], ['🏦', 'ดอกเบี้ย'], ['🎁', 'ของขวัญ/เงินให้'],
+        ['↩️', 'เงินคืน'], ['🏷️', 'ขายของ'], ['🏠', 'ค่าเช่า'], ['🎉', 'โบนัส'], ['📦', 'อื่น ๆ']]
+    };
+
+    /** ปุ่มเลือก emoji สำเร็จรูปสำหรับหมวดหมู่ — เติมลงช่องไอคอน (ยังพิมพ์เองได้) */
+    function iconPicker() {
+      var box = el('div', { class: 'mt-1', role: 'group', 'aria-labelledby': 'mf-icon-picker-title' },
+        el('p', { id: 'mf-icon-picker-title', class: 'field-label', text: 'เลือกไอคอนสำเร็จรูป' }));
+      var grid = el('div', { class: 'icon-grid' });
+      box.appendChild(grid);
+      box.appendChild(el('p', { class: 'field-hint', text: 'แตะเพื่อเลือก หรือพิมพ์ emoji เองในช่องไอคอน (Windows กด Win + .)' }));
+      var input = fieldsBox.querySelector('#mf-icon');
+      var type = fieldsBox.querySelector('#mf-category_type');
+      function sync() {
+        Array.prototype.forEach.call(grid.children, function (b) {
+          b.setAttribute('aria-pressed', String(b.dataset.icon === input.value.trim()));
+        });
+      }
+      function draw() {
+        grid.textContent = '';
+        (CATEGORY_ICONS[type.value] || CATEGORY_ICONS.EXPENSE).forEach(function (pair) {
+          grid.appendChild(el('button', { type: 'button', class: 'icon-choice', 'data-icon': pair[0], title: pair[1],
+            'aria-label': pair[1] + ' ' + pair[0], onclick: function () {
+              input.value = input.value.trim() === pair[0] ? '' : pair[0];
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+              sync();
+            } }, pair[0]));
+        });
+        sync();
+      }
+      input.addEventListener('input', sync);
+      type.addEventListener('change', draw);
+      draw();
+      return box;
+    }
+
     function textInput(id, value, attrs) {
       var a = Object.assign({ id: 'mf-' + id, name: id, type: 'text', class: 'field-input', value: value === undefined ? '' : value,
         'aria-describedby': 'mf-' + id + '-error' }, attrs || {});
@@ -282,6 +329,7 @@
           field('icon', 'ไอคอน', textInput('icon', r.icon, { maxlength: 50, placeholder: 'เช่น 🍜' })),
           field('color', 'สี', textInput('color', r.color || '#E0E7FF', { type: 'color', class: 'field-input h-11 p-1' })));
         fieldsBox.appendChild(row2);
+        fieldsBox.appendChild(iconPicker());
         return;
       }
       // account

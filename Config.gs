@@ -28,7 +28,9 @@ var Config = {
     PAYMENT_ALLOCATIONS: 'PaymentAllocations',
     SETTINGS: 'Settings',
     AUDIT_LOGS: 'AuditLogs',
-    OPERATION_JOURNAL: 'OperationJournal'
+    OPERATION_JOURNAL: 'OperationJournal',
+    BUDGETS: 'Budgets',
+    BUDGET_CATEGORIES: 'BudgetCategories'
   },
 
   HEADERS: {
@@ -43,7 +45,10 @@ var Config = {
     PaymentAllocations: ['allocation_id', 'transaction_id', 'schedule_id', 'allocated_amount', 'created_at'],
     Settings: ['setting_key', 'setting_value', 'description', 'updated_at'],
     AuditLogs: ['audit_id', 'event_at', 'actor_id', 'action', 'entity_type', 'entity_id', 'operation_id', 'result'],
-    OperationJournal: ['operation_id', 'idempotency_key', 'request_hash', 'actor_id', 'operation_type', 'status', 'recovery_data', 'result_ref', 'created_at', 'updated_at']
+    OperationJournal: ['operation_id', 'idempotency_key', 'request_hash', 'actor_id', 'operation_type', 'status', 'recovery_data', 'result_ref', 'created_at', 'updated_at'],
+    // งบใช้จ่ายรายเดือน/รายสัปดาห์ (อนุมัติ 2026-11-26) หนึ่งงบต่อแถว และหนึ่งหมวดของงบต่อแถว
+    Budgets: ['budget_id', 'budget_month', 'budget_name', 'owner_id', 'owner_name', 'amount', 'weekly_amount', 'note', 'is_active', 'created_at', 'updated_at'],
+    BudgetCategories: ['budget_category_id', 'budget_id', 'category_id', 'category_name', 'created_at']
   },
 
   /** Primary key ของแต่ละตาราง */
@@ -59,8 +64,13 @@ var Config = {
     PaymentAllocations: 'allocation_id',
     Settings: 'setting_key',
     AuditLogs: 'audit_id',
-    OperationJournal: 'operation_id'
+    OperationJournal: 'operation_id',
+    Budgets: 'budget_id',
+    BudgetCategories: 'budget_category_id'
   },
+
+  /** ชีตที่ระบบสร้างเองเมื่อเขียนครั้งแรก (ฟีเจอร์ที่เพิ่มภายหลัง) และอ่านเป็นตารางว่างถ้ายังไม่มี */
+  AUTO_CREATE_SHEETS: ['SubAccounts', 'Budgets', 'BudgetCategories'],
 
   ENUMS: {
     ACCOUNT_TYPE: ['CASH', 'BANK', 'E_WALLET', 'CREDIT_CARD', 'CASH_CARD', 'LOAN'],
@@ -106,6 +116,12 @@ var Config = {
       ['sub_account_id', 'sub_account_name', 'subAccounts'],
       ['account_id', 'account_name', 'accounts'],
       ['owner_id', 'owner_name', 'owners'],
+      ['category_id', 'category_name', 'categories']
+    ],
+    Budgets: [
+      ['owner_id', 'owner_name', 'owners']
+    ],
+    BudgetCategories: [
       ['category_id', 'category_name', 'categories']
     ]
   },

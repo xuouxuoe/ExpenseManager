@@ -1,0 +1,913 @@
+<section id="pm-root" class="mt-6" aria-labelledby="pm-title" hidden>
+  <div class="pm-toolbar">
+    <h2 id="pm-title" class="font-semibold">รายการประจำเดือน</h2>
+    <div class="pm-month" role="group" aria-label="เลือกช่วงเวลา">
+      <button type="button" id="pm-prev" class="btn btn-secondary" aria-label="ก่อนหน้า">‹</button>
+      <label class="sr-only" for="pm-month">เดือน</label>
+      <input id="pm-month" type="month" min="1900-01" max="2399-12" class="field-input" required>
+      <p id="pm-year" class="pm-year" aria-live="polite" hidden></p>
+      <button type="button" id="pm-next" class="btn btn-secondary" aria-label="ถัดไป">›</button>
+    </div>
+  </div>
+  <div class="pm-filters">
+    <div class="pp-tabs" role="group" aria-label="ประเภทรายการ">
+      <button type="button" id="pm-mode-pay" class="btn" aria-pressed="true">ต้องจ่าย</button>
+      <button type="button" id="pm-mode-save" class="btn" aria-pressed="false">ต้องเก็บ</button>
+    </div>
+    <label class="pm-filter"><span class="field-label">จัดกลุ่มตาม</span>
+      <select id="pm-group" class="field-input">
+        <option value="account">บัญชี / บัตร</option>
+        <option value="accsub">บัญชี/บัตร + บัญชีย่อย</option>
+        <option value="sub">บัญชีย่อย</option>
+        <option value="owner">เจ้าของ</option>
+      </select>
+    </label>
+    <label class="pm-filter"><span class="field-label">เจ้าของ</span>
+      <select id="pm-owner" class="field-input"><option value="">ทั้งหมด</option></select>
+    </label>
+    <div class="pm-actions">
+      <div class="pp-view-switch" role="group" aria-label="รูปแบบการแสดงรายการประจำเดือน">
+        <button id="pm-view-cards" type="button" class="btn" aria-label="มุมมองการ์ด" title="มุมมองการ์ด" aria-pressed="true" aria-controls="pm-list">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.8"/><rect x="14" y="3" width="7" height="7" rx="1.8"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.8"/><rect x="14" y="14" width="7" height="7" rx="1.8"/>
+          </svg>
+        </button>
+        <button id="pm-view-table" type="button" class="btn" aria-label="มุมมองตาราง" title="มุมมองตาราง" aria-pressed="false" aria-controls="pm-list">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14.5h18M9 9v11"/>
+          </svg>
+        </button>
+      </div>
+      <button type="button" id="pm-csv" class="btn btn-secondary">ดาวน์โหลด CSV</button>
+    </div>
+  </div>
+  <div class="mt-2">
+    <div class="flex items-start gap-2">
+      <p id="pm-hint" class="flex-1 text-sm text-slate-500"></p>
+      <span id="pm-info-btn"></span>
+    </div>
+    <div id="pm-info-panel"></div>
+  </div>
+  <div id="pm-summary" class="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-live="polite"></div>
+  <div id="pm-list" class="mt-3 space-y-3" aria-live="polite"></div>
+  <div id="pm-bar" class="pm-bar" hidden>
+    <p id="pm-bar-text" class="text-sm font-medium text-slate-700" aria-live="polite"></p>
+    <button type="button" id="pm-review" class="btn btn-primary">ตรวจสอบและบันทึก</button>
+  </div>
+</section>
+
+<dialog id="pm-dialog" class="w-[min(34rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="pm-dialog-title">
+  <form id="pm-dialog-form" class="flex max-h-[88vh] flex-col" novalidate>
+    <div class="border-b border-slate-200 px-5 py-4">
+      <h2 id="pm-dialog-title" class="font-semibold">ตรวจสอบก่อนบันทึก</h2>
+      <p id="pm-dialog-sub" class="text-sm text-slate-500"></p>
+    </div>
+    <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <ol id="pm-lines" class="space-y-2"></ol>
+      <div class="flex items-start gap-2">
+        <p id="pm-total" class="flex-1 rounded-xl bg-indigo-50 px-3 py-2 text-sm font-semibold text-indigo-800"></p>
+        <span id="pm-confirm-info-btn" class="pt-1.5"></span>
+      </div>
+      <div id="pm-confirm-info-panel"></div>
+      <label class="block"><span class="field-label">วันที่ทำรายการ *</span>
+        <input id="pm-date" type="date" class="field-input" required>
+      </label>
+      <label class="block"><span class="field-label">หมายเหตุ</span>
+        <input id="pm-note" type="text" maxlength="500" class="field-input" placeholder="เช่น ปิดยอดเดือน">
+      </label>
+      <p id="pm-error" role="alert" class="text-sm text-rose-700 empty:hidden"></p>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+      <button type="button" id="pm-dialog-close" class="btn btn-secondary">ปิด</button>
+      <button type="submit" id="pm-confirm" class="btn btn-primary">ยืนยันบันทึกทั้งหมด</button>
+    </div>
+  </form>
+</dialog>
+
+<style>
+  .pm-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+  .pm-month { display: flex; align-items: center; gap: .375rem; }
+  .pm-month .btn { width: 2.75rem; padding: 0; font-size: 1.25rem; }
+  .pm-month .field-input { width: 11rem; }
+  .pm-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .75rem; margin-top: .75rem; }
+  .pm-filter { min-width: 9.5rem; flex: 1 1 9.5rem; max-width: 14rem; }
+  .pm-year { min-width: 11rem; min-height: 2.75rem; display: grid; place-items: center; border: 1px solid #cbd5e1; border-radius: .75rem;
+    background: #fff; font-weight: 600; }
+  .pm-year-table { min-width: 64rem; }
+  .pm-year-table th, .pm-year-table td { text-align: right; }
+  .pm-year-table th:first-child { text-align: left; min-width: 11rem; position: sticky; left: 0; z-index: 2; background: #fff;
+    box-shadow: 1px 0 0 #e2e8f0; }
+  .pm-year-table thead th:first-child { background: #e8eef8; z-index: 3; }
+  .pm-year-table tfoot th:first-child { background: #eef2ff; }
+  @media (max-width: 640px) { .pm-year-table th:first-child { min-width: 8rem; max-width: 9rem; } }
+  .pm-year-table .pm-now { background: #eef2ff; }
+  .pm-cell { display: block; width: 100%; min-height: 2.75rem; border-radius: .5rem; padding: .25rem .375rem; text-align: right; line-height: 1.25; }
+  .pm-cell:hover { background: #e0e7ff; }
+  .pm-cell:focus-visible { outline: 2px solid #6366f1; outline-offset: 1px; }
+  .pm-cell small { display: block; font-size: .72rem; font-weight: 500; }
+  .pm-actions { display: flex; align-items: flex-end; gap: .5rem; margin-left: auto; }
+  .pm-table-wrap { overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 1rem; background: #fff; }
+  .pm-table { width: 100%; min-width: 68rem; border-collapse: collapse; font-size: .875rem; text-align: left; }
+  .pm-table th, .pm-table td { padding: .5rem .625rem; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+  .pm-table thead th { position: sticky; top: 0; z-index: 1; background: #e8eef8; color: #334155; font-weight: 600; white-space: nowrap; }
+  .pm-table .pm-money { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .pm-table .pm-group-row th { background: #f1f5ff; padding: .5rem .625rem; }
+  .pm-table .pm-group-cell { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; }
+  .pm-table .pm-group-cell .pm-payer { flex: 0 1 18rem; }
+  .pm-table tbody tr.pm-item th { font-weight: 400; min-width: 12rem; }
+  .pm-table tbody tr.pm-item td:first-child { padding-left: 1.5rem; width: 2.75rem; }
+  .pm-table tr.pm-done { color: #94a3b8; }
+  .pm-table tr.pm-shift { background: #fff7ed; box-shadow: inset 3px 0 0 #f97316; }
+  .pm-table .pm-cell-input { width: 7.5rem; min-height: 2.25rem; padding: .25rem .5rem; text-align: right; }
+  .pm-table tfoot th, .pm-table tfoot td { background: #eef2ff; font-weight: 600; }
+  .pm-group { border: 1px solid #e2e8f0; border-radius: 1rem; background: #fff; }
+  .pm-group-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .75rem; padding: .75rem 1rem; border-bottom: 1px solid #f1f5f9; }
+  .pm-group-head .pm-name { flex: 1 1 12rem; min-width: 0; }
+  .pm-payer { display: flex; align-items: center; gap: .5rem; flex: 1 1 15rem; max-width: 20rem; }
+  .pm-payer .field-input { min-height: 2.5rem; }
+  .pm-group ul { margin: .25rem .75rem .75rem 2.25rem; border-left: 2px solid #e0e7ff; }
+  .pm-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: .25rem .75rem; align-items: start; padding: .625rem .5rem .625rem .875rem; border-top: 1px solid #f1f5f9; }
+  .pm-row:first-child { border-top: 0; }
+  .pm-row.pm-shift { background: linear-gradient(90deg, #fff7ed 0, #fff 70%); box-shadow: inset 3px 0 0 #f97316; }
+  .pm-title-account { color: #0f172a; }
+  .pm-title-sep { color: #94a3b8; font-weight: 400; }
+  .pm-title-sub { color: #4338ca; background: #eef2ff; border-radius: .375rem; padding: 0 .375rem; }
+  .pm-title-nosub { color: #64748b; font-weight: 500; font-style: italic; }
+  .pm-shift-badge { display: inline-flex; align-items: center; gap: .25rem; margin-top: .25rem; border-radius: 9999px; padding: .125rem .5rem;
+    background: #ffedd5; color: #9a3412; font-size: .75rem; font-weight: 600; white-space: nowrap; }
+  .pm-legend { display: inline-flex; align-items: center; gap: .375rem; }
+  .pm-legend::before { content: ''; width: .75rem; height: .75rem; border-radius: .2rem; background: #ffedd5; box-shadow: inset 3px 0 0 #f97316; }
+  .pm-row.pm-done { color: #94a3b8; }
+  .pm-row input[type="checkbox"], .pm-group-head input[type="checkbox"] { width: 1.25rem; height: 1.25rem; margin-top: .125rem; accent-color: #4f46e5; }
+  .pm-amount { text-align: right; white-space: nowrap; }
+  .pm-edit { grid-column: 2 / -1; display: flex; align-items: center; gap: .5rem; }
+  .pm-edit .field-input { max-width: 10rem; min-height: 2.5rem; text-align: right; }
+  .pm-bar { position: sticky; bottom: .75rem; z-index: 20; margin-top: 1rem; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem;
+    border: 1px solid #c7d2fe; border-radius: 1rem; background: #eef2ff; padding: .625rem .75rem .625rem 1rem; box-shadow: 0 6px 20px #3730a31f; }
+  @media (max-width: 640px) {
+    .pm-actions { margin-left: 0; width: 100%; }
+    .pm-actions #pm-csv { flex: 1; }
+    .pm-filter { max-width: none; }
+    .pm-group ul { margin-left: 1.25rem; margin-right: .5rem; }
+    .pm-month { width: 100%; }
+    .pm-month .field-input { flex: 1; width: auto; }
+    .pm-bar .btn { width: 100%; }
+  }
+</style>
+
+<script>
+  (function () {
+    var el = App.el;
+    var root = document.getElementById('pm-root');
+    var monthInput = document.getElementById('pm-month');
+    var yearLabel = document.getElementById('pm-year');
+    var groupSelect = document.getElementById('pm-group');
+    var ownerSelect = document.getElementById('pm-owner');
+    var modePay = document.getElementById('pm-mode-pay');
+    var modeSave = document.getElementById('pm-mode-save');
+    var hint = document.getElementById('pm-hint');
+    var summary = document.getElementById('pm-summary');
+    var list = document.getElementById('pm-list');
+    var bar = document.getElementById('pm-bar');
+    var barText = document.getElementById('pm-bar-text');
+    var reviewButton = document.getElementById('pm-review');
+    var dialog = document.getElementById('pm-dialog');
+    var dialogForm = document.getElementById('pm-dialog-form');
+    var dialogSub = document.getElementById('pm-dialog-sub');
+    var linesBox = document.getElementById('pm-lines');
+    var totalBox = document.getElementById('pm-total');
+    var dateInput = document.getElementById('pm-date');
+    var noteInput = document.getElementById('pm-note');
+    var errorBox = document.getElementById('pm-error');
+    var confirmButton = document.getElementById('pm-confirm');
+
+    var data = { plans: [], masters: null };
+    var mode = App.pref('monthlyMode') === 'SAVE' ? 'SAVE' : 'PAY';
+    var month = Number(App.todayIso().slice(0, 7).replace('-', ''));
+    var selected = new Map();   // schedule_id -> ยอดที่กรอก (ข้อความ)
+    var payers = {};            // group key -> account_id ที่จ่าย/กันเงิน
+    var submit = App.createSubmitter();
+    var pending = null;         // payload ที่ยังไม่ได้รับผลยืนยัน ต้องส่งชุดเดิมเท่านั้น
+    var saving = false;
+    var view = App.pref('monthlyView') === 'table' ? 'table' : 'cards';
+    // ช่วงเวลาเลือกจากปุ่ม รายแผน/รายเดือน/รายปี ในหน้าแผนชำระ (PlannerBridge.showTab)
+    var period = App.pref('plannerTab') === 'yearly' ? 'year' : 'month';
+    var viewCards = document.getElementById('pm-view-cards');
+    var viewTable = document.getElementById('pm-view-table');
+
+    var PAY_STATUS = { UNPAID: 'ยังไม่จ่าย', PARTIAL: 'จ่ายบางส่วน', PAID: 'จ่ายแล้ว' };
+    var SAVE_STATUS = { NOT_SAVED: 'ยังไม่กันเงิน', PARTIAL: 'กันบางส่วน', SAVED: 'กันครบ', NOT_REQUIRED: 'จ่ายแล้ว' };
+    var ASSET_TYPES = ['CASH', 'BANK', 'E_WALLET'];
+
+    groupSelect.value = ['account', 'accsub', 'sub', 'owner'].indexOf(App.pref('monthlyGroup')) >= 0 ? App.pref('monthlyGroup') : 'account';
+
+    function toSatang(v) { return Math.round(Number(v) * 100); }
+
+    // ---------- คำอธิบาย (ปุ่ม ⓘ) ----------
+    var FIX_NO_CASH = ['“<ชื่อรายการ>: เงินที่ใช้ได้ในบัญชีชำระไม่เพียงพอ”',
+      'เปลี่ยนบัญชีในช่อง “จ่ายจาก” ของกลุ่มนั้น, ลดยอดหรือเลือกน้อยลง, ปลดเงินที่กันไว้ให้รายการอื่น (แท็บรายแผน → จัดการอื่น ๆ → ปลดเงิน) หรือบันทึกรายรับ/โอนเงินเข้าบัญชีที่หน้า “รายการ”'];
+    var FIX_PENDING = ['“ยังยืนยันผลไม่ได้” หรือ “มีการอัปเดตแผนค้าง”', 'กด “ยืนยันบันทึกทั้งหมด” อีกครั้ง ระบบส่งรายการชุดเดิมและไม่บันทึกซ้ำ'];
+    var INFO = {
+      PAY: { title: 'ต้องจ่าย (ตามเดือนชำระ)', points: ['แสดงงวดที่เดือนชำระตรงกับเดือนที่เลือก รวมงวดที่จ่ายครบแล้ว (สีจาง) และงวดค้างจากเดือนก่อน',
+        'ติ๊กเลือกรายการ แก้ยอดได้ถ้าจ่ายบางส่วน และเลือกบัญชีในช่อง “จ่ายจาก” ของแต่ละกลุ่ม',
+        'ระบบใช้เงินที่กันไว้ในบัญชีที่จ่ายก่อน ส่วนที่เกินหักจากเงินที่ใช้ได้ของบัญชีนั้น', 'แถบส้ม = เดือนเก็บกับเดือนจ่ายไม่ตรงกัน, #12-3 = แผนที่ 12 งวดที่ 3'],
+        fixes: [FIX_NO_CASH, ['ยอดหรือเดือนของงวดไม่ถูกต้อง', 'แท็บรายแผน → จัดการอื่น ๆ → ปรับยอดและเดือนของงวดค้าง'],
+          ['เจ้าของ หมวดหมู่ หรือบัญชีของแผนผิด', 'แท็บรายแผน → จัดการอื่น ๆ → แก้รายละเอียดแผน'], ['บันทึกจ่ายผิด', 'แท็บรายแผน → จัดการอื่น ๆ → กลับรายการชำระ']] },
+      SAVE: { title: 'ต้องเก็บ (ตามเดือนเก็บ)', points: ['แสดงงวดที่เดือนเก็บตรงกับเดือนที่เลือก และยอดที่ยังต้องกันเงิน',
+        'กันเงิน = แยกเงินในบัญชีไว้สำหรับงวดนั้น ไม่ใช่รายจ่าย เงินยังอยู่ในบัญชีแต่ไม่นับเป็นเงินที่ใช้ได้', 'ตอนจ่ายจริง ให้เลือกจ่ายจากบัญชีเดียวกับที่กันไว้ เพื่อใช้เงินที่กันไว้'],
+        fixes: [['“ยอดกันเงินเกินเงินที่ใช้ได้หรือยอดที่ยังต้องเก็บ”', 'ลดยอด หรือเปลี่ยนบัญชีในช่อง “กันไว้ที่”'],
+          ['กันเงินผิดบัญชีหรือเกิน', 'แท็บรายแผน → จัดการอื่น ๆ → ปลดเงิน แล้วกันใหม่'], FIX_PENDING] },
+      YEAR: { title: 'ภาพรวมรายปี', points: ['แต่ละช่องคือยอดของกลุ่มในเดือนนั้น: ตัวบน = ยอดตามแผน, ตัวล่าง = ยอดค้าง หรือ “ครบ”',
+        'โหมดต้องจ่ายนับตามเดือนชำระ โหมดต้องเก็บนับตามเดือนเก็บ ไม่รวมงวดที่ยกเลิก', 'แตะช่องเพื่อเปิดเดือนนั้นและบันทึกต่อ'],
+        fixes: [['ยอดไปตกผิดเดือน', 'แท็บรายแผน → จัดการอื่น ๆ → ปรับยอดและเดือนของงวดค้าง (มีปุ่มเลื่อนทุกงวด ±1 เดือน)'],
+          ['แผนอยู่ผิดกลุ่ม', 'แก้บัญชี/บัญชีย่อย/เจ้าของที่ แท็บรายแผน → จัดการอื่น ๆ → แก้รายละเอียดแผน']] },
+      CONFIRM_PAY: { title: 'ก่อนยืนยันการจ่าย', points: ['แต่ละบรรทัดคือยอดที่ต้องโอนจากบัญชีหนึ่งไปบัตร/สินเชื่อ หรือจ่ายเป็นรายจ่าย ใช้เป็นเช็กลิสต์ตอนโอนจริง',
+        '“ใช้เงินที่กันไว้” คือส่วนที่ตัดจากเงินที่กันไว้ในบัญชีที่จ่าย “ต้องโอนจริง” คือยอดรวมลบส่วนนั้น', 'ระบบตรวจทั้งชุดก่อนบันทึก ถ้ารายการใดไม่ผ่าน จะไม่บันทึกอะไรเลย',
+        'วันที่ต้องไม่เป็นวันในอนาคต หมายเหตุจะติดไปทุกรายการในชุดนี้'],
+        fixes: [FIX_NO_CASH, FIX_PENDING, ['บันทึกแล้วพบว่าผิด', 'แท็บรายแผน → จัดการอื่น ๆ ของแผนนั้น → กลับรายการชำระ']] },
+      CONFIRM_SAVE: { title: 'ก่อนยืนยันการกันเงิน', points: ['แต่ละบรรทัดคือยอดที่จะกันไว้ในบัญชีนั้น ไม่สร้างรายการรายจ่าย', 'ระบบตรวจทั้งชุดก่อนบันทึก ถ้ารายการใดไม่ผ่าน จะไม่บันทึกอะไรเลย'],
+        fixes: [['“ยอดกันเงินเกินเงินที่ใช้ได้…”', 'ลดยอดหรือเปลี่ยนบัญชีในช่อง “กันไว้ที่”'], FIX_PENDING] }
+    };
+    var infoKeys = {};
+    /** สร้างปุ่ม ⓘ ใหม่เฉพาะเมื่อเนื้อหาเปลี่ยน เพื่อไม่ให้คำอธิบายที่เปิดอยู่ปิดเองทุกครั้งที่เลือกรายการ */
+    function setInfo(slot, key) {
+      if (infoKeys[slot] === key) return;
+      infoKeys[slot] = key;
+      var btnBox = document.getElementById(slot + '-btn');
+      var panelBox = document.getElementById(slot + '-panel');
+      btnBox.textContent = '';
+      panelBox.textContent = '';
+      if (!INFO[key]) return;
+      var info = App.infoButton(INFO[key]);
+      btnBox.appendChild(info.button);
+      panelBox.appendChild(info.panel);
+    }
+    function money(satang) { return App.formatMoney(satang / 100); }
+    function monthValue(ym) { return String(ym).slice(0, 4) + '-' + String(ym).slice(4); }
+    function monthTh(ym) {
+      var s = String(ym);
+      return new Date(Number(s.slice(0, 4)), Number(s.slice(4, 6)) - 1, 1).toLocaleDateString('th-TH', { month: 'short', year: '2-digit' });
+    }
+    /** วันที่สั้นแบบไทย เช่น 15 ต.ค. 69 — ใช้แยกแผนชื่อเดียวกันที่ทำรายการคนละวัน */
+    function shortDate(iso) {
+      var p = String(iso).split('-');
+      return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+    }
+    function addMonths(ym, n) {
+      var total = Math.floor(ym / 100) * 12 + (ym % 100) - 1 + n;
+      return Math.floor(total / 12) * 100 + (total % 12) + 1;
+    }
+
+    function assets() {
+      var accounts = (data.masters && data.masters.accounts) || [];
+      return accounts.filter(function (a) { return a.is_active && ASSET_TYPES.indexOf(a.account_type) >= 0; });
+    }
+    var LIABILITY_TYPES = ['CREDIT_CARD', 'CASH_CARD', 'LOAN'];
+    function accountType(id) {
+      var a = ((data.masters && data.masters.accounts) || []).find(function (r) { return r.account_id === id; });
+      return a ? a.account_type : '';
+    }
+    function accountName(id) {
+      var a = ((data.masters && data.masters.accounts) || []).find(function (r) { return r.account_id === id; });
+      return a ? a.account_name : '';
+    }
+
+    /** รายการของเดือนที่เลือก + งวดค้างจากเดือนก่อน (เฉพาะที่ยังมียอดคงเหลือ) */
+    function entries() {
+      var owner = ownerSelect.value;
+      var out = [];
+      data.plans.forEach(function (record) {
+        var plan = record.plan;
+        if (plan.plan_status === 'CANCELLED' || (owner && plan.owner_id !== owner)) return;
+        record.schedules.forEach(function (s) {
+          if (s.is_cancelled) return;
+          var ym = mode === 'PAY' ? s.payment_month : s.saving_month;
+          var remaining = toSatang(mode === 'PAY' ? s.remaining_to_pay : s.remaining_to_save);
+          var carry = ym < month && remaining > 0;
+          if (ym !== month && !carry) return;
+          out.push({ plan: plan, s: s, no: record.plan_no ? '#' + record.plan_no + '-' + s.installment_no : '', carry: carry, remaining: remaining, due: toSatang(s.amount_due),
+            done: remaining <= 0, groupKey: groupKeyOf(plan), groupName: groupNameOf(plan), groupSort: groupSortOf(plan) });
+        });
+      });
+      return out.sort(function (a, b) {
+        return compareSort(a.groupSort, b.groupSort) || Number(b.carry) - Number(a.carry) ||
+          (a.s.due_date || '').localeCompare(b.s.due_date || '') || a.plan.item_name.localeCompare(b.plan.item_name, 'th');
+      });
+    }
+
+    var NO_SUB = 'ไม่ระบุบัญชีย่อย';
+    function groupKeyOf(plan) {
+      if (groupSelect.value === 'owner') return 'o:' + plan.owner_id;
+      // แผนที่ไม่มีบัญชีย่อยรวมเป็นกลุ่มเดียว เพื่อให้ทุกกลุ่มเป็นชื่อบัญชีย่อยล้วน
+      if (groupSelect.value === 'sub') return 's:' + (plan.sub_account_id || 'none');
+      if (groupSelect.value === 'accsub') return 'as:' + plan.account_id + ':' + (plan.sub_account_id || 'none');
+      return 'a:' + plan.account_id;
+    }
+    function groupNameOf(plan) {
+      if (groupSelect.value === 'owner') return plan.owner_name || 'ไม่ระบุเจ้าของ';
+      if (groupSelect.value === 'sub') return plan.sub_account_name || NO_SUB;
+      if (groupSelect.value === 'accsub') return plan.account_name + ' · ' + (plan.sub_account_name || NO_SUB);
+      return plan.account_name;
+    }
+    /** ลำดับกลุ่มแบบหลายระดับ: [ชื่อหลัก, ไม่มีบัญชีย่อย?, ชื่อบัญชีย่อย] กลุ่มที่ไม่ระบุบัญชีย่อยอยู่ท้าย */
+    function groupSortOf(plan) {
+      var noSub = plan.sub_account_name ? 0 : 1;
+      if (groupSelect.value === 'sub') return ['', noSub, plan.sub_account_name || ''];
+      if (groupSelect.value === 'accsub') return [plan.account_name, noSub, plan.sub_account_name || ''];
+      return [groupNameOf(plan), 0, ''];
+    }
+    function compareSort(a, b) {
+      return a[0].localeCompare(b[0], 'th') || a[1] - b[1] || a[2].localeCompare(b[2], 'th');
+    }
+
+    /** บัญชีที่มีเงินกันไว้มากที่สุดของงวดในกลุ่ม > บัญชีที่ใช้ครั้งล่าสุด > บัญชีแรก */
+    function defaultPayer(items) {
+      var options = assets().map(function (a) { return a.account_id; });
+      var held = {};
+      items.forEach(function (item) {
+        (item.s.reserved_accounts || []).forEach(function (r) { held[r.account_id] = (held[r.account_id] || 0) + toSatang(r.amount); });
+      });
+      var best = Object.keys(held).filter(function (id) { return options.indexOf(id) >= 0; })
+        .sort(function (a, b) { return held[b] - held[a]; })[0];
+      var last = App.pref('monthlyPayer');
+      return best || (options.indexOf(last) >= 0 ? last : options[0] || '');
+    }
+
+    function render() {
+      if (!data.masters) return;
+      modePay.setAttribute('aria-pressed', String(mode === 'PAY'));
+      modeSave.setAttribute('aria-pressed', String(mode === 'SAVE'));
+      var yearly = period === 'year';
+      document.getElementById('pm-title').textContent = yearly ? 'ภาพรวมรายปี' : 'รายการประจำเดือน';
+      monthInput.hidden = yearly;
+      yearLabel.hidden = !yearly;
+      viewCards.parentNode.hidden = yearly;
+      setInfo('pm-info', yearly ? 'YEAR' : mode);
+      if (yearly) { renderYear(); return; }
+      monthInput.value = monthValue(month);
+      hint.textContent = mode === 'PAY'
+        ? 'งวดที่ครบชำระในเดือน ' + monthTh(month) + ' เลือกรายการ ระบุบัญชีที่จ่าย แล้วบันทึกครั้งเดียว ระบบใช้เงินที่กันไว้ในบัญชีนั้นก่อน'
+        : 'งวดที่ต้องเก็บเงินในเดือน ' + monthTh(month) + ' เลือกรายการและบัญชีที่จะกันเงินไว้ เงินยังอยู่ในบัญชีแต่ไม่นับเป็นเงินที่ใช้ได้';
+
+      var all = entries();
+      var open = new Set(all.filter(function (e) { return !e.done; }).map(function (e) { return e.s.schedule_id; }));
+      selected.forEach(function (value, id) { if (!open.has(id)) selected.delete(id); });
+
+      renderSummary(all);
+      list.textContent = '';
+      var shifted = all.filter(function (e) { return !e.done && e.s.saving_month !== e.s.payment_month; }).length;
+      if (shifted) list.appendChild(el('p', { class: 'pm-legend text-xs text-orange-800',
+        text: 'แถบส้ม = เดือนเก็บกับเดือนจ่ายไม่ตรงกัน ' + shifted + ' รายการ' }));
+      if (!all.length) {
+        list.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center' },
+          el('p', { class: 'font-medium text-slate-700', text: mode === 'PAY' ? 'ไม่มีรายการที่ต้องจ่ายใน' + monthTh(month) : 'ไม่มีรายการที่ต้องเก็บใน' + monthTh(month) }),
+          el('p', { class: 'mt-1 text-sm text-slate-500', text: 'ลองเปลี่ยนเดือนหรือเจ้าของ' })));
+      }
+      var groups = [];
+      var byKey = {};
+      all.forEach(function (entry) {
+        if (!byKey[entry.groupKey]) groups.push(byKey[entry.groupKey] = { key: entry.groupKey, name: entry.groupName, plan: entry.plan, items: [] });
+        byKey[entry.groupKey].items.push(entry);
+      });
+      viewCards.setAttribute('aria-pressed', String(view === 'cards'));
+      viewTable.setAttribute('aria-pressed', String(view === 'table'));
+      if (view === 'table' && groups.length) list.appendChild(renderTable(groups));
+      else groups.forEach(function (group) { list.appendChild(renderGroup(group)); });
+      renderBar();
+    }
+
+    function renderSummary(all) {
+      summary.textContent = '';
+      var current = all.filter(function (e) { return !e.carry; });
+      var planned = current.reduce(function (s, e) { return s + e.due; }, 0);
+      var left = current.reduce(function (s, e) { return s + e.remaining; }, 0);
+      var carry = all.filter(function (e) { return e.carry; }).reduce(function (s, e) { return s + e.remaining; }, 0);
+      [['ตามแผนเดือนนี้', planned, 'text-slate-800'],
+        [mode === 'PAY' ? 'จ่ายแล้ว' : 'เก็บแล้ว', planned - left, 'text-emerald-700'],
+        ['คงเหลือ', left, left ? 'text-rose-600' : 'text-slate-800'],
+        ['ค้างจากเดือนก่อน', carry, carry ? 'text-amber-600' : 'text-slate-800']].forEach(function (c) {
+        summary.appendChild(el('div', { class: 'rounded-2xl border border-slate-200 bg-white p-3' },
+          el('p', { class: 'text-xs text-slate-500', text: c[0] }),
+          el('p', { class: 'mt-1 font-semibold ' + c[2], text: money(c[1]) + ' ฿' })));
+      });
+    }
+
+    /** หัวกลุ่ม: แบบบัญชี + บัญชีย่อยแยกสีชื่อบัญชี (เข้ม) กับบัญชีย่อย (คราม) ให้อ่านแยกได้ทันที */
+    function groupTitle(group) {
+      if (groupSelect.value !== 'accsub') return group.name;
+      var sub = group.plan.sub_account_name;
+      return el('span', {},
+        el('span', { class: 'pm-title-account', text: group.plan.account_name }),
+        el('span', { class: 'pm-title-sep', 'aria-hidden': 'true', text: ' › ' }),
+        el('span', { class: sub ? 'pm-title-sub' : 'pm-title-nosub', text: sub || NO_SUB }));
+    }
+
+    function safeId(key) { return key.replace(/[^A-Za-z0-9_-]/g, '_'); }
+
+    /** ส่วนควบคุมของกลุ่ม (เลือกทั้งกลุ่ม + บัญชีที่จ่าย/กันเงิน) ใช้ร่วมกันทั้งมุมมองการ์ดและตาราง */
+    function groupControls(group) {
+      var openItems = group.items.filter(function (e) { return !e.done; });
+      var left = openItems.reduce(function (s, e) { return s + e.remaining; }, 0);
+      if (!payers[group.key] || !assets().some(function (a) { return a.account_id === payers[group.key]; })) payers[group.key] = defaultPayer(openItems);
+      var all = el('input', { type: 'checkbox', id: 'pm-all-' + safeId(group.key), disabled: !openItems.length,
+        'aria-label': 'เลือกทุกรายการที่ยังค้างของ ' + group.name });
+      all.checked = openItems.length > 0 && openItems.every(function (e) { return selected.has(e.s.schedule_id); });
+      all.indeterminate = !all.checked && openItems.some(function (e) { return selected.has(e.s.schedule_id); });
+      all.addEventListener('change', function () {
+        openItems.forEach(function (e) {
+          if (all.checked) { if (!selected.has(e.s.schedule_id)) selected.set(e.s.schedule_id, (e.remaining / 100).toFixed(2)); }
+          else selected.delete(e.s.schedule_id);
+        });
+        render();
+        var again = document.getElementById(all.id);
+        if (again) again.focus();
+      });
+      var payerWrap = null;
+      if (openItems.length) {
+        var payerId = 'pm-payer-' + safeId(group.key);
+        var payer = el('select', { id: payerId, class: 'field-input' });
+        assets().forEach(function (a) { payer.appendChild(el('option', { value: a.account_id, text: a.account_name })); });
+        payer.value = payers[group.key];
+        payer.addEventListener('change', function () { payers[group.key] = payer.value; App.pref('monthlyPayer', payer.value); renderBar(); });
+        payerWrap = el('div', { class: 'pm-payer' },
+          el('label', { for: payerId, class: 'whitespace-nowrap text-sm text-slate-600', text: mode === 'PAY' ? 'จ่ายจาก' : 'กันไว้ที่' }), payer);
+      }
+      return { all: all, payer: payerWrap, summary: group.items.length + ' รายการ · คงเหลือ ' + money(left) + ' ฿' };
+    }
+
+    function itemCheckbox(entry) {
+      var id = 'pm-c-' + entry.s.schedule_id;
+      var checkbox = el('input', { type: 'checkbox', id: id, disabled: entry.done, 'aria-label': 'เลือก ' + entry.plan.item_name });
+      checkbox.checked = selected.has(entry.s.schedule_id);
+      checkbox.addEventListener('change', function () {
+        if (checkbox.checked) selected.set(entry.s.schedule_id, (entry.remaining / 100).toFixed(2));
+        else selected.delete(entry.s.schedule_id);
+        render();
+        var again = document.getElementById(id);
+        if (again) again.focus();
+      });
+      return checkbox;
+    }
+
+    function amountInput(entry, className) {
+      var s = entry.s;
+      var input = el('input', { id: 'pm-a-' + s.schedule_id, type: 'number', min: '0.01', step: '0.01', max: (entry.remaining / 100).toFixed(2),
+        inputmode: 'decimal', class: className, value: selected.get(s.schedule_id),
+        'aria-label': (mode === 'PAY' ? 'ยอดที่จ่ายของ ' : 'ยอดที่กันของ ') + entry.plan.item_name });
+      input.addEventListener('input', function () {
+        selected.set(s.schedule_id, input.value);
+        input.setAttribute('aria-invalid', String(!validAmount(input.value, entry.remaining)));
+        renderBar();
+      });
+      return input;
+    }
+
+    function noBadge(entry) {
+      return entry.no ? el('span', { class: 'pp-plan-no', title: 'เลขแผน-งวด', text: entry.no }) : null;
+    }
+    function isShift(s) { return s.saving_month !== s.payment_month; }
+    function statusOf(s) { return (mode === 'PAY' ? PAY_STATUS[s.payment_status] : SAVE_STATUS[s.saving_status]) || ''; }
+    function shiftBadge(s) {
+      return el('span', { class: 'pm-shift-badge', title: 'เดือนเก็บเงินกับเดือนจ่ายไม่ตรงกัน',
+        text: 'เก็บ ' + monthTh(s.saving_month) + ' → จ่าย ' + monthTh(s.payment_month) });
+    }
+    function carryBadge(entry) {
+      return el('span', { class: 'pp-badge mt-1 bg-amber-50 text-amber-700',
+        text: 'ค้างจาก ' + monthTh(mode === 'PAY' ? entry.s.payment_month : entry.s.saving_month) });
+    }
+    function overdueBadge() { return el('span', { class: 'pp-badge mt-1 ml-1 bg-rose-50 text-rose-700', text: 'เกินกำหนด' }); }
+
+    function renderGroup(group) {
+      var controls = groupControls(group);
+      var section = el('section', { class: 'pm-group', 'aria-label': group.name });
+      var head = el('div', { class: 'pm-group-head' }, controls.all,
+        el('div', { class: 'pm-name' },
+          el('p', { class: 'font-semibold' }, groupTitle(group)),
+          el('p', { class: 'text-xs text-slate-500', text: controls.summary })),
+        controls.payer);
+      section.appendChild(head);
+      var ul = el('ul', {});
+      group.items.forEach(function (entry) { ul.appendChild(renderRow(entry)); });
+      section.appendChild(ul);
+      return section;
+    }
+
+    function renderRow(entry) {
+      var s = entry.s;
+      var plan = entry.plan;
+      var meta = [s.installment_count > 1 ? 'งวด ' + s.installment_no + '/' + s.installment_count : 'ครั้งเดียว'];
+      if (plan.purchase_date) meta.unshift('ทำรายการ ' + shortDate(plan.purchase_date));
+      if (groupSelect.value !== 'owner' && plan.owner_name) meta.push(plan.owner_name);
+      if (groupSelect.value === 'sub' || groupSelect.value === 'owner') meta.push(plan.account_name);
+      if (mode === 'PAY' && s.due_date) meta.push('ครบกำหนด ' + App.formatDateTh(s.due_date));
+      // เดือนเก็บกับเดือนจ่ายต่างกัน: เน้นทั้งแถวและบอกทั้งสองเดือน เพื่อไม่ให้สับสนว่าเงินที่เก็บเดือนนี้ใช้จ่ายเดือนไหน
+      var shift = isShift(s);
+      if (mode === 'SAVE' && !shift) meta.push('จ่ายเดือนเดียวกัน');
+      var checkbox = itemCheckbox(entry);
+      checkbox.removeAttribute('aria-label');
+      var li = el('li', { class: 'pm-row' + (entry.done ? ' pm-done' : '') + (shift && !entry.done ? ' pm-shift' : '') }, checkbox,
+        el('label', { for: checkbox.id, class: 'min-w-0 cursor-pointer' },
+          el('span', { class: 'block font-medium ' + (entry.done ? '' : 'text-slate-800') }, plan.item_name + ' ', noBadge(entry)),
+          el('span', { class: 'block text-xs ' + (entry.done ? '' : 'text-slate-500'), text: meta.join(' · ') }),
+          shift ? shiftBadge(s) : null,
+          entry.carry ? carryBadge(entry) : null,
+          s.is_overdue && mode === 'PAY' ? overdueBadge() : null),
+        el('div', { class: 'pm-amount' },
+          el('p', { class: 'font-semibold', text: entry.done ? money(entry.due) + ' ฿' : money(entry.remaining) + ' ฿' }),
+          el('p', { class: 'text-xs', text: statusOf(s) + (!entry.done && entry.remaining !== entry.due ? ' · จาก ' + money(entry.due) : '') })));
+      if (selected.has(s.schedule_id)) {
+        var input = amountInput(entry, 'field-input');
+        input.removeAttribute('aria-label');
+        li.appendChild(el('div', { class: 'pm-edit' },
+          el('label', { for: input.id, class: 'text-sm text-slate-600', text: mode === 'PAY' ? 'ยอดที่จ่าย' : 'ยอดที่กัน' }), input,
+          el('span', { class: 'text-xs text-slate-500', text: 'แก้ได้ถ้าจ่ายบางส่วน' })));
+      }
+      return li;
+    }
+
+    /** มุมมองตาราง: หนึ่ง tbody ต่อกลุ่ม แถวหัวกลุ่มมีปุ่มเลือกทั้งกลุ่มและบัญชีที่จ่าย */
+    function renderTable(groups) {
+      var COLS = 13;
+      var table = el('table', { class: 'pm-table' },
+        el('caption', { class: 'sr-only', text: (mode === 'PAY' ? 'รายการที่ต้องจ่าย' : 'รายการที่ต้องเก็บ') + ' ' + monthTh(month) + ' ยอดเงินหน่วยบาท' }));
+      var head = el('tr');
+      [['', 'เลือก'], ['รายการ'], ['วันที่ทำรายการ'], ['งวด'], ['เจ้าของ'], ['บัญชี/บัตร'], ['เก็บ → จ่าย'], ['ครบกำหนด'],
+        ['ตามแผน', '', 'pm-money'], [mode === 'PAY' ? 'จ่ายแล้ว' : 'เก็บแล้ว', '', 'pm-money'], ['คงเหลือ', '', 'pm-money'], ['สถานะ'],
+        [mode === 'PAY' ? 'ยอดที่จ่าย' : 'ยอดที่กัน', '', 'pm-money']].forEach(function (c) {
+        head.appendChild(el('th', { scope: 'col', class: c[2] || '' }, c[1] ? el('span', { class: 'sr-only', text: c[1] }) : c[0]));
+      });
+      table.appendChild(el('thead', {}, head));
+      var sums = { due: 0, done: 0, left: 0, picked: 0, count: 0 };
+      groups.forEach(function (group) {
+        var controls = groupControls(group);
+        var body = el('tbody', { 'aria-label': group.name });
+        body.appendChild(el('tr', { class: 'pm-group-row' },
+          el('th', { scope: 'rowgroup', colspan: COLS },
+            el('div', { class: 'pm-group-cell' }, controls.all,
+              el('span', { class: 'font-semibold' }, groupTitle(group)),
+              el('span', { class: 'text-xs font-normal text-slate-500', text: controls.summary }),
+              controls.payer))));
+        group.items.forEach(function (entry) {
+          var s = entry.s;
+          var plan = entry.plan;
+          var shift = isShift(s);
+          var picked = selected.has(s.schedule_id);
+          var name = el('th', { scope: 'row' }, el('span', { class: 'font-medium', text: plan.item_name + ' ' }), noBadge(entry));
+          if (entry.carry) { name.appendChild(el('br')); name.appendChild(carryBadge(entry)); }
+          if (s.is_overdue && mode === 'PAY') name.appendChild(overdueBadge());
+          body.appendChild(el('tr', { class: 'pm-item' + (entry.done ? ' pm-done' : '') + (shift && !entry.done ? ' pm-shift' : '') },
+            el('td', {}, itemCheckbox(entry)),
+            name,
+            el('td', { class: 'whitespace-nowrap', text: plan.purchase_date ? shortDate(plan.purchase_date) : '—' }),
+            el('td', { class: 'whitespace-nowrap', text: s.installment_count > 1 ? s.installment_no + '/' + s.installment_count : 'ครั้งเดียว' }),
+            el('td', { text: plan.owner_name || '' }),
+            el('td', { class: 'whitespace-nowrap', text: plan.account_name + (plan.sub_account_name ? ' · ' + plan.sub_account_name : '') }),
+            el('td', { class: 'whitespace-nowrap' }, shift ? shiftBadge(s) : monthTh(s.payment_month)),
+            el('td', { class: 'whitespace-nowrap', text: s.due_date ? App.formatDateTh(s.due_date) : '—' }),
+            el('td', { class: 'pm-money', text: money(entry.due) }),
+            el('td', { class: 'pm-money', text: money(entry.due - entry.remaining) }),
+            el('td', { class: 'pm-money font-semibold' + (entry.done ? '' : ' text-rose-700'), text: money(entry.remaining) }),
+            el('td', { class: 'whitespace-nowrap', text: statusOf(s) }),
+            el('td', { class: 'pm-money' }, picked ? amountInput(entry, 'field-input pm-cell-input') : '')));
+          if (!entry.carry) { sums.due += entry.due; sums.done += entry.due - entry.remaining; }
+          sums.left += entry.remaining;
+          if (picked && validAmount(selected.get(s.schedule_id), entry.remaining)) { sums.picked += toSatang(selected.get(s.schedule_id)); sums.count++; }
+        });
+        table.appendChild(body);
+      });
+      table.appendChild(el('tfoot', {}, el('tr', {},
+        el('th', { scope: 'row', colspan: 8, text: 'รวมเดือนนี้ (คงเหลือรวมงวดค้าง)' }),
+        el('td', { class: 'pm-money', text: money(sums.due) }),
+        el('td', { class: 'pm-money', text: money(sums.done) }),
+        el('td', { class: 'pm-money', text: money(sums.left) }),
+        el('td', { text: sums.count ? 'เลือก ' + sums.count : '' }),
+        el('td', { class: 'pm-money', text: sums.count ? money(sums.picked) : '' }))));
+      return el('div', { class: 'pm-table-wrap', tabindex: 0, role: 'region', 'aria-label': 'ตารางรายการประจำเดือน เลื่อนแนวนอนเพื่อดูทุกคอลัมน์' }, table);
+    }
+
+    function validAmount(value, max) {
+      var v = toSatang(value);
+      return /^\d+(\.\d{1,2})?$/.test(String(value).trim()) && v > 0 && v <= max;
+    }
+
+    /** รายการที่เลือกพร้อมบัญชีของกลุ่ม หรือ null ถ้ามียอดไม่ถูกต้อง */
+    function selection() {
+      var items = [];
+      var ok = true;
+      entries().forEach(function (entry) {
+        if (!selected.has(entry.s.schedule_id) || entry.done) return;
+        var value = selected.get(entry.s.schedule_id);
+        if (!validAmount(value, entry.remaining)) ok = false;
+        items.push({ entry: entry, amount: toSatang(value), account: payers[entry.groupKey] });
+      });
+      return { items: items, ok: ok };
+    }
+
+    // ---------- มุมมองรายปี: ยอดตามแผนและคงเหลือของแต่ละกลุ่มใน 12 เดือน ----------
+
+    function yearOf(ym) { return Math.floor(ym / 100); }
+    function yearTh(y) { return 'ปี ' + new Date(y, 0, 1).toLocaleDateString('th-TH', { year: 'numeric' }) + ' (' + y + ')'; }
+    function monthShort(y, m) { return new Date(y, m - 1, 1).toLocaleDateString('th-TH', { month: 'short' }); }
+    var MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+    /** สรุปทั้งปีตามกลุ่มที่เลือก: ไม่รวมงวดที่ยกเลิก แผนที่จบแล้วยังนับเพื่อดูผลย้อนหลัง */
+    function yearGroups(y) {
+      var owner = ownerSelect.value;
+      var groups = [];
+      var byKey = {};
+      data.plans.forEach(function (record) {
+        var plan = record.plan;
+        if (owner && plan.owner_id !== owner) return;
+        record.schedules.forEach(function (s) {
+          if (s.is_cancelled) return;
+          var ym = mode === 'PAY' ? s.payment_month : s.saving_month;
+          if (yearOf(ym) !== y) return;
+          var key = groupKeyOf(plan);
+          var g = byKey[key];
+          if (!g) groups.push(g = byKey[key] = { key: key, name: groupNameOf(plan), sort: groupSortOf(plan), plan: plan, cells: {}, due: 0, left: 0 });
+          var cell = g.cells[ym % 100] || (g.cells[ym % 100] = { due: 0, left: 0, count: 0 });
+          var due = toSatang(s.amount_due);
+          var left = toSatang(mode === 'PAY' ? s.remaining_to_pay : s.remaining_to_save);
+          cell.due += due; cell.left += left; cell.count++;
+          g.due += due; g.left += left;
+        });
+      });
+      return groups.sort(function (a, b) { return compareSort(a.sort, b.sort); });
+    }
+
+    function openMonth(ym) {
+      month = ym;
+      // ให้ปุ่มด้านบนเปลี่ยนเป็น "รายเดือน" ด้วย (showTab เรียก setPeriod แล้ว render)
+      window.PlannerBridge.showTab('monthly');
+      root.scrollIntoView({ block: 'start' });
+    }
+
+    function yearCell(c, ym, label) {
+      if (!c || !c.count) return el('span', { class: 'text-slate-300', text: '—' });
+      return el('button', { type: 'button', class: 'pm-cell', onclick: function () { openMonth(ym); },
+        'aria-label': label + ' ' + monthTh(ym) + ' ตามแผน ' + money(c.due) + ' บาท คงเหลือ ' + money(c.left) + ' บาท เปิดดูเดือนนี้' },
+        el('span', { class: 'font-medium', text: money(c.due) }),
+        el('small', { class: c.left ? 'text-rose-600' : 'text-emerald-600', text: c.left ? 'ค้าง ' + money(c.left) : 'ครบ' }));
+    }
+
+    function yearTotal(due, left) {
+      return el('td', { class: 'pm-money' }, el('span', { class: 'font-semibold', text: money(due) }),
+        el('small', { class: 'block text-xs ' + (left ? 'text-rose-600' : 'text-emerald-600'), text: left ? 'ค้าง ' + money(left) : 'ครบ' }));
+    }
+
+    function renderYear() {
+      var y = yearOf(month);
+      var nowMonth = Number(App.todayIso().slice(0, 7).replace('-', ''));
+      yearLabel.textContent = yearTh(y);
+      hint.textContent = (mode === 'PAY' ? 'ยอดที่ต้องจ่ายตามเดือนชำระ' : 'ยอดที่ต้องเก็บตามเดือนเก็บ') +
+        'ของแต่ละกลุ่มตลอดปี ตัวเลขบนคือยอดตามแผน ตัวเลขล่างคือยอดคงเหลือ แตะช่องเดือนเพื่อดูรายการและบันทึกในเดือนนั้น';
+      bar.hidden = true;
+      var groups = yearGroups(y);
+      var totals = MONTHS.map(function (m) {
+        return groups.reduce(function (t, g) {
+          var c = g.cells[m];
+          if (c) { t.due += c.due; t.left += c.left; t.count += c.count; }
+          return t;
+        }, { due: 0, left: 0, count: 0 });
+      });
+      var due = groups.reduce(function (s, g) { return s + g.due; }, 0);
+      var left = groups.reduce(function (s, g) { return s + g.left; }, 0);
+      var activeMonths = totals.filter(function (t) { return t.count > 0; }).length;
+      summary.textContent = '';
+      [['ตามแผนทั้งปี', due, 'text-slate-800'], [mode === 'PAY' ? 'จ่ายแล้ว' : 'เก็บแล้ว', due - left, 'text-emerald-700'],
+        ['คงเหลือ', left, left ? 'text-rose-600' : 'text-slate-800'],
+        ['เฉลี่ยต่อเดือนที่มีรายการ', activeMonths ? Math.round(due / activeMonths) : 0, 'text-indigo-700']].forEach(function (c) {
+        summary.appendChild(el('div', { class: 'rounded-2xl border border-slate-200 bg-white p-3' },
+          el('p', { class: 'text-xs text-slate-500', text: c[0] }),
+          el('p', { class: 'mt-1 font-semibold ' + c[2], text: money(c[1]) + ' ฿' })));
+      });
+      list.textContent = '';
+      if (!groups.length) {
+        list.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center' },
+          el('p', { class: 'font-medium text-slate-700', text: 'ไม่มีรายการ' + (mode === 'PAY' ? 'ที่ต้องจ่าย' : 'ที่ต้องเก็บ') + 'ใน' + yearTh(y) }),
+          el('p', { class: 'mt-1 text-sm text-slate-500', text: 'ลองเปลี่ยนปีหรือเจ้าของ' })));
+        return;
+      }
+      var table = el('table', { class: 'pm-table pm-year-table' },
+        el('caption', { class: 'sr-only', text: (mode === 'PAY' ? 'ยอดที่ต้องจ่าย' : 'ยอดที่ต้องเก็บ') + 'รายเดือน ' + yearTh(y) + ' หน่วยบาท' }));
+      var head = el('tr', {}, el('th', { scope: 'col', text: 'กลุ่ม' }));
+      MONTHS.forEach(function (m) {
+        head.appendChild(el('th', { scope: 'col', class: y * 100 + m === nowMonth ? 'pm-now' : '', text: monthShort(y, m) }));
+      });
+      head.appendChild(el('th', { scope: 'col', text: 'รวม' }));
+      table.appendChild(el('thead', {}, head));
+      var body = el('tbody');
+      groups.forEach(function (g) {
+        var tr = el('tr', {}, el('th', { scope: 'row' }, groupTitle({ name: g.name, plan: g.plan })));
+        MONTHS.forEach(function (m) {
+          tr.appendChild(el('td', { class: y * 100 + m === nowMonth ? 'pm-now' : '' }, yearCell(g.cells[m], y * 100 + m, g.name)));
+        });
+        tr.appendChild(yearTotal(g.due, g.left));
+        body.appendChild(tr);
+      });
+      table.appendChild(body);
+      var foot = el('tr', {}, el('th', { scope: 'row', text: 'รวมทุกกลุ่ม' }));
+      totals.forEach(function (t, i) {
+        foot.appendChild(el('td', { class: y * 100 + MONTHS[i] === nowMonth ? 'pm-now' : '' }, yearCell(t, y * 100 + MONTHS[i], 'รวมทุกกลุ่ม')));
+      });
+      foot.appendChild(yearTotal(due, left));
+      table.appendChild(el('tfoot', {}, foot));
+      list.appendChild(el('div', { class: 'pm-table-wrap', tabindex: 0, role: 'region', 'aria-label': 'ตารางภาพรวมรายปี เลื่อนแนวนอนเพื่อดูทุกเดือน' }, table));
+    }
+
+    /** CSV รายปี: สองแถวต่อกลุ่ม (ตามแผน/คงเหลือ) คอลัมน์เป็นปีเดือน YYYYMM */
+    function yearCsvRows() {
+      var y = yearOf(month);
+      var rows = [['กลุ่ม', 'ยอด'].concat(MONTHS.map(function (m) { return y * 100 + m; })).concat(['รวม'])];
+      yearGroups(y).forEach(function (g) {
+        [['ตามแผน', 'due'], ['คงเหลือ', 'left']].forEach(function (kind) {
+          rows.push([g.name, kind[0]].concat(MONTHS.map(function (m) { return g.cells[m] ? g.cells[m][kind[1]] / 100 : 0; })).concat([g[kind[1]] / 100]));
+        });
+      });
+      return rows;
+    }
+
+    function renderBar() {
+      if (pending) {
+        bar.hidden = false;
+        barText.textContent = 'มีรายการที่ยังยืนยันผลไม่ได้ ' + pending.payload.items.length + ' รายการ';
+        reviewButton.disabled = false;
+        reviewButton.textContent = 'ส่งรายการเดิมอีกครั้ง';
+        return;
+      }
+      var pick = selection();
+      bar.hidden = !pick.items.length;
+      var total = pick.items.reduce(function (s, i) { return s + i.amount; }, 0);
+      barText.textContent = 'เลือก ' + pick.items.length + ' รายการ · ' + money(total) + ' ฿' + (pick.ok ? '' : ' · มียอดไม่ถูกต้อง');
+      reviewButton.textContent = 'ตรวจสอบและบันทึก';
+      reviewButton.disabled = !pick.ok || !pick.items.length;
+    }
+
+    function openReview() {
+      errorBox.textContent = '';
+      var view;
+      if (pending) view = pending.view;
+      else {
+        var pick = selection();
+        if (!pick.ok || !pick.items.length) return;
+        if (pick.items.some(function (i) { return !i.account; })) { App.toast('กรุณาเพิ่มบัญชีเงินสด/ธนาคารก่อน', 'error'); return; }
+        view = buildView(pick.items);
+        dateInput.value = App.todayIso();
+        noteInput.value = '';
+      }
+      dateInput.max = App.todayIso();
+      dateInput.disabled = noteInput.disabled = !!pending;
+      dialogSub.textContent = (view.mode === 'PAY' ? 'บันทึกการจ่ายจริง ' : 'กันเงิน ') + view.count + ' รายการ · ' + monthTh(view.month);
+      linesBox.textContent = '';
+      view.lines.forEach(function (line) {
+        linesBox.appendChild(el('li', { class: 'rounded-xl border border-slate-200 px-3 py-2' },
+          el('div', { class: 'flex items-start justify-between gap-3' },
+            el('p', { class: 'font-medium', text: line.title }),
+            el('p', { class: 'whitespace-nowrap font-semibold', text: money(line.amount) + ' ฿' })),
+          el('p', { class: 'text-xs text-slate-500', text: line.items.join(' · ') }),
+          line.reserved ? el('p', { class: 'text-xs text-indigo-700', text: 'ใช้เงินที่กันไว้ในบัญชีนี้ ' + money(line.reserved) + ' ฿ · ต้องโอนจริง ' + money(line.amount - line.reserved) + ' ฿' }) : null));
+      });
+      totalBox.textContent = 'รวม ' + money(view.total) + ' บาท' + (view.mode === 'PAY' ? ' · ใช้รายการนี้เป็นเช็กลิสต์โอนเงินได้' : '');
+      setInfo('pm-confirm-info', view.mode === 'PAY' ? 'CONFIRM_PAY' : 'CONFIRM_SAVE');
+      if (!dialog.open) dialog.showModal();
+    }
+
+    function buildView(items) {
+      var lines = [];
+      var byKey = {};
+      items.forEach(function (i) {
+        var plan = i.entry.plan;
+        var key = mode === 'PAY' ? i.account + '>' + plan.account_id : i.account;
+        // แผนบนบัตร/สินเชื่อเป็นการโอนชำระหนี้เข้าบัญชีนั้น แผนอื่นเป็นรายจ่ายจากบัญชีที่จ่าย
+        var debt = LIABILITY_TYPES.indexOf(accountType(plan.account_id)) >= 0;
+        if (mode === 'PAY' && !debt) key = i.account;
+        if (!byKey[key]) lines.push(byKey[key] = { title: mode === 'PAY'
+          ? (debt ? accountName(i.account) + ' → ' + plan.account_name : 'จ่ายรายจ่ายจาก ' + accountName(i.account))
+          : 'กันเงินใน ' + accountName(i.account), amount: 0, reserved: 0, items: [] });
+        var line = byKey[key];
+        line.amount += i.amount;
+        line.items.push(plan.item_name + (i.entry.no ? ' ' + i.entry.no : '') + ' ' + money(i.amount));
+        if (mode === 'PAY') {
+          var held = (i.entry.s.reserved_accounts || []).find(function (r) { return r.account_id === i.account; });
+          line.reserved += Math.min(i.amount, held ? toSatang(held.amount) : 0);
+        }
+      });
+      return { mode: mode, month: month, lines: lines, count: items.length,
+        total: items.reduce(function (s, i) { return s + i.amount; }, 0),
+        items: items.map(function (i) { return { schedule_id: i.entry.s.schedule_id, account_id: i.account, amount: (i.amount / 100).toFixed(2) }; }) };
+    }
+
+    dialogForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (saving) return;
+      var payload;
+      var view;
+      if (pending) { payload = pending.payload; view = pending.view; }
+      else {
+        if (!dateInput.value || dateInput.value > App.todayIso()) { errorBox.textContent = 'กรุณาระบุวันที่ที่ไม่เป็นวันในอนาคต'; dateInput.focus(); return; }
+        view = buildView(selection().items);
+        payload = { action: view.mode === 'PAY' ? 'PAY' : 'RESERVE', date: dateInput.value, note: noteInput.value.trim(), items: view.items };
+      }
+      saving = true;
+      errorBox.textContent = '';
+      App.setBusy(confirmButton, true);
+      submit(payload, function (key) { return App.call('api_monthlyBatch', payload, key); }).then(function (res) {
+        pending = null;
+        selected.clear();
+        dialog.close();
+        App.toast((payload.action === 'PAY' ? 'บันทึกการจ่าย ' : 'กันเงิน ') + res.result.items + ' รายการ รวม ' + App.formatMoney(res.result.total) + ' บาทแล้ว', 'success');
+        window.PlannerBridge.apply(res.plans);
+      }, function (err) {
+        var retryable = err.code === 'NETWORK' || err.code === 'BUSY' || err.code === 'INTERNAL_ERROR';
+        pending = retryable ? { payload: payload, view: view } : null;
+        dateInput.disabled = noteInput.disabled = retryable;
+        errorBox.textContent = retryable ? 'ยังยืนยันผลไม่ได้ กด “ยืนยันบันทึกทั้งหมด” อีกครั้งเพื่อส่งรายการชุดเดิม ระบบจะไม่บันทึกซ้ำ' : err.message;
+        renderBar();
+      }).finally(function () {
+        saving = false;
+        App.setBusy(confirmButton, false);
+      });
+    });
+
+    document.getElementById('pm-dialog-close').addEventListener('click', function () { dialog.close(); });
+    reviewButton.addEventListener('click', openReview);
+
+    function setMonth(ym) {
+      if (!ym) return;
+      month = ym;
+      render();
+    }
+    document.getElementById('pm-prev').addEventListener('click', function () { setMonth(addMonths(month, period === 'year' ? -12 : -1)); });
+    document.getElementById('pm-next').addEventListener('click', function () { setMonth(addMonths(month, period === 'year' ? 12 : 1)); });
+    window.MonthlyView = {
+      setPeriod: function (next) {
+        if (next === period) { render(); return; }
+        period = next;
+        selected.clear();
+        render();
+      }
+    };
+    monthInput.addEventListener('change', function () {
+      if (/^\d{4}-\d{2}$/.test(monthInput.value)) setMonth(Number(monthInput.value.replace('-', '')));
+    });
+    function setMode(next) {
+      if (next === mode) return;
+      mode = next;
+      App.pref('monthlyMode', mode);
+      selected.clear();
+      render();
+    }
+    modePay.addEventListener('click', function () { setMode('PAY'); });
+    modeSave.addEventListener('click', function () { setMode('SAVE'); });
+    groupSelect.addEventListener('change', function () { App.pref('monthlyGroup', groupSelect.value); render(); });
+    function setView(next) { view = next; App.pref('monthlyView', view); render(); }
+    viewCards.addEventListener('click', function () { setView('cards'); });
+    viewTable.addEventListener('click', function () { setView('table'); });
+    ownerSelect.addEventListener('change', render);
+
+    /** CSV ของมุมมองที่แสดงอยู่ (เดือน + งวดค้าง) — ข้อความกัน formula injection */
+    document.getElementById('pm-csv').addEventListener('click', function () {
+      var yearly = period === 'year';
+      var all = yearly ? [] : entries();
+      var rows = yearly ? yearCsvRows() : null;
+      if (yearly ? rows.length < 2 : !all.length) { App.toast('ไม่มีรายการให้ส่งออก', 'info'); return; }
+      if (!yearly) rows = [['กลุ่ม', 'เลขที่', 'รายการ', 'วันที่ทำรายการ', 'งวดที่', 'งวดทั้งหมด', 'เจ้าของ', 'บัญชี/บัตร', 'บัญชีย่อย', 'เดือนเก็บ', 'เดือนชำระ', 'วันครบกำหนด',
+        'ยอดตามแผน', mode === 'PAY' ? 'จ่ายแล้ว' : 'เก็บแล้ว', 'คงเหลือ', 'สถานะ', 'ค้างจากเดือนก่อน']].concat(all.map(function (e) {
+        var s = e.s;
+        return [e.groupName, e.no, e.plan.item_name, e.plan.purchase_date || '', s.installment_no, s.installment_count, e.plan.owner_name, e.plan.account_name,
+          e.plan.sub_account_name || '', s.saving_month, s.payment_month, s.due_date || '', e.due / 100, (e.due - e.remaining) / 100,
+          e.remaining / 100, (mode === 'PAY' ? PAY_STATUS[s.payment_status] : SAVE_STATUS[s.saving_status]) || '', e.carry ? 'ใช่' : ''];
+      }));
+      var csv = rows.map(function (row) {
+        return row.map(function (value) {
+          if (typeof value === 'number') return String(value);
+          var text = String(value);
+          if (/^[=+@\-\t\r]/.test(text)) text = "'" + text;
+          return '"' + text.replace(/"/g, '""') + '"';
+        }).join(',');
+      }).join('\r\n');
+      var url = URL.createObjectURL(new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' }));
+      var link = el('a', { href: url, download: (yearly ? 'yearly-' : 'monthly-') + (mode === 'PAY' ? 'pay' : 'save') + '-' +
+        (yearly ? Math.floor(month / 100) : month) + '.csv', target: '_self' });
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    });
+
+    document.addEventListener('planner:data', function (event) {
+      data = event.detail;
+      // การ์ดในหน้าภาพรวมเลือกโหมดไว้ก่อนเปิดหน้านี้
+      var preferred = App.pref('monthlyMode') === 'SAVE' ? 'SAVE' : 'PAY';
+      if (preferred !== mode && !pending) { mode = preferred; selected.clear(); }
+      var owners = ((data.masters && data.masters.owners) || []).filter(function (o) { return o.is_active; });
+      var current = ownerSelect.value;
+      ownerSelect.textContent = '';
+      ownerSelect.appendChild(el('option', { value: '', text: 'ทั้งหมด' }));
+      owners.forEach(function (o) { ownerSelect.appendChild(el('option', { value: o.owner_id, text: o.owner_name })); });
+      ownerSelect.value = owners.some(function (o) { return o.owner_id === current; }) ? current : '';
+      render();
+    });
+  })();
+</script>
