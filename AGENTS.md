@@ -576,3 +576,40 @@ AI ต้องแปลงข้อมูลให้อยู่ในรู�
 ให้ความสำคัญกับความถูกต้องของข้อมูลและความสะดวกในการใช้งานมากกว่าการเพิ่มความซับซ้อนของระบบโดยไม่จำเป็น
 
 หากข้อกำหนดไม่ชัดเจน ให้เลือกแนวทางที่เรียบง่ายและปลอดภัยสำหรับการเปลี่ยนแปลงที่ย้อนกลับได้ แต่ต้องสอบถามผู้ใช้ก่อนดำเนินการที่มีผลกระทบสำคัญหรือย้อนกลับได้ยาก
+
+## 21. Local Development & Testing Tools
+
+เครื่องมือที่ใช้จริงในโปรเจกต์นี้ (ต้องมี Node.js 20+; ไม่มี npm dependency) — AI ทุกตัวต้องใช้ตามนี้ก่อนอ้างว่าทดสอบแล้ว
+
+| คำสั่ง | ใช้ทำอะไร |
+|---|---|
+| `npm test` | Unit test ทั้งหมด (`node --test tests/*.test.js`) ต้องผ่านทุกกรณีก่อน commit/clasp push |
+| `node --test tests/<file>.test.js` | รันเฉพาะไฟล์ |
+| `npm run dev` | Preview หน้าเว็บที่ http://localhost:5178 (`tests/dev-server.js`) ใช้โค้ด `.gs`/`.html` จริงกับข้อมูลจำลองในหน่วยความจำ ไม่เชื่อมต่อ Google |
+| `node tests/perf-probe.js` | นับจำนวนการเรียก Sheets API ต่อคำขอ (ใช้เทียบก่อน/หลังปรับประสิทธิภาพ) |
+
+### 21.1 โครงสร้างการทดสอบ
+
+- `tests/gas-shim.js`: fake Apps Script services (SpreadsheetApp, PropertiesService, LockService, Session, Utilities, HtmlService, Logger) และโหลดไฟล์ `.gs` ทุกไฟล์ใน root เข้า `vm` context; `createDbContext()` ให้ Spreadsheet จำลองที่ initialize แล้ว; `countCalls`/`resetCalls` สำหรับนับการเรียก API
+- ค่าจาก vm context เป็นคนละ realm: แปลงด้วย `JSON.parse(JSON.stringify(x))` ก่อน `assert.deepEqual`
+- idempotency key ในการทดสอบต้องตรง `/^[A-Za-z0-9_-]{8,128}$/`
+- `tests/performance.test.js` คุมงบจำนวนการเรียก Sheets ต่อคำขอ — ถ้าเพิ่มการอ่าน/เขียนต้องปรับงบพร้อมเหตุผล
+- `tests/html.test.js` ตรวจลิงก์ภายใน, include whitelist และ HTML id ซ้ำ
+- `tests/dev-server.js` ตัวเลือก env: `DEV_EMPTY=1` (ไม่ seed ข้อมูล), `DEV_DELAY_MS` (หน่วงเวลาตอบกลับ), `DEV_FAIL_RATE` (0–1 จำลองเครือข่ายล้มเหลว); แก้ `.html` แล้วรีเฟรชได้ทันที แต่แก้ `.gs` ต้อง restart server; การ navigate ไป URL เดิมที่ต่างแค่ `#hash` ไม่ reload หน้า (เติม `?r=n` เพื่อบังคับ reload)
+- `.claude/launch.json` มี configuration `expense-manager-preview` สำหรับเปิด preview
+
+### 21.2 ทดสอบบน Apps Script จริง (`/dev`)
+
+- ต้องได้รับอนุญาตจากผู้ใช้ก่อน `clasp push` ทุกครั้ง (§13); หลัง push ให้ `clasp pull` ลงโฟลเดอร์ชั่วคราวแยกจาก repo แล้ว diff ว่าตรงกับในเครื่อง (ห้าม pull ทับ repo)
+- ถ้า `clasp push` ตอบ `Skipping push.` แปลว่า `appsscript.json` บนเซิร์ฟเวอร์ต่างจากในเครื่อง: ดึงมาเทียบก่อน ห้ามใช้ `--force` โดยไม่ได้รับอนุญาต
+- Script Properties: `SPREADSHEET_ID`, `TEST_SPREADSHEET_ID`, `ALLOWED_EMAILS`, `DB_TARGET` (`TEST` = Web App ใช้ไฟล์ทดสอบ); ฟังก์ชันผู้ดูแล `checkDatabase`/`initializeDatabase`/`refreshProjections` ใช้ Production เสมอ — ห้ามเขียนข้อมูลทดสอบลง Production
+- ทดสอบผ่าน Test deployment (URL ลงท้าย `/dev`, ใช้โค้ด HEAD ล่าสุด) ด้วย `DB_TARGET=TEST`; ห้ามสร้างหรืออัปเดต deployment แบบเปิดสาธารณะ
+- ดูเวลาทำงานจริงที่ Apps Script → การเรียกใช้ (Executions)
+
+### 21.3 ข้อควรระวังที่พบแล้ว
+
+- หน้าเว็บอยู่ใน iframe ของ Apps Script และ `Index.html` ใช้ `<base target="_top">`: ลิงก์ภายใน (`#...`) ต้องมี `target="_self"` มิฉะนั้นทั้งแท็บจะเป็นหน้าว่าง (preview ในเครื่องจับไม่ได้)
+- Tailwind class ที่กำหนด display (`grid`, `flex`) ชนะ attribute `hidden` — `Styles.html` มี `[hidden]{display:none!important}` แล้ว ห้ามลบ
+- สร้าง DOM ด้วย `App.el` (textContent) เท่านั้น ห้ามใส่ข้อมูลผู้ใช้ผ่าน `innerHTML`
+- ค่า derived ใน `PaymentSchedules` (amount_reserved, สถานะ ฯลฯ) ถูกคำนวณใหม่เมื่อมี activity กับแผนนั้น การเปลี่ยนสูตรจึงไม่ปรับค่าที่เก็บไว้จนกว่าจะมี activity ถัดไป
+- Apps Script แต่ละคำขอมีต้นทุนคงที่ราว 2–3 วินาที: ลดจำนวน round trip (รวมหลายข้อมูลในคำขอเดียว) และใช้ cache ภายใน execution ของ `Database` (`resetExecutionCache` หลังได้ lock)

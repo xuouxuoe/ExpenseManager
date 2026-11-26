@@ -53,6 +53,8 @@ npm run dev
 
 ## ทดสอบในเครื่อง
 
+รายละเอียดเครื่องมือ ข้อควรระวัง และขั้นตอนทดสอบบน Apps Script `/dev` สำหรับนักพัฒนาและ AI agent อยู่ใน [AGENTS.md §21](AGENTS.md)
+
 ต้องใช้ Node.js 20 ขึ้นไป (ไม่มี dependency):
 
 ```powershell
