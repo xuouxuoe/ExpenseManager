@@ -25,6 +25,12 @@ var Operation = (function () {
     Database.writeRowAt(SHEET, found.rowNumber, found.entry);
   }
 
+  function successAudit(entry, replay) {
+    Audit.log({ actorId: entry.actor_id, action: entry.operation_type, entityType: 'Operation',
+      entityId: entry.operation_id, operationId: entry.operation_id, result: 'SUCCESS',
+      auditId: Util.deterministicUuid(entry.operation_id, 'operation-success-audit'), deduplicate: replay });
+  }
+
   /**
    * รันงานเขียนข้อมูลภายใต้ lock และ journal
    * request: { operationType, idempotencyKey, payload, actor: {actorId}, recoveryData }
@@ -59,7 +65,10 @@ var Operation = (function () {
           throw Util.AppError('IDEMPOTENCY_CONFLICT', 'คำขอนี้ถูกใช้กับข้อมูลชุดอื่นแล้ว กรุณาเริ่มรายการใหม่');
         }
         if (entry.status === 'COMMITTED') {
-          return { operationId: entry.operation_id, result: entry.result_ref ? JSON.parse(entry.result_ref) : null, replayed: true };
+          var committedResult = entry.result_ref ? JSON.parse(entry.result_ref) : null;
+          // Repairs older committed requests whose audit write failed. Never rerun the business write.
+          successAudit(entry, true);
+          return { operationId: entry.operation_id, result: committedResult, replayed: true };
         }
         // PENDING / FAILED / NEEDS_RECOVERY: replay ด้วย operation_id เดิม
         entry.status = 'PENDING';
@@ -118,10 +127,12 @@ var Operation = (function () {
         throw workError;
       }
 
+      // Persist the success event before confirming the request. A lost reply here leaves
+      // PENDING and can be replayed with the same operation/audit IDs, without duplicate events.
+      successAudit(entry, replay);
       entry.status = 'COMMITTED';
       entry.result_ref = resultRef;
       saveEntry(found);
-      Audit.log({ actorId: actorId, action: operationType, entityType: 'Operation', entityId: operationId, operationId: operationId, result: 'SUCCESS' });
       return { operationId: operationId, result: result === undefined ? null : result, replayed: false };
     } finally {
       lock.releaseLock();
@@ -145,10 +156,20 @@ var Operation = (function () {
 })();
 
 var Audit = (function () {
-  /** entry: { actorId, action, entityType, entityId, operationId, result } */
+  /** entry: { actorId, action, entityType, entityId, operationId, result, auditId?, deduplicate? } */
   function log(entry) {
+    if (entry.deduplicate && entry.operationId) {
+      // Match the event identity as well as operation ID, including legacy audits with random IDs.
+      var existing = Database.findRowsByValue('AuditLogs', 'operation_id', entry.operationId).some(function (hit) {
+        var row = hit.row;
+        return row.actor_id === (entry.actorId || '') && row.action === entry.action &&
+          row.entity_type === (entry.entityType || '') && row.entity_id === (entry.entityId || '') &&
+          row.result === (entry.result || 'SUCCESS');
+      });
+      if (existing) return;
+    }
     Database.appendRows('AuditLogs', [{
-      audit_id: Util.uuid(),
+      audit_id: entry.auditId || Util.uuid(),
       event_at: Util.nowIso(),
       actor_id: entry.actorId || '',
       action: entry.action,

@@ -156,10 +156,11 @@ var PaymentPlanner = (function () {
   }
 
   /** เขียนการเชื่อมรายการซื้อแบบ replay ได้ */
-  function writeLink(link, plan) {
+  function writeLink(link, plan, masters) {
     if (!link) return;
     if (link.mode === 'NEW') {
-      Database.appendRowsIfAbsent('Transactions', [link.transaction]);
+      // The checkpointed draft may predate a master rename made while this request was pending.
+      Database.appendRowsIfAbsent('Transactions', [Projection.apply('Transactions', link.transaction, masters)]);
       return;
     }
     var row = Database.readAll('Transactions').rows.filter(function (r) { return r.transaction_id === link.transaction_id; })[0];
@@ -262,7 +263,7 @@ var PaymentPlanner = (function () {
       })) {
         throw Util.AppError('INTERNAL_ERROR', 'ตรวจสอบงวดที่บันทึกไม่สำเร็จ กรุณาลองใหม่');
       }
-      writeLink(draft.link, plan);
+      writeLink(draft.link, plan, masters);
       if (draft.link && Database.readAll('Transactions').rows.filter(function (r) {
         return r.plan_id === plan.plan_id && r.transaction_type === 'CREDIT_PURCHASE';
       }).length !== 1) {

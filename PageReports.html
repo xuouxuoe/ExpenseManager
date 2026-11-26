@@ -405,8 +405,13 @@
       App.setBusy(button, true, 'กำลังเตรียมรายงาน…');
       App.call('api_sharedAccountReport', activeFilters).then(function (data) {
         if (seq !== requestSeq) return;
+        if (!data.accounts.length) {
+          shareRows = null;
+          document.getElementById('fr-share-result').hidden = true;
+          App.toast('ยังไม่มีบัญชีย่อยในตัวกรองที่เลือก', 'info');
+          return;
+        }
         shareRows = data.accounts;
-        if (!shareRows.length) { App.toast('ยังไม่มีบัญชีย่อยในตัวกรองที่เลือก', 'info'); return; }
         var canvas = document.getElementById('fr-share-canvas');
         canvas.width = 1000;
         canvas.height = 160 + shareRows.length * 140;
@@ -431,7 +436,7 @@
           ctx.textAlign = 'left';
           ctx.fillStyle = '#f1f5f9';
           ctx.fillRect(40, y + 16, 920, 14);
-          ctx.fillStyle = row.isAsset ? '#6366f1' : '#f59e0b';
+          ctx.fillStyle = row.balance < 0 ? '#e11d48' : (row.isAsset ? '#6366f1' : '#f59e0b');
           ctx.fillRect(40, y + 16, 920 * Math.abs(row.balance) / max, 14);
           ctx.font = '18px sans-serif';
           ctx.fillStyle = '#475569';

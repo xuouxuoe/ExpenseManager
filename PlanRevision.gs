@@ -54,8 +54,18 @@ var PlanRevision = (function () {
       principalRemaining: principalRemaining, interestRemaining: interestRemaining, feeRemaining: feeRemaining };
   }
 
+  /** Display-name projections are excluded: renaming a master must not invalidate a reviewed quote. */
+  function withoutNames(row, sheet) {
+    var copy = Object.assign({}, row);
+    Config.NAME_PROJECTIONS[sheet].forEach(function (spec) { delete copy[spec[1]]; });
+    return copy;
+  }
+
   function version(plan, rows) {
-    return Util.sha256Hex(Util.stableStringify({ plan: plan, schedules: rows }));
+    return Util.sha256Hex(Util.stableStringify({
+      plan: withoutNames(plan, 'PaymentPlans'),
+      schedules: rows.map(function (row) { return withoutNames(row, 'PaymentSchedules'); })
+    }));
   }
 
   function settlementKey(paymentId) { return 'plan.settlement.' + paymentId; }

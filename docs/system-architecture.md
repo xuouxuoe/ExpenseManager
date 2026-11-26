@@ -74,13 +74,20 @@ ProjectionService เป็นจุดเดียวที่เขียน�
 3. ProjectionService อ่าน Master ที่ cache ไว้ (CacheService; invalidate เมื่อ Master เปลี่ยน) และเติม `*_name`
 4. Database เขียนแถวแบบ batch
 
-### 3.2 เปลี่ยนชื่อ Master (operation_type `RENAME_MASTER`)
+### 3.2 เปลี่ยนชื่อ Master (operation_type `UPDATE_*`, audit `RENAME_MASTER`)
 
-1. รับ lock (LockService) และบันทึก OperationJournal `PENDING` พร้อม recovery_data = {entity_type, id, old_name, new_name}
+1. รับ lock (LockService) และบันทึก OperationJournal `PENDING`; เมื่อชื่อเปลี่ยน checkpoint `recovery_data = {renamed: true}` ก่อนเขียน Master เพื่อจดจำเหตุการณ์สำหรับ retry
 2. อัปเดตแถว Master
 3. สำหรับแต่ละตารางที่อ้างอิง (Transactions, PaymentPlans, PaymentSchedules): อ่านคอลัมน์ ID ทั้งคอลัมน์ครั้งเดียว, คำนวณคอลัมน์ชื่อใหม่ในหน่วยความจำ, เขียนกลับเฉพาะคอลัมน์ชื่อด้วย `setValues` ครั้งเดียวต่อคอลัมน์
-4. ตรวจผลแล้วตั้ง `COMMITTED` และเขียน AuditLogs หนึ่งรายการ
+4. เขียน Audit `RENAME_MASTER` หนึ่งเหตุการณ์ด้วย ID คงที่และตรวจประวัติเดิมเมื่อ retry จากนั้นเขียน operation success Audit ก่อนตั้ง `COMMITTED` (เป็นคนละเหตุการณ์)
 5. หากล้มเหลวกลางทาง: สถานะ `NEEDS_RECOVERY`; การกู้คืนคือรัน refresh ซ้ำจาก Master (idempotent) ไม่ใช่ย้อนชื่อทีละแถว
+
+### 3.2.1 การยืนยันงานและ Audit เมื่อ retry (Phase 6)
+
+- Operation.run เขียนผลธุรกิจเสร็จ ตรวจ/serialize ผลลัพธ์ แล้วเขียน success Audit ก่อนบันทึก COMMITTED หากเสียการเชื่อมต่อในช่วง Audit หรือ commit งานยังอยู่ในสถานะค้าง หรือ commit สำเร็จแต่ client ไม่ทราบผล จึงต้องส่ง key/payload เดิม
+- Audit ID ของ operation success และ rename คงที่ตาม operation_id; เมื่อ replay ค้นเหตุการณ์ด้วย operation_id/action/actor/entity/result ผ่าน TextFinder เพื่อไม่สร้างซ้ำและรองรับ Audit ID แบบสุ่มรุ่นเก่า ไม่เพิ่มการค้น Audit ในเส้นทางคำขอใหม่ตามปกติ
+- เมื่อ retry งาน COMMITTED เดิม ให้ตรวจและเติม operation success Audit ที่หายก่อนคืนผลที่เก็บไว้ โดยไม่เรียก business work ซ้ำ ไม่สแกนซ่อมทุก operation อัตโนมัติ และไม่สร้างย้อนหลังเหตุการณ์ rename รุ่นเก่าที่ไม่มี checkpoint ให้พิสูจน์
+- Google Sheets ยังไม่มี ACID ข้ามชีต การทดสอบในเครื่องยืนยันเฉพาะ outage หนึ่งครั้งก่อน/หลังแต่ละ write และการแย่ง lock จำลอง ยังไม่ใช่หลักฐาน concurrency หรือ outage ต่อเนื่องบน Google จริง
 
 ### 3.3 สร้างแผน (operation_type `CREATE_PLAN`)
 

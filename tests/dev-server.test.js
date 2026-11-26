@@ -34,7 +34,7 @@ test('local โหลด backend ใหม่เมื่อ .gs เปลี่
     const call = async (name, ...args) => {
       const response = await fetch('http://127.0.0.1:' + port + '/api/' + name, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args)
-      });
+      }).catch((error) => { throw new Error('Preview request failed: ' + (error.cause?.code || error.message), { cause: error }); });
       if (!response.ok) return { status: response.status };
       return response.json();
     };

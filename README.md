@@ -4,7 +4,7 @@
 
 - ข้อกำหนดโครงการ: [AGENTS.md](AGENTS.md)
 - เอกสารออกแบบ: [docs/](docs/) — database-schema, business-rules, system-architecture, development-plan, test-plan
-- สถานะ: Phase 3 (Transactions) — หน้ารายการรับ-จ่าย และบัญชีและข้อมูลหลัก ใช้งานได้
+- สถานะ: ปิด Phase 5 และ Phase 6 แล้ว (2026-11-26) ผ่านเทสต์ในเครื่อง 143/143 และทดสอบบน `/dev` ด้วยฐาน TEST; ยังไม่ deploy เป็น Production (ดู docs/development-plan.md และ docs/test-plan.md)
 
 ## โครงสร้างไฟล์ runtime (Phase 1)
 

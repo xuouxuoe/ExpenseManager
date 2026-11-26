@@ -414,7 +414,13 @@ var PaymentActivity = (function () {
         Database.appendRowsIfAbsent('Settings', [{ setting_key: PlanRevision.settlementKey(batch.settlement.paymentId),
           setting_value: Util.stableStringify(batch.settlement), description: 'ประวัติปรับแผนเมื่อปิดยอดก่อนกำหนด', updated_at: batch.at }]);
       }
-      if (batch.transactions.length) Database.appendRowsIfAbsent('Transactions', batch.transactions);
+      if (batch.transactions.length) {
+        // The checkpoint may predate a master rename made while this request was pending.
+        var currentNames = Projection.loadMasters();
+        Database.appendRowsIfAbsent('Transactions', batch.transactions.map(function (t) {
+          return Projection.apply('Transactions', t, currentNames);
+        }));
+      }
       if (batch.reservations.length) Database.appendRowsIfAbsent('Reservations', batch.reservations);
       if (batch.allocations.length) Database.appendRowsIfAbsent('PaymentAllocations', batch.allocations);
       if (batch.reclassify) {

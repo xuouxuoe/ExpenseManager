@@ -261,13 +261,18 @@ var MasterData = (function () {
         throw fail('RULE', typeField, 'เปลี่ยนประเภทไม่ได้ เพราะมีรายการที่ใช้ข้อมูลนี้แล้ว');
       }
       var renamed = clean[def.nameField] !== current[def.nameField];
+      // Preserve the rename event before updating the master. On replay the stored
+      // master may already have its new name even when its projections/audit are incomplete.
+      var recordRename = renamed || !!(ctx.recoveryData && ctx.recoveryData.renamed);
+      if (renamed && !ctx.recoveryData) ctx.checkpoint({ renamed: true });
       var updated = Object.assign({}, current, clean, { updated_at: ctx.now });
       var displayChanged = type === 'account' && saveDisplayName(id, input, ctx.now);
       Database.updateRows(def.sheet, [updated]);
       // refresh เฉพาะเมื่อชื่อเปลี่ยน หรือเป็นการ replay งานที่ค้าง (อาจ refresh ไม่ครบรอบก่อน)
       var report = (renamed || displayChanged || ctx.replay) ? Projection.refresh({ masterKeys: [def.projectionKey] }) : { tables: [], orphans: [] };
-      if (renamed) {
-        Audit.log({ actorId: ctx.actorId, action: 'RENAME_MASTER', entityType: def.sheet, entityId: current[def.pk], operationId: ctx.operationId, result: 'SUCCESS' });
+      if (recordRename) {
+        Audit.log({ actorId: ctx.actorId, action: 'RENAME_MASTER', entityType: def.sheet, entityId: current[def.pk],
+          operationId: ctx.operationId, result: 'SUCCESS', auditId: ctx.id('master-rename-audit'), deduplicate: ctx.replay });
       }
       var saved = findRow(type, current[def.pk]).row;
       return { row: type === 'account' ? displayAccount(saved) : saved, projection: { changedColumns: report.tables.length, orphans: report.orphans.length } };

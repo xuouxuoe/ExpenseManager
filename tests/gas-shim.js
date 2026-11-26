@@ -57,6 +57,21 @@ class FakeRange {
     };
   }
   setFontWeight() { return this; }
+  getValue() { return this.getValues()[0][0]; }
+  setValue(value) { return this.setValues([[value]]); }
+  clearContent() {
+    return this.setValues(Array.from({ length: this.numRows }, () => Array(this.numCols).fill('')));
+  }
+  createPivotTable(source) {
+    const pivot = { source, anchor: [this.row, this.col], groups: [], columns: [], values: [],
+      addRowGroup(column) { this.groups.push(column); return this; },
+      addColumnGroup(column) { this.columns.push(column); return this; },
+      addPivotValue(column, summary) { this.values.push({ column, summary }); return this; },
+      remove: () => { this.sheet.pivots = this.sheet.pivots.filter((p) => p !== pivot); }
+    };
+    this.sheet.pivots.push(pivot);
+    return pivot;
+  }
 }
 
 class FakeSheet {
@@ -66,6 +81,8 @@ class FakeSheet {
     this.formats = [];
     this.frozen = 0;
     this.calls = { setValues: 0 };
+    this.maxRows = 1000;
+    this.pivots = [];
   }
   getName() { return this.name; }
   getLastRow() {
@@ -81,7 +98,9 @@ class FakeSheet {
     this.data.forEach((row) => row.forEach((v, i) => { if (v !== '' && v !== undefined && v !== null) max = Math.max(max, i + 1); }));
     return max;
   }
-  getMaxRows() { return 1000; }
+  getMaxRows() { return this.maxRows; }
+  insertRowsAfter(after, count) { this.maxRows += count; return this; }
+  getPivotTables() { return this.pivots.slice(); }
   getDataRange() {
     return this.getRange(1, 1, Math.max(this.getLastRow(), 1), Math.max(this.getLastColumn(), 1));
   }
@@ -123,6 +142,7 @@ function formatBangkok(date, pattern) {
  */
 function createContext(options = {}) {
   const props = Object.assign({}, options.properties || {});
+  const sharedLock = options.sharedLock || { held: false };
   const state = {
     activeEmail: options.activeEmail === undefined ? 'owner@example.com' : options.activeEmail,
     effectiveEmail: options.effectiveEmail || 'owner@example.com',
@@ -140,16 +160,26 @@ function createContext(options = {}) {
       })
     },
     SpreadsheetApp: {
+      PivotTableSummarizeFunction: { SUM: 'SUM' },
       openById: (id) => {
         if (!state.spreadsheets[id]) state.spreadsheets[id] = new FakeSpreadsheet();
         return state.spreadsheets[id];
       }
     },
     LockService: {
-      getScriptLock: () => ({
-        tryLock: () => { if (!state.lockAvailable) return false; state.locks++; return true; },
-        releaseLock: () => { state.locks--; }
-      })
+      getScriptLock: () => {
+        let acquired = false;
+        return {
+          tryLock: () => {
+            if (acquired) return true;
+            if (!state.lockAvailable || sharedLock.held) return false;
+            sharedLock.held = acquired = true; state.locks++; return true;
+          },
+          releaseLock: () => {
+            if (acquired) { sharedLock.held = acquired = false; state.locks--; }
+          }
+        };
+      }
     },
     Session: {
       getActiveUser: () => ({ getEmail: () => state.activeEmail }),
