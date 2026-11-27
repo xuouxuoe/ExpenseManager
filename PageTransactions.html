@@ -48,6 +48,14 @@
       <label for="tx-f-q" class="field-label">ค้นหา</label>
       <input id="tx-f-q" type="search" class="field-input" placeholder="ชื่อรายการ, หมายเหตุ…" autocomplete="off">
     </div>
+    <div class="col-span-2 sm:col-span-4">
+      <label for="tx-f-sort" class="field-label">เรียงตาม</label>
+      <select id="tx-f-sort" class="field-input" aria-describedby="tx-f-sort-hint">
+        <option value="DATE">วันที่ทำรายการ (ล่าสุดก่อน)</option>
+        <option value="CREATED">เวลาที่บันทึก (เพิ่งบันทึกก่อน)</option>
+      </select>
+      <p id="tx-f-sort-hint" class="field-hint">รายการจากสลิปใช้วันที่บนสลิป เลือก “เวลาที่บันทึก” เพื่อดูรายการที่เพิ่งบันทึกบนสุด</p>
+    </div>
     <div id="tx-f-budget-box" class="col-span-2 sm:col-span-4" hidden>
       <label for="tx-f-budget" class="field-label">งบทริป/โครงการ</label>
       <select id="tx-f-budget" class="field-input" aria-describedby="tx-f-budget-hint"></select>
@@ -259,7 +267,7 @@
 
     var state = {
       masters: { accounts: [], owners: [], categories: [] },
-      filters: { month: '', type: '', account: '', q: '', budget: '' },
+      filters: { month: '', type: '', account: '', q: '', budget: '', sort: App.pref('txSort') === 'CREATED' ? 'CREATED' : 'DATE' },
       events: [],
       rows: [], total: 0, page: 1, hasMore: false, summary: null,
       status: 'idle', errorMessage: '', loadingMore: false,
@@ -445,7 +453,7 @@
       var range = state.filters.budget ? { from: '', to: '' } : monthRange(state.filters.month);
       return {
         date_from: range.from, date_to: range.to, transaction_type: state.filters.type,
-        account_id: state.filters.account, budget_id: state.filters.budget, q: state.filters.q, page: page || 1, page_size: 30
+        account_id: state.filters.account, budget_id: state.filters.budget, q: state.filters.q, sort: state.filters.sort, page: page || 1, page_size: 30
       };
     }
 
@@ -746,6 +754,19 @@
     // รายการที่เชื่อมแผน (ซื้อด้วยบัตร/ชำระงวด/ดอกเบี้ย) จัดการผ่านหน้าแผนชำระเท่านั้น
     function canReverse(r) { return !r.reversal_of && !r.is_reversed && !r.plan_id; }
 
+    var SOURCE_LABELS = { AI: 'ผ่าน LINE/API', PLAN: 'จากแผนชำระ', MIGRATION: 'นำเข้า' };
+
+    /** เวลาที่บันทึก (Asia/Bangkok) เช่น "บันทึก 28 พ.ย. 01:57 · ผ่าน LINE/API" */
+    function recordedText(r) {
+      var t = r.created_at ? new Date(r.created_at) : null;
+      if (!t || isNaN(t.getTime())) return '';
+      var opts = { timeZone: 'Asia/Bangkok' };
+      var day = t.toLocaleDateString('th-TH', Object.assign({ day: 'numeric', month: 'short' }, opts));
+      var time = t.toLocaleTimeString('th-TH', Object.assign({ hour: '2-digit', minute: '2-digit' }, opts));
+      var src = SOURCE_LABELS[r.source] ? ' · ' + SOURCE_LABELS[r.source] : '';
+      return 'บันทึก ' + day + ' ' + time + ' น.' + src;
+    }
+
     function renderRow(r) {
       var meta = TYPES[r.transaction_type] || { label: r.transaction_type, icon: '•' };
       var sub = [meta.label, r.category_name, flowText(r), r.owner_name].filter(Boolean).join(' · ');
@@ -763,6 +784,8 @@
           el('div', { class: 'min-w-0 flex-1' },
             el('p', { class: 'tx-wrap text-sm font-medium', text: r.item_name }),
             el('p', { class: 'tx-wrap text-xs leading-snug text-slate-500', text: sub }),
+            recordedText(r) ? el('p', { class: 'tx-wrap text-[0.7rem] leading-snug text-slate-400', text: recordedText(r) +
+              (state.filters.sort === 'CREATED' ? ' · รายการวันที่ ' + App.formatDateTh(r.transaction_date) : '') }) : null,
             badges.childNodes.length ? badges : null),
           amountNode(r)),
         actions.childNodes.length ? actions : null);
@@ -798,10 +821,13 @@
       panel.appendChild(el('p', { class: 'mb-2 text-xs text-slate-500', text: 'แสดง ' + state.rows.length + ' จาก ' + state.total + ' รายการ' }));
       var lastDate = null;
       var list = null;
+      var byCreated = state.filters.sort === 'CREATED';
       state.rows.forEach(function (r) {
-        if (r.transaction_date !== lastDate) {
-          lastDate = r.transaction_date;
-          panel.appendChild(el('h2', { class: 'mb-1 mt-4 text-sm font-semibold text-slate-600', text: App.formatDateTh(r.transaction_date) }));
+        // เรียงตามเวลาที่บันทึก: จัดกลุ่มตามวันที่บันทึก (Asia/Bangkok) แทนวันที่ทำรายการ
+        var groupKey = byCreated ? (r.created_at ? new Date(r.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }) : '') : r.transaction_date;
+        if (groupKey !== lastDate) {
+          lastDate = groupKey;
+          panel.appendChild(el('h2', { class: 'mb-1 mt-4 text-sm font-semibold text-slate-600', text: (byCreated ? 'บันทึกเมื่อ ' : '') + App.formatDateTh(groupKey) }));
           list = el('ul', { class: 'space-y-2' });
           panel.appendChild(list);
         }
@@ -1101,6 +1127,13 @@
     document.getElementById('tx-f-type').addEventListener('change', function (e) { state.filters.type = e.target.value; loadList(false); });
     document.getElementById('tx-f-account').addEventListener('change', function (e) { state.filters.account = e.target.value; loadList(false); renderBalances(); });
     document.getElementById('tx-f-q').addEventListener('input', App.debounce(function (e) { state.filters.q = e.target.value.trim(); loadList(false); }, 300));
+    var sortSelect = document.getElementById('tx-f-sort');
+    sortSelect.value = state.filters.sort;
+    sortSelect.addEventListener('change', function (e) {
+      state.filters.sort = e.target.value === 'CREATED' ? 'CREATED' : 'DATE';
+      App.pref('txSort', state.filters.sort);
+      loadList(false);
+    });
     document.getElementById('tx-f-budget').addEventListener('change', function (e) {
       state.filters.budget = e.target.value;
       state.filters.budgetName = e.target.selectedOptions[0] ? e.target.selectedOptions[0].textContent : '';

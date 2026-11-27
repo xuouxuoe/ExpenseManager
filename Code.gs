@@ -70,7 +70,7 @@ function api_setMasterActive(type, id, isActive, idempotencyKey) {
   });
 }
 
-/** filters: { date_from, date_to, transaction_type, account_id, owner_id, category_id, budget_id, q, page, page_size } */
+/** filters: { date_from, date_to, transaction_type, account_id, owner_id, category_id, budget_id, q, sort (DATE|CREATED), page, page_size } */
 function api_listTransactions(filters) {
   return handleApi_(function () {
     return Transactions.list(filters);

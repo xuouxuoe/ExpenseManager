@@ -366,6 +366,8 @@ var Transactions = (function () {
     var categoryId = Validation.requireId(f.category_id, 'category_id', { required: false });
     var budgetId = Validation.requireId(f.budget_id, 'budget_id', { required: false });
     var q = normalize(Validation.requireText(f.q, 'q', { max: 100 }));
+    // sort: DATE (ค่าเริ่มต้น: วันที่ทำรายการ) | CREATED (เวลาที่บันทึก ล่าสุดก่อน — เห็นรายการจาก LINE/สลิปที่วันที่ย้อนหลัง)
+    var sort = Validation.requireEnum(Validation.isBlank(f.sort) ? 'DATE' : f.sort, ['DATE', 'CREATED'], 'sort');
     var page = Validation.isBlank(f.page) ? 1 : Validation.requireInt(f.page, 'page', { min: 1 });
     var pageSize = Validation.isBlank(f.page_size) ? PAGE_SIZE_DEFAULT : Validation.requireInt(f.page_size, 'page_size', { min: 1, max: PAGE_SIZE_MAX });
 
@@ -388,8 +390,9 @@ var Transactions = (function () {
       }
       return true;
     }).sort(function (a, b) {
-      if (a.transaction_date !== b.transaction_date) return a.transaction_date < b.transaction_date ? 1 : -1;
-      return a.created_at < b.created_at ? 1 : (a.created_at > b.created_at ? -1 : 0);
+      if (sort === 'DATE' && a.transaction_date !== b.transaction_date) return a.transaction_date < b.transaction_date ? 1 : -1;
+      if (a.created_at !== b.created_at) return a.created_at < b.created_at ? 1 : -1;
+      return a.transaction_date < b.transaction_date ? 1 : (a.transaction_date > b.transaction_date ? -1 : 0);
     });
 
     var income = 0;
