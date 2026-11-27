@@ -29,7 +29,23 @@ var LineWebhook = (function () {
   }
 
   function helpText() {
-    return text('พิมพ์รายการที่ต้องการบันทึก เช่น\n• กาแฟ 65\n• ข้าวกลางวัน 120 จ่ายด้วย kbank\n• เงินเดือนเข้า 30000\n• โอนจาก kbank ไป scb 500\n\nระบบจะสรุปให้ตรวจก่อน แล้วกด "ยืนยัน" เพื่อบันทึก');
+    return text('พิมพ์รายการที่ต้องการบันทึก เช่น\n• กาแฟ 65\n• ข้าวกลางวัน 120 จ่ายด้วย kbank\n• เงินเดือนเข้า 30000\n• โอนจาก kbank ไป scb 500\n\nระบบจะสรุปให้ตรวจก่อน แล้วกด "ยืนยัน" เพื่อบันทึก\n\nคำสั่งดูข้อมูล\n• สรุป — รายรับรายจ่ายเดือนนี้\n• ยอดเงิน — ยอดบัญชีและเงินที่ใช้ได้\n• ล่าสุด — 5 รายการล่าสุด\n• งบ — งบใช้จ่ายคงเหลือ');
+  }
+
+  /**
+   * คำสั่งดูข้อมูล (ระยะ A5): จับคำตรงตัวก่อนเรียก AI (ไม่เสียค่า AI และไม่สร้างร่าง)
+   * ต้องมีสิทธิ์ READ ในการเชื่อมต่อ
+   */
+  var READ_COMMANDS = [
+    { words: ['สรุป', 'สรุปเดือนนี้', 'summary'], result: 'summary', run: function () { return ApiReads.formatSummary(ApiReads.summaryMonth({})); } },
+    { words: ['ยอดเงิน', 'ยอดคงเหลือ', 'คงเหลือ', 'balance', 'balances'], result: 'balances', run: function () { return ApiReads.formatBalances(ApiReads.balances()); } },
+    { words: ['ล่าสุด', 'รายการล่าสุด', 'recent'], result: 'recent', run: function () { return ApiReads.formatRecent(ApiReads.recentTransactions({})); } },
+    { words: ['งบ', 'งบเหลือ', 'งบคงเหลือ', 'budget'], result: 'budget', run: function () { return ApiReads.formatBudgets(ApiReads.budgetRemaining({})); } }
+  ];
+
+  function readCommandOf(body) {
+    var key = body.toLowerCase().replace(/\s+/g, '');
+    return READ_COMMANDS.filter(function (c) { return c.words.indexOf(key) >= 0; })[0] || null;
   }
 
   function postbackData(action, draft) {
@@ -139,6 +155,14 @@ var LineWebhook = (function () {
     if (!body || HELP_WORDS.indexOf(body.toLowerCase()) >= 0) {
       reply(replyToken, [helpText()]);
       return 'help';
+    }
+    var command = readCommandOf(body);
+    if (command) {
+      if (call.client.scopes.indexOf('READ') < 0) {
+        throw Util.AppError('FORBIDDEN_SCOPE', 'การเชื่อมต่อนี้ไม่มีสิทธิ์ดูข้อมูล (READ) ให้ผู้ดูแลเพิ่มสิทธิ์ในหน้าเชื่อมต่อภายนอก');
+      }
+      reply(replyToken, [text(command.run())]);
+      return command.result;
     }
     var parsed = AiParser.parse(body, call.client);
     if (parsed.intent !== 'TRANSACTION') {

@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Added — Integration API ระยะ A5: อ่านข้อมูล (2026-11-27)
+
+- `ApiReadService.gs`: actions สิทธิ์ READ `summary.month`, `balances`, `transactions.recent`, `budget.remaining` คำนวณด้วยโค้ดเดียวกับหน้าภาพรวม/หน้างบ (ตัวเลขตรงกัน) ไม่เขียนข้อมูล ไม่เรียก AI
+- LINE: คำสั่ง `สรุป` / `ยอดเงิน` / `ล่าสุด` / `งบ` ตอบทันทีโดยไม่ผ่าน AI (การเชื่อมต่อต้องมีสิทธิ์ READ); "วิธีใช้" แสดงคำสั่ง
+- คู่มือ API: 4 actions เป็น "ใช้ได้" พร้อมตัวอย่างคำขอ/คำตอบ และคำสั่งในหัวข้อ LINE
+- `tests/api-reads.test.js` 7 กรณี
+
 ### Added — Integration API ระยะ A4: LINE Official Account (2026-11-27)
 
 - `LineService.gs`: gateway รับ LINE webhook โดยตรงที่ `/exec?line_key=<API key>` → AI แปลงข้อความ → สร้างร่าง → ตอบ Flex พร้อมปุ่ม [ยกเลิก][ยืนยัน]; กดยืนยันจึงบันทึก (source AI) ครั้งเดียว

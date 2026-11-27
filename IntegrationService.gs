@@ -239,6 +239,27 @@ var IntegrationApi = (function () {
       scope: 'WRITE',
       channel: 'optional',
       run: function (params, call) { return AiParser.parse(params.text, call.client); }
+    },
+    // ระยะ A5: อ่านข้อมูล (ApiReadService.gs) ตัวเลขตรงกับ Dashboard/หน้างบ
+    'summary.month': {
+      scope: 'READ',
+      channel: 'optional',
+      run: function (params) { return ApiReads.summaryMonth(params); }
+    },
+    balances: {
+      scope: 'READ',
+      channel: 'optional',
+      run: function () { return ApiReads.balances(); }
+    },
+    'transactions.recent': {
+      scope: 'READ',
+      channel: 'optional',
+      run: function (params) { return ApiReads.recentTransactions(params); }
+    },
+    'budget.remaining': {
+      scope: 'READ',
+      channel: 'optional',
+      run: function (params) { return ApiReads.budgetRemaining(params); }
     }
   };
 

@@ -79,7 +79,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 | A2 | ApiDrafts, `masters.list`, `draft.create/confirm/cancel` ผ่าน API key (ทดสอบด้วย Postman) | ครบวงจรบน TEST, ยืนยันซ้ำไม่ซ้ำ, หมดอายุ/token ผิดถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.8)** |
 | A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง — **implement ในเครื่องแล้ว (ข้อ 0.9)** |
 | A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.11)** |
-| A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard |
+| A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard — **implement ในเครื่องแล้ว (ข้อ 0.12)** |
 | A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง |
 
 คู่มือ API ในแอปปรับตามแต่ละระยะ (ตัดส่วน Make ออก เพิ่มการตั้งค่า LINE webhook และ Script Properties ของ AI)
@@ -149,6 +149,19 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - [ ] ผู้ใช้ตั้ง LINE token, สร้างการเชื่อมต่อสำหรับ LINE, ตั้ง Webhook URL ใน LINE Developers และทดสอบในแชต
 - [x] แก้ (2026-11-27): ผู้ใช้พบว่าปุ่ม Verify ใน LINE timeout เมื่อ URL มี `?line_key=` (ไม่มี key ผ่าน) เพราะเส้นทาง LINE เปิด Spreadsheet ตรวจ key ก่อน → คำขอที่ `events` ว่างตอบ `ok` ทันทีโดยไม่ตรวจ key/ไม่แตะ Spreadsheet (ไม่มีการประมวลผล) — push แล้ว (ตรงกัน 32 ไฟล์); วัดผ่าน curl รวมการตาม redirect: Verify 2.0–3.0 วินาทีได้ `ok`, เหตุการณ์จริงกับ key ปลอม 3.5 วินาทีได้ `UNAUTHORIZED`
 - ข้อจำกัด: ตรวจ X-Line-Signature ไม่ได้ (ข้อ 0.5); การกันซ้ำพึ่ง CacheService (หายได้ก่อนกำหนด แต่ร่างยังกันซ้ำด้วย request_id); เวลาตอบจริงยังไม่ได้วัด
+
+### 0.12 สถานะ A5 (2026-11-27)
+
+- [x] `ApiReadService.gs` (`ApiReads`) + actions สิทธิ์ READ (channel ไม่บังคับ) ไม่เขียนชีต ไม่เรียก AI:
+  - `summary.month` params `{ month?, owner_id? }` → `income/expense/net`, `plan { scheduled, paid, outstanding, need_to_save, saved }`, `top_categories` (5 หมวดรายจ่ายสูงสุด) — คำนวณด้วย `FinanceReports.dashboard({ month, owner_id })` จึงตรงกับ Dashboard
+  - `balances` → `totals { assets, reserved, available, liabilities }` (ทุกบัญชี เท่า `accountTotals` ของ Dashboard) และ `accounts` (บัญชีที่ใช้งาน หรือปิดแล้วแต่ยังมียอด)
+  - `transactions.recent` params `{ limit 1–20 ค่าเริ่มต้น 5 }` → เรียงแบบหน้ารายการ มี `is_reversed`/`reversal_of`; ไม่คืน note/external_ref/created_at
+  - `budget.remaining` params `{ month? }` → ยอดรวมและรายงบ (remaining, สัปดาห์นี้, ใช้ได้ต่อวัน) จาก `Budgets.list`
+  - ไม่ระบุ month = เดือนปัจจุบัน (Asia/Bangkok); month ผิดรูปแบบ → `VALIDATION_YEAR_MONTH*`
+- [x] LINE: คำสั่งตรงตัว (ไม่สนช่องว่าง/ตัวพิมพ์) `สรุป` / `ยอดเงิน` / `ล่าสุด` / `งบ` (และคำพ้อง) ตอบข้อความสรุปโดยไม่เรียก AI และไม่สร้างร่าง; การเชื่อมต่อต้องมีสิทธิ์ READ เพิ่มจาก WRITE ไม่งั้นตอบ `FORBIDDEN_SCOPE`; "วิธีใช้" แสดงคำสั่งใหม่
+- [x] `tests/api-reads.test.js` 7 กรณี (เทียบกับ `api_dashboard`/`api_budgetPage`, สิทธิ์, ไม่เขียนชีต, รูปแบบข้อความ, คำสั่ง LINE); `npm test` ผ่าน 231/231; คู่มือ API แสดง 4 actions เป็น "ใช้ได้" พร้อมตัวอย่าง (ตรวจ preview แล้ว)
+- [ ] clasp push และทดสอบบน `/dev` / LINE จริงด้วยฐาน TEST (ต้องได้รับอนุญาต; รอแก้ข้อค้างของ A4 ก่อน)
+- ข้อจำกัด: ยอดเงินส่วนตัวถูกส่งกลับผ่าน LINE (ตอบเฉพาะ userId ที่อนุญาต); ยังไม่ได้วัดเวลาตอบจริง (`summary.month` อ่าน 7–8 ชีต)
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
 
