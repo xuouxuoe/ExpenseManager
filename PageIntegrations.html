@@ -551,6 +551,39 @@
       panel.appendChild(el('span', { class: 'rounded-full px-2 py-0.5 text-xs font-semibold ' + (s.has_token ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'),
         text: s.has_token ? 'ตั้ง token แล้ว (…' + s.token_hint + ')' : 'ยังไม่ได้ตั้ง token' }));
       if (!s.can_edit) panel.appendChild(el('p', { class: 'mt-2 text-xs text-slate-500', text: 'เฉพาะเจ้าของระบบเท่านั้นที่ตั้ง token ได้' }));
+      panel.appendChild(lastWebhook(s.last_webhook));
+    }
+
+    // ความหมายของผลล่าสุดจาก webhook (รหัสเดียวกับ log LINE_WEBHOOK)
+    var HINTS = {
+      VERIFY: 'ได้รับคำขอ Verify จาก LINE (ข้อความจริงจะแสดงผลแทนเมื่อมีคนพิมพ์)',
+      UNAUTHORIZED: 'key ใน Webhook URL ไม่ถูกต้องหรือการเชื่อมต่อถูกปิด — ตรวจ ?line_key= ให้ตรงกับ key ล่าสุด',
+      FORBIDDEN_SCOPE: 'การเชื่อมต่อไม่มีสิทธิ์บันทึก (WRITE)',
+      FORBIDDEN_CHANNEL: 'การเชื่อมต่อยังไม่ได้ใส่ LINE userId',
+      FORBIDDEN: 'ผู้สร้างการเชื่อมต่อไม่อยู่ใน ALLOWED_EMAILS แล้ว',
+      RATE_LIMITED: 'ส่งข้อความถี่เกินไป',
+      BAD_REQUEST: 'คำขอไม่ใช่รูปแบบ LINE webhook',
+      forbidden: 'LINE userId ของผู้ส่งไม่อยู่ในรายการที่อนุญาต (บอทตอบ userId กลับไป)',
+      draft: 'สร้างร่างและส่งปุ่มยืนยันแล้ว',
+      confirmed: 'ยืนยันและบันทึกแล้ว',
+      cancelled: 'ยกเลิกร่างแล้ว',
+      ignored: 'ข้ามข้อความ (เช่น มาจากกลุ่ม)',
+      duplicate: 'LINE ส่งข้อความเดิมซ้ำ จึงข้าม',
+      LINE_NOT_CONFIGURED: 'ยังไม่ได้ตั้ง Channel access token จึงตอบกลับไม่ได้',
+      LINE_REPLY_HTTP_401: 'Channel access token ไม่ถูกต้องหรือหมดอายุ',
+      LINE_REPLY_HTTP_400: 'ตอบกลับไม่ได้ (reply token หมดอายุหรือข้อความผิดรูปแบบ)'
+    };
+
+    function lastWebhook(last) {
+      if (!last) return el('p', { class: 'mt-2 text-xs text-slate-500', text: 'ยังไม่เคยได้รับ webhook จาก LINE' });
+      var codes = last.outcome.split(/[ ,\/]+/).filter(Boolean);
+      var hints = codes.map(function (c) { return HINTS[c] || (c.indexOf('error:') === 0 ? 'ข้อผิดพลาด ' + c.slice(6) : ''); }).filter(Boolean);
+      var when = last.at ? new Date(last.at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'medium' }) : '';
+      return el('div', { class: 'mt-3 rounded-xl bg-slate-50 px-3 py-2 text-sm' },
+        el('p', { class: 'text-slate-500', text: 'ผลล่าสุดจาก LINE' + (when ? ' · ' + when : '') }),
+        el('p', { class: 'font-mono text-slate-800', text: last.outcome }),
+        hints.length ? el('p', { class: 'mt-1 text-slate-600', text: hints.join(' · ') }) : null,
+        el('button', { type: 'button', class: 'btn btn-ghost mt-1 px-0 text-indigo-700', onclick: load }, 'รีเฟรช'));
     }
 
     function load() {

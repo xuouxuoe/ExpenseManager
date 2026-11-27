@@ -10,6 +10,7 @@
 - `tests/line-webhook.test.js` 10 กรณี
 - ปุ่ม Verify ของ LINE (events ว่าง) ตอบทันทีโดยไม่เปิด Spreadsheet เพื่อไม่ให้ timeout
 - log `LINE_WEBHOOK: <ผล>` ทุกครั้ง (ไม่มีข้อความ/userId/key/token) และ log ในเส้นทาง Web App ใช้ `console.log` เพื่อให้ดูได้ใน Executions
+- การ์ด LINE แสดง "ผลล่าสุดจาก LINE" (เวลา + รหัสผลพร้อมคำอธิบาย) เก็บใน Script Property `LINE_LAST_WEBHOOK` สำหรับหาสาเหตุเมื่อบอทไม่ตอบ
 
 ### Added — Integration API ระยะ A3: แปลงข้อความด้วย AI (2026-11-27)
 
