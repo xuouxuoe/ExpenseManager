@@ -30,7 +30,8 @@ var Config = {
     AUDIT_LOGS: 'AuditLogs',
     OPERATION_JOURNAL: 'OperationJournal',
     BUDGETS: 'Budgets',
-    BUDGET_CATEGORIES: 'BudgetCategories'
+    BUDGET_CATEGORIES: 'BudgetCategories',
+    API_CLIENTS: 'ApiClients'
   },
 
   HEADERS: {
@@ -48,7 +49,9 @@ var Config = {
     OperationJournal: ['operation_id', 'idempotency_key', 'request_hash', 'actor_id', 'operation_type', 'status', 'recovery_data', 'result_ref', 'created_at', 'updated_at'],
     // งบใช้จ่ายรายเดือน/รายสัปดาห์ (อนุมัติ 2026-11-26) หนึ่งงบต่อแถว และหนึ่งหมวดของงบต่อแถว
     Budgets: ['budget_id', 'budget_month', 'budget_name', 'owner_id', 'owner_name', 'amount', 'weekly_amount', 'note', 'is_active', 'created_at', 'updated_at'],
-    BudgetCategories: ['budget_category_id', 'budget_id', 'category_id', 'category_name', 'created_at']
+    BudgetCategories: ['budget_category_id', 'budget_id', 'category_id', 'category_name', 'created_at'],
+    // ผู้เรียก Integration API ภายนอก เช่น Make (อนุมัติ 2026-11-27) เก็บเฉพาะ hash ของ API key
+    ApiClients: ['client_id', 'client_name', 'actor_id', 'key_hash', 'scopes', 'allowed_channel_user_ids', 'default_account_id', 'default_owner_id', 'is_active', 'created_at', 'updated_at']
   },
 
   /** Primary key ของแต่ละตาราง */
@@ -66,11 +69,12 @@ var Config = {
     AuditLogs: 'audit_id',
     OperationJournal: 'operation_id',
     Budgets: 'budget_id',
-    BudgetCategories: 'budget_category_id'
+    BudgetCategories: 'budget_category_id',
+    ApiClients: 'client_id'
   },
 
   /** ชีตที่ระบบสร้างเองเมื่อเขียนครั้งแรก (ฟีเจอร์ที่เพิ่มภายหลัง) และอ่านเป็นตารางว่างถ้ายังไม่มี */
-  AUTO_CREATE_SHEETS: ['SubAccounts', 'Budgets', 'BudgetCategories'],
+  AUTO_CREATE_SHEETS: ['SubAccounts', 'Budgets', 'BudgetCategories', 'ApiClients'],
 
   ENUMS: {
     ACCOUNT_TYPE: ['CASH', 'BANK', 'E_WALLET', 'CREDIT_CARD', 'CASH_CARD', 'LOAN'],
@@ -84,7 +88,8 @@ var Config = {
     PAYMENT_STATUS: ['UNPAID', 'PARTIAL', 'PAID', 'CANCELLED'],
     RESERVATION_ACTION: ['RESERVE', 'RELEASE', 'CONSUME'],
     OPERATION_STATUS: ['PENDING', 'COMMITTED', 'FAILED', 'NEEDS_RECOVERY'],
-    AUDIT_RESULT: ['SUCCESS', 'FAILED']
+    AUDIT_RESULT: ['SUCCESS', 'FAILED'],
+    API_SCOPE: ['READ', 'WRITE']
   },
 
   /** ความยาวสูงสุดของข้อความ (docs/database-schema.md §1.3) */

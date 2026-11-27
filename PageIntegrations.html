@@ -1,0 +1,290 @@
+<section aria-labelledby="int-title">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 id="int-title" class="text-xl font-semibold">เชื่อมต่อภายนอก</h1>
+      <p class="text-sm text-slate-500">API key สำหรับ Make / LINE OA ให้ส่งคำขอบันทึกหรือดูข้อมูล</p>
+    </div>
+    <button type="button" id="int-add" class="btn btn-primary"><span aria-hidden="true">+</span>เพิ่มการเชื่อมต่อ</button>
+  </div>
+
+  <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+    <p class="font-semibold">ระยะ A1: รองรับ action <code>ping</code> เพื่อทดสอบการเชื่อมต่อเท่านั้น</p>
+    <p class="mt-1">ส่ง <code>POST</code> แบบ JSON ไปที่ URL ของ deployment สำหรับ Integration (ลงท้าย <code>/exec</code>) เช่น
+      <code class="break-all">{"api_key":"emk_…","action":"ping"}</code> ระบบตอบ HTTP 200 เสมอ ให้ตรวจค่า <code>ok</code> ในคำตอบ</p>
+  </div>
+
+  <div id="int-panel" class="mt-4" aria-busy="true"></div>
+</section>
+
+<dialog id="int-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="int-form-title">
+  <form id="int-form" novalidate class="flex max-h-[85vh] flex-col">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 id="int-form-title" class="text-base font-semibold">เพิ่มการเชื่อมต่อ</h2>
+      <button type="button" id="int-form-close" class="btn btn-ghost" aria-label="ปิดหน้าต่าง">✕</button>
+    </div>
+    <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <div>
+        <label for="int-name" class="field-label">ชื่อการเชื่อมต่อ</label>
+        <input id="int-name" class="field-input" maxlength="100" required autocomplete="off" placeholder="เช่น Make LINE ครอบครัว">
+      </div>
+      <fieldset>
+        <legend class="field-label">สิทธิ์</legend>
+        <div class="flex flex-wrap gap-4">
+          <label for="int-scope-read" class="inline-flex min-h-[2.75rem] items-center gap-2 text-sm"><input id="int-scope-read" type="checkbox" value="READ" class="h-5 w-5 rounded border-slate-300 text-indigo-600" checked> ดูข้อมูล (READ)</label>
+          <label for="int-scope-write" class="inline-flex min-h-[2.75rem] items-center gap-2 text-sm"><input id="int-scope-write" type="checkbox" value="WRITE" class="h-5 w-5 rounded border-slate-300 text-indigo-600" checked> บันทึกผ่านร่าง (WRITE)</label>
+        </div>
+      </fieldset>
+      <div>
+        <label for="int-channels" class="field-label">LINE userId ที่อนุญาต</label>
+        <textarea id="int-channels" class="field-input" rows="3" autocomplete="off" placeholder="U1234… (คั่นด้วยบรรทัดใหม่หรือจุลภาค)"></textarea>
+        <p class="field-hint">ว่าง = ไม่ตรวจ userId (ไม่แนะนำเมื่อใช้กับ LINE) สูงสุด 20 รายการ</p>
+      </div>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label for="int-account" class="field-label">บัญชีเริ่มต้น</label>
+          <select id="int-account" class="field-input"></select>
+        </div>
+        <div>
+          <label for="int-owner" class="field-label">เจ้าของเริ่มต้น</label>
+          <select id="int-owner" class="field-input"></select>
+        </div>
+      </div>
+      <p class="field-hint">ค่าเริ่มต้นใช้เมื่อข้อความไม่ได้ระบุบัญชีหรือเจ้าของ (ใช้ในระยะ A2)</p>
+    </div>
+    <p id="int-form-error" role="alert" class="mx-5 mb-2 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700" hidden></p>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+      <button type="button" id="int-form-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="int-form-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="int-key-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="int-key-title">
+  <div class="p-5">
+    <h2 id="int-key-title" class="text-base font-semibold">API key ใหม่</h2>
+    <p class="mt-2 text-sm text-rose-700">คัดลอกเก็บไว้ใน Make ตอนนี้ ระบบแสดง key นี้ครั้งเดียวและไม่เก็บค่าจริงไว้ ถ้าหายให้กด "เปลี่ยน key"</p>
+    <label for="int-key-value" class="field-label mt-3">API key</label>
+    <input id="int-key-value" class="field-input font-mono text-sm" readonly>
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" id="int-key-copy" class="btn btn-secondary">คัดลอก</button>
+      <button type="button" id="int-key-done" class="btn btn-primary">เก็บแล้ว ปิด</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    var el = App.el;
+    var state = { status: 'loading', clients: [], masters: { accounts: [], owners: [] }, editing: null, error: '' };
+    var panel = document.getElementById('int-panel');
+    var dialog = document.getElementById('int-dialog');
+    var form = document.getElementById('int-form');
+    var formError = document.getElementById('int-form-error');
+    var saveBtn = document.getElementById('int-form-save');
+    var keyDialog = document.getElementById('int-key-dialog');
+    var keyInput = document.getElementById('int-key-value');
+    var submitForm = App.createSubmitter();
+    var rowSubmitters = {};
+
+    /** API key 256 บิตจากเบราว์เซอร์: emk_ + base64url 43 ตัวอักษร */
+    function generateApiKey() {
+      var bytes = new Uint8Array(32);
+      crypto.getRandomValues(bytes);
+      var bin = '';
+      for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+      return 'emk_' + btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    }
+
+    function nameOf(list, pk, nameKey, id) {
+      var r = list.filter(function (x) { return x[pk] === id; })[0];
+      return r ? r[nameKey] : '';
+    }
+
+    function load() {
+      state.status = 'loading';
+      render();
+      Promise.all([App.call('api_listApiClients'), App.call('api_listMasters', { includeInactive: false })]).then(function (res) {
+        state.clients = res[0] || [];
+        state.masters = res[1] || state.masters;
+        state.status = 'ready';
+        render();
+      }, function (err) {
+        state.status = 'error';
+        state.error = (err && err.message) || 'โหลดข้อมูลไม่สำเร็จ';
+        render();
+      });
+    }
+
+    function render() {
+      panel.textContent = '';
+      panel.setAttribute('aria-busy', String(state.status === 'loading'));
+      if (state.status === 'loading') {
+        panel.appendChild(el('p', { class: 'flex items-center gap-2 text-sm text-slate-500' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'กำลังโหลด…'));
+        return;
+      }
+      if (state.status === 'error') {
+        panel.appendChild(el('div', { class: 'rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700', role: 'alert' },
+          el('p', { text: state.error }),
+          el('button', { type: 'button', class: 'btn btn-secondary mt-3', onclick: load }, 'ลองใหม่')));
+        return;
+      }
+      if (!state.clients.length) {
+        panel.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500' },
+          el('p', { text: 'ยังไม่มีการเชื่อมต่อ' }),
+          el('p', { class: 'mt-1', text: 'กด "เพิ่มการเชื่อมต่อ" เพื่อสร้าง API key สำหรับ Make' })));
+        return;
+      }
+      var list = el('ul', { class: 'grid gap-3 md:grid-cols-2' });
+      state.clients.forEach(function (c) { list.appendChild(card(c)); });
+      panel.appendChild(list);
+    }
+
+    function card(c) {
+      var scopeLabel = c.scopes.map(function (s) { return s === 'READ' ? 'ดูข้อมูล' : 'บันทึก'; }).join(' · ');
+      var account = nameOf(state.masters.accounts, 'account_id', 'account_name', c.default_account_id);
+      var owner = nameOf(state.masters.owners, 'owner_id', 'owner_name', c.default_owner_id);
+      var details = el('dl', { class: 'mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm' },
+        el('dt', { class: 'text-slate-500', text: 'สิทธิ์' }), el('dd', { text: scopeLabel }),
+        el('dt', { class: 'text-slate-500', text: 'LINE userId' }), el('dd', { class: 'break-all', text: c.allowed_channel_user_ids.length ? c.allowed_channel_user_ids.length + ' รายการ' : 'ไม่ตรวจ' }),
+        el('dt', { class: 'text-slate-500', text: 'ค่าเริ่มต้น' }), el('dd', { text: [account || '— บัญชี', owner || '— เจ้าของ'].join(' / ') }),
+        el('dt', { class: 'text-slate-500', text: 'สร้างโดย' }), el('dd', { class: 'break-all', text: c.actor_id }));
+      var actions = el('div', { class: 'mt-3 flex flex-wrap gap-2' },
+        el('button', { type: 'button', class: 'btn btn-secondary', onclick: function () { openForm(c); } }, 'แก้ไข'),
+        el('button', { type: 'button', class: 'btn btn-secondary', onclick: function (e) { rotate(c, e.currentTarget); } }, 'เปลี่ยน key'),
+        el('button', { type: 'button', class: c.is_active ? 'btn btn-ghost text-rose-700' : 'btn btn-ghost', onclick: function (e) { toggleActive(c, e.currentTarget); } }, c.is_active ? 'ปิดใช้งาน' : 'เปิดใช้งาน'));
+      return el('li', { class: 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm' + (c.is_active ? '' : ' opacity-70') },
+        el('div', { class: 'flex items-start justify-between gap-2' },
+          el('p', { class: 'font-semibold', text: c.client_name }),
+          el('span', { class: 'rounded-full px-2 py-0.5 text-xs font-semibold ' + (c.is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'), text: c.is_active ? 'ใช้งาน' : 'ปิดแล้ว' })),
+        details, actions);
+    }
+
+    function fillSelect(select, rows, pk, nameKey, value, emptyLabel) {
+      select.textContent = '';
+      select.appendChild(el('option', { value: '', text: emptyLabel }));
+      rows.forEach(function (r) { select.appendChild(el('option', { value: r[pk], text: r[nameKey], selected: r[pk] === value })); });
+    }
+
+    function openForm(c) {
+      state.editing = c || null;
+      document.getElementById('int-form-title').textContent = c ? 'แก้ไขการเชื่อมต่อ' : 'เพิ่มการเชื่อมต่อ';
+      document.getElementById('int-name').value = c ? c.client_name : '';
+      document.getElementById('int-scope-read').checked = c ? c.scopes.indexOf('READ') >= 0 : true;
+      document.getElementById('int-scope-write').checked = c ? c.scopes.indexOf('WRITE') >= 0 : true;
+      document.getElementById('int-channels').value = c ? c.allowed_channel_user_ids.join('\n') : '';
+      fillSelect(document.getElementById('int-account'), state.masters.accounts, 'account_id', 'account_name', c ? c.default_account_id : '', '— ไม่กำหนด —');
+      fillSelect(document.getElementById('int-owner'), state.masters.owners, 'owner_id', 'owner_name', c ? c.default_owner_id : '', '— ไม่กำหนด —');
+      formError.hidden = true;
+      saveBtn.textContent = c ? 'บันทึก' : 'สร้าง API key';
+      dialog.showModal();
+      document.getElementById('int-name').focus();
+    }
+
+    function readForm() {
+      var scopes = [];
+      ['int-scope-read', 'int-scope-write'].forEach(function (id) { var b = document.getElementById(id); if (b.checked) scopes.push(b.value); });
+      return {
+        client_name: document.getElementById('int-name').value.trim(),
+        scopes: scopes,
+        allowed_channel_user_ids: document.getElementById('int-channels').value,
+        default_account_id: document.getElementById('int-account').value,
+        default_owner_id: document.getElementById('int-owner').value
+      };
+    }
+
+    function showKey(apiKey) {
+      keyInput.value = apiKey;
+      keyDialog.showModal();
+      keyInput.select();
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (saveBtn.disabled) return;
+      var input = readForm();
+      if (!input.client_name) { formError.textContent = 'กรุณากรอกชื่อการเชื่อมต่อ'; formError.hidden = false; return; }
+      if (!input.scopes.length) { formError.textContent = 'กรุณาเลือกสิทธิ์อย่างน้อย 1 อย่าง'; formError.hidden = false; return; }
+      formError.hidden = true;
+      var editing = state.editing;
+      // key ใหม่สร้างครั้งเดียวต่อข้อมูลชุดนี้ เพื่อให้ retry ใช้ key เดิม (hash ตรงกับคำขอแรก)
+      if (!editing && (!state.pendingKey || state.pendingSignature !== JSON.stringify(input))) {
+        state.pendingKey = generateApiKey();
+        state.pendingSignature = JSON.stringify(input);
+      }
+      var apiKey = state.pendingKey;
+      App.setBusy(saveBtn, true);
+      submitForm(input, function (key) {
+        return editing
+          ? App.call('api_updateApiClient', editing.client_id, input, key)
+          : App.call('api_createApiClient', Object.assign({ api_key: apiKey }, input), key);
+      }).then(function (data) {
+        App.setBusy(saveBtn, false);
+        state.clients = data.clients;
+        dialog.close();
+        render();
+        if (editing) App.toast('บันทึกการเชื่อมต่อแล้ว', 'success');
+        else { state.pendingKey = null; showKey(apiKey); }
+      }, function (err) {
+        App.setBusy(saveBtn, false);
+        formError.textContent = (err && err.message) || 'บันทึกไม่สำเร็จ';
+        formError.hidden = false;
+      });
+    });
+
+    function rowSubmitter(id) {
+      return rowSubmitters[id] = rowSubmitters[id] || App.createSubmitter();
+    }
+
+    function rotate(c, button) {
+      App.confirm('เปลี่ยน API key ของ "' + c.client_name + '"? key เดิมจะใช้ไม่ได้ทันที ต้องนำ key ใหม่ไปใส่ใน Make', 'เปลี่ยน key').then(function (ok) {
+        if (!ok) return;
+        var apiKey = generateApiKey();
+        App.setBusy(button, true, 'กำลังเปลี่ยน…');
+        rowSubmitter('rotate-' + c.client_id)({ id: c.client_id, apiKey: apiKey }, function (key) {
+          return App.call('api_rotateApiClientKey', c.client_id, apiKey, key);
+        }).then(function (data) {
+          state.clients = data.clients;
+          render();
+          showKey(apiKey);
+        }, function (err) {
+          App.setBusy(button, false);
+          App.toast((err && err.message) || 'เปลี่ยน key ไม่สำเร็จ', 'error');
+        });
+      });
+    }
+
+    function toggleActive(c, button) {
+      var next = !c.is_active;
+      var ask = next ? Promise.resolve(true) : App.confirm('ปิดใช้งาน "' + c.client_name + '"? คำขอจาก Make ที่ใช้ key นี้จะถูกปฏิเสธทันที', 'ปิดใช้งาน');
+      ask.then(function (ok) {
+        if (!ok) return;
+        App.setBusy(button, true, 'กำลังบันทึก…');
+        rowSubmitter('active-' + c.client_id)({ id: c.client_id, next: next }, function (key) {
+          return App.call('api_setApiClientActive', c.client_id, next, key);
+        }).then(function (data) {
+          state.clients = data.clients;
+          render();
+          App.toast(next ? 'เปิดใช้งานแล้ว' : 'ปิดใช้งานแล้ว', 'success');
+        }, function (err) {
+          App.setBusy(button, false);
+          App.toast((err && err.message) || 'บันทึกไม่สำเร็จ', 'error');
+        });
+      });
+    }
+
+    document.getElementById('int-add').addEventListener('click', function () { openForm(null); });
+    document.getElementById('int-form-close').addEventListener('click', function () { dialog.close(); });
+    document.getElementById('int-form-cancel').addEventListener('click', function () { dialog.close(); });
+    document.getElementById('int-key-copy').addEventListener('click', function () {
+      var done = function () { App.toast('คัดลอก API key แล้ว', 'success'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(keyInput.value).then(done, function () { keyInput.select(); App.toast('คัดลอกอัตโนมัติไม่ได้ กรุณากด Ctrl+C', 'info'); });
+      } else { keyInput.select(); App.toast('กรุณากด Ctrl+C เพื่อคัดลอก', 'info'); }
+    });
+    // ล้าง key ออกจากหน้าเมื่อปิด
+    keyDialog.addEventListener('close', function () { keyInput.value = ''; });
+    document.getElementById('int-key-done').addEventListener('click', function () { keyDialog.close(); });
+
+    App.onShow('integrations', load);
+  })();
+</script>

@@ -150,6 +150,7 @@ function createContext(options = {}) {
     lockAvailable: options.lockAvailable !== false,
     locks: 0,
     spreadsheets: {},
+    cache: options.sharedCache || {},
     logs: []
   };
   const sandbox = {
@@ -195,6 +196,16 @@ function createContext(options = {}) {
         if (tz !== 'Asia/Bangkok') throw new Error('unexpected timezone ' + tz);
         return formatBangkok(date, pattern);
       }
+    },
+    CacheService: {
+      getScriptCache: () => ({
+        get: (k) => (k in state.cache ? state.cache[k] : null),
+        put: (k, v) => { state.cache[k] = String(v); }
+      })
+    },
+    ContentService: {
+      MimeType: { JSON: 'application/json' },
+      createTextOutput: (text) => ({ text, mimeType: null, setMimeType(m) { this.mimeType = m; return this; }, getContent() { return this.text; } })
     },
     HtmlService: {
       createHtmlOutput: (html) => ({ html, setTitle(t) { this.title = t; return this; } })

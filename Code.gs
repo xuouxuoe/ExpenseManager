@@ -22,7 +22,7 @@ function doGet() {
 }
 
 /** ใช้ใน template เท่านั้น: รวมไฟล์ HTML ที่อนุญาต */
-var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports'];
+var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports', 'PageIntegrations'];
 
 function include(name) {
   if (INCLUDABLE_FILES_.indexOf(name) < 0) throw new Error('include: ไม่อนุญาตไฟล์ ' + name);
@@ -247,6 +247,46 @@ function api_copyBudgets(fromMonth, toMonth, idempotencyKey) {
   return handleApi_(function (actor) {
     var result = Budgets.copyMonth(fromMonth, toMonth, { idempotencyKey: idempotencyKey, actor: actor });
     return { result: result, page: budgetPage_(toMonth) };
+  });
+}
+
+// ---------- Integration API (Make / LINE OA) ----------
+// docs/integration-api.md — doPost ใช้กับ deployment แบบไม่ต้องล็อกอิน ตรวจสิทธิ์ด้วย API key ใน body
+
+function doPost(e) {
+  return IntegrationApi.handlePost(e);
+}
+
+function api_listApiClients() {
+  return handleApi_(function () { return ApiClients.list(); });
+}
+
+/** input.api_key สร้างฝั่งเบราว์เซอร์และแสดงผู้ใช้ครั้งเดียว Backend เก็บเฉพาะ hash */
+function api_createApiClient(input, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var client = ApiClients.create(input, { idempotencyKey: idempotencyKey, actor: actor });
+    return { client: client, clients: ApiClients.list() };
+  });
+}
+
+function api_updateApiClient(clientId, input, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var client = ApiClients.update(clientId, input, { idempotencyKey: idempotencyKey, actor: actor });
+    return { client: client, clients: ApiClients.list() };
+  });
+}
+
+function api_setApiClientActive(clientId, active, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var client = ApiClients.setActive(clientId, active, { idempotencyKey: idempotencyKey, actor: actor });
+    return { client: client, clients: ApiClients.list() };
+  });
+}
+
+function api_rotateApiClientKey(clientId, apiKey, idempotencyKey) {
+  return handleApi_(function (actor) {
+    var client = ApiClients.rotateKey(clientId, apiKey, { idempotencyKey: idempotencyKey, actor: actor });
+    return { client: client, clients: ApiClients.list() };
   });
 }
 

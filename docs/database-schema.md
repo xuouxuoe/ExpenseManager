@@ -78,6 +78,7 @@ Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`t
 | OperationJournal | หนึ่งคำขอเขียนข้อมูล | Idempotency / Recovery |
 | Budgets | หนึ่งงบใช้จ่ายของหนึ่งเดือน | Config (อนุมัติ 2026-11-26) |
 | BudgetCategories | หนึ่งหมวดที่นับเข้างบหนึ่งงบ | Bridge |
+| ApiClients | หนึ่งผู้เรียก Integration API (เช่น Make) | Config / Security (อนุมัติ 2026-11-27) |
 | Pivot_Saving / Pivot_Payment / Pivot_Transactions | — | รายงาน ไม่ใช่ข้อมูลต้นฉบับ |
 
 ## 3. Canonical headers
@@ -97,9 +98,10 @@ AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operati
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
 Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
 BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
+ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_user_ids, default_account_id, default_owner_id, is_active, created_at, updated_at
 ```
 
-จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 11, BudgetCategories 5
+จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 11, BudgetCategories 5, ApiClients 11
 
 ### บัญชีย่อยสำหรับรายงาน (อนุมัติ 2026-11-26)
 
@@ -336,6 +338,23 @@ BudgetCategories: budget_category_id, budget_id, category_id, category_name, cre
 | BudgetCategories | created_at | Timestamp | SYS | |
 
 ทั้งสองชีตถูกสร้างอัตโนมัติเมื่อบันทึกงบครั้งแรก (เหมือน SubAccounts) และอ่านเป็นตารางว่างถ้ายังไม่มี `initializeDatabase()` / `initializeTestDatabase()` ก็สร้างให้ได้โดยไม่แตะข้อมูลเดิม
+
+### 4.11 ApiClients (อนุมัติ 2026-11-27)
+
+ผู้เรียก Integration API ภายนอก (docs/integration-api.md) ไม่ใช่ข้อมูลการเงิน; สร้างอัตโนมัติเมื่อเพิ่มการเชื่อมต่อครั้งแรก
+
+| Sheet | Column | Type | Kind | คำอธิบาย |
+|---|---|---|---|---|
+| ApiClients | client_id | ID | KEY | |
+| ApiClients | client_name | Text(100) | INPUT | ชื่อที่ผู้ใช้ตั้ง |
+| ApiClients | actor_id | Text | SYS | email ผู้สร้าง ใช้เป็นผู้ทำรายการใน journal/audit; ต้องอยู่ใน ALLOWED_EMAILS |
+| ApiClients | key_hash | Text | SYS | SHA-256 ของ API key (ไม่เก็บ key จริง); key สร้างในเบราว์เซอร์และแสดงครั้งเดียว |
+| ApiClients | scopes | Enum list | INPUT | READ, WRITE คั่นด้วยจุลภาค |
+| ApiClients | allowed_channel_user_ids | Text list | INPUT | LINE userId ที่อนุญาต คั่นด้วยจุลภาค; ว่าง = ไม่ตรวจ |
+| ApiClients | default_account_id | ID | INPUT | FK → Accounts (active) ว่างได้ |
+| ApiClients | default_owner_id | ID | INPUT | FK → Owners (active) ว่างได้ |
+| ApiClients | is_active | Boolean | INPUT | ปิดแล้ว key ใช้ไม่ได้ทันที (ไม่ลบแถว) |
+| ApiClients | created_at / updated_at | Timestamp | SYS | |
 
 ## 5. Projection map
 

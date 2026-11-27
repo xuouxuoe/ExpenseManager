@@ -209,6 +209,7 @@
 | OperationJournal | หนึ่งคำขอเขียนข้อมูลเพื่อป้องกันซ้ำและกู้คืน |
 | Budgets | หนึ่งงบใช้จ่ายรายเดือน (อนุมัติ 2026-11-26) |
 | BudgetCategories | หนึ่งหมวดที่นับเข้างบ |
+| ApiClients | หนึ่งผู้เรียก Integration API เช่น Make (อนุมัติ 2026-11-27; เก็บเฉพาะ hash ของ key) |
 | Pivot_Saving / Pivot_Payment / Pivot_Transactions | รายงาน |
 
 ### 7.1 Canonical headers (เรียงตามลำดับ) — อนุมัติแล้ว 2026-11-25
@@ -228,6 +229,7 @@ AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operati
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
 Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
 BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
+ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_user_ids, default_account_id, default_owner_id, is_active, created_at, updated_at
 ```
 
 รายละเอียด type, ความหมาย และ Kind ของทุกคอลัมน์อยู่ใน docs/database-schema.md ซึ่งต้องตรงกับรายการนี้เสมอ

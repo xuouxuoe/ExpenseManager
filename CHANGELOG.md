@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added — Integration API ระยะ A1 (schema ApiClients อนุมัติ 2026-11-27)
+
+- `doPost` + `IntegrationApi` (IntegrationService.gs) สำหรับผู้เรียกภายนอก เช่น Make: รับ JSON `{ api_key, action, request_id, channel_user_id, params }` ตอบ HTTP 200 เสมอพร้อม `ok`; ระยะนี้มี action `ping` อย่างเดียว (ไม่เขียนข้อมูล)
+- ชีตใหม่ ApiClients (AGENTS.md §7.1, docs/database-schema.md §4.11) สร้างเองเมื่อเพิ่มการเชื่อมต่อครั้งแรก เก็บเฉพาะ SHA-256 ของ API key; key สร้างในเบราว์เซอร์ แสดงครั้งเดียว ไม่ลง journal/audit/log
+- ตรวจ: key ถูกต้องและเปิดใช้งาน, ผู้สร้างยังอยู่ใน ALLOWED_EMAILS, scope (READ/WRITE), LINE userId ที่อนุญาต, จำกัด 60 คำขอ/นาทีต่อการเชื่อมต่อ, body ไม่เกิน 100,000 ตัวอักษร
+- เมนู "เชื่อมต่อภายนอก" (#integrations): เพิ่ม/แก้/ปิด-เปิดการเชื่อมต่อ และเปลี่ยน key (key เดิมใช้ไม่ได้ทันที)
+- ยังไม่ได้ทดสอบบน Apps Script จริง: ต้องเลือกรูปแบบ deployment แบบไม่ต้องล็อกอินและทดสอบกับ Make บน TEST (docs/integration-api.md §3, §9)
+
 ### Changed — หน้างบใช้จ่าย (2026-11-27)
 
 - กราฟโดนัทแสดงสัดส่วนที่ใช้ไปของงบ (ตรงกลางเป็น % สีแดง วงสีครามปกติ เหลืองเมื่อถึง 80% แดงเมื่อเกินงบ) ในการ์ดสรุปเดือนนี้/สัปดาห์นี้ พร้อมคำอธิบายใช้ไป/เหลือ และในการ์ดงบแต่ละรายการแทนแถบเส้น ใช้ CSS conic-gradient ไม่โหลดไลบรารีเพิ่ม
