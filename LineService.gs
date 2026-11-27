@@ -13,6 +13,8 @@
  */
 var LineWebhook = (function () {
   var REPLY_URL = 'https://api.line.me/v2/bot/message/reply';
+  var CONTENT_URL = 'https://api-data.line.me/v2/bot/message/';
+  var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
   var MAX_BODY_LENGTH = 100000;
   var DEDUPE_SECONDS = 6 * 60 * 60;
   var HELP_WORDS = ['help', 'ช่วยเหลือ', 'วิธีใช้', '?'];
@@ -29,7 +31,7 @@ var LineWebhook = (function () {
   }
 
   function helpText() {
-    return text('พิมพ์รายการที่ต้องการบันทึก เช่น\n• กาแฟ 65\n• ข้าวกลางวัน 120 จ่ายด้วย kbank\n• เงินเดือนเข้า 30000\n• โอนจาก kbank ไป scb 500\n\nระบบจะสรุปให้ตรวจก่อน แล้วกด "ยืนยัน" เพื่อบันทึก\n\nใช้งบทริป: ใส่ชื่องบในข้อความ เช่น "ราเมน 350 งบญี่ปุ่น"\n\nคำสั่งดูข้อมูล\n• สรุป — รายรับรายจ่ายเดือนนี้\n• ยอดเงิน — ยอดบัญชีและเงินที่ใช้ได้\n• ล่าสุด — 5 รายการล่าสุด\n• งบ — งบใช้จ่ายคงเหลือ');
+    return text('พิมพ์รายการที่ต้องการบันทึก เช่น\n• กาแฟ 65\n• ข้าวกลางวัน 120 จ่ายด้วย kbank\n• เงินเดือนเข้า 30000\n• โอนจาก kbank ไป scb 500\n• หรือส่งรูปสลิปโอนเงิน/ใบเสร็จ\n\nระบบจะสรุปให้ตรวจก่อน แล้วกด "ยืนยัน" เพื่อบันทึก\n\nใช้งบทริป: ใส่ชื่องบในข้อความ เช่น "ราเมน 350 งบญี่ปุ่น"\n\nคำสั่งดูข้อมูล\n• สรุป — รายรับรายจ่ายเดือนนี้\n• ยอดเงิน — ยอดบัญชีและเงินที่ใช้ได้\n• ล่าสุด — 5 รายการล่าสุด\n• งบ — งบใช้จ่ายคงเหลือ');
   }
 
   /**
@@ -80,7 +82,7 @@ var LineWebhook = (function () {
     var e = Util.toClientError(err);
     if (e.code === 'INTERNAL_ERROR') return 'เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง';
     if (e.code === 'AI_NOT_CONFIGURED') return 'ระบบยังไม่ได้ตั้งค่า AI กรุณาแจ้งผู้ดูแล';
-    if (e.code === 'AI_ERROR' || e.code === 'AI_INVALID_OUTPUT') return 'แปลงข้อความไม่สำเร็จ กรุณาลองพิมพ์ใหม่อีกครั้ง';
+    if (e.code === 'AI_ERROR' || e.code === 'AI_INVALID_OUTPUT') return 'แปลงข้อความ/รูปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง (รูปสลิปต้องใช้โมเดล AI ที่อ่านภาพได้)';
     var msg = e.message;
     var candidates = e.details && e.details.candidates;
     if (candidates && candidates.length) {
@@ -167,7 +169,11 @@ var LineWebhook = (function () {
       reply(replyToken, [text(command.run())]);
       return command.result;
     }
-    var parsed = AiParser.parse(body, call.client);
+    return draftFromParsed(AiParser.parse(body, call.client), call, replyToken);
+  }
+
+  /** ผลจาก AI → ร่าง + Flex ยืนยัน หรือข้อความอธิบายเมื่อไม่ใช่รายการ */
+  function draftFromParsed(parsed, call, replyToken) {
     if (parsed.intent !== 'TRANSACTION') {
       reply(replyToken, [text((parsed.message || 'ข้อความนี้ไม่ใช่รายการรับจ่าย') + '\nพิมพ์ "วิธีใช้" เพื่อดูตัวอย่าง')]);
       return 'other';
@@ -175,6 +181,36 @@ var LineWebhook = (function () {
     var draft = ApiDrafts.create(parsed.params, call);
     reply(replyToken, [draftMessage(draft)]);
     return 'draft';
+  }
+
+  function channelToken() {
+    return String(PropertiesService.getScriptProperties().getProperty(Config.PROPERTY_KEYS.LINE_CHANNEL_ACCESS_TOKEN) || '').trim();
+  }
+
+  /**
+   * รูปสลิป (ระยะ A6): ดึงรูปจาก LINE content API → AI อ่านรูป → ร่างรายการ (ไม่เก็บรูป)
+   * รูปจากลิงก์ภายนอก (contentProvider ไม่ใช่ line) ไม่ดึง
+   */
+  function onImage(message, call, replyToken) {
+    if (message.contentProvider && message.contentProvider.type && message.contentProvider.type !== 'line') {
+      reply(replyToken, [text('รองรับเฉพาะรูปที่ส่งเข้าแชตโดยตรง')]);
+      return 'unsupported';
+    }
+    var token = channelToken();
+    if (!token) throw Util.AppError('LINE_NOT_CONFIGURED', 'ยังไม่ได้ตั้ง LINE Channel access token จึงดึงรูปไม่ได้');
+    var id = String(message.id || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 40);
+    if (!id) return 'ignored';
+    var res = UrlFetchApp.fetch(CONTENT_URL + id + '/content', { method: 'get', headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+    var code = res.getResponseCode();
+    if (code < 200 || code >= 300) {
+      console.log('LINE_ERROR: content HTTP ' + code);
+      throw Util.AppError('LINE_CONTENT_ERROR', 'ดึงรูปจาก LINE ไม่สำเร็จ กรุณาส่งรูปใหม่อีกครั้ง');
+    }
+    var blob = res.getBlob();
+    var bytes = blob.getBytes();
+    if (bytes.length > MAX_IMAGE_BYTES) throw Util.AppError('UNSUPPORTED_IMAGE', 'รูปมีขนาดใหญ่เกินไป (เกิน 5 MB)');
+    var parsed = AiParser.parseImage({ mime: blob.getContentType(), data: Utilities.base64Encode(bytes) }, call.client);
+    return draftFromParsed(parsed, call, replyToken);
   }
 
   function onPostback(data, call, replyToken) {
@@ -215,7 +251,8 @@ var LineWebhook = (function () {
       if (ev.type === 'postback') return onPostback(ev.postback && ev.postback.data, call, ev.replyToken);
       if (ev.type === 'message') {
         if (ev.message && ev.message.type === 'text') return onText(ev.message.text, call, ev.replyToken);
-        reply(ev.replyToken, [text('ตอนนี้รองรับเฉพาะข้อความ พิมพ์รายการ เช่น "กาแฟ 65"')]);
+        if (ev.message && ev.message.type === 'image') return onImage(ev.message, call, ev.replyToken);
+        reply(ev.replyToken, [text('รองรับข้อความและรูปสลิป พิมพ์รายการ เช่น "กาแฟ 65" หรือส่งรูปสลิปโอนเงิน')]);
         return 'unsupported';
       }
       return 'ignored';

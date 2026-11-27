@@ -199,6 +199,7 @@ function createContext(options = {}) {
       DigestAlgorithm: { SHA_256: 'SHA_256' },
       Charset: { UTF_8: 'UTF_8' },
       getUuid: () => crypto.randomUUID(),
+      base64Encode: (bytes) => Buffer.from(Array.from(bytes, (b) => b & 255)).toString('base64'),
       computeDigest: (_alg, text) => Array.from(crypto.createHash('sha256').update(text, 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
       formatDate: (date, tz, pattern) => {
         if (tz !== 'Asia/Bangkok') throw new Error('unexpected timezone ' + tz);
@@ -226,7 +227,10 @@ function createContext(options = {}) {
         if (!state.fetch) throw new Error('UrlFetchApp: no fake handler (network disabled in tests)');
         const res = state.fetch(url, options || {});
         const body = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
-        return { getResponseCode: () => res.code, getContentText: () => body };
+        // ข้อมูลไบนารี (เช่น รูปจาก LINE content API): res.bytes + res.contentType; คืนไบต์แบบ signed เหมือน Apps Script
+        const bytes = res.bytes ? Array.from(res.bytes, (b) => (b > 127 ? b - 256 : b)) : [];
+        const blob = { getBytes: () => bytes.slice(), getContentType: () => res.contentType || 'application/octet-stream' };
+        return { getResponseCode: () => res.code, getContentText: () => body, getBlob: () => blob, getContent: () => bytes.slice() };
       }
     }
   };

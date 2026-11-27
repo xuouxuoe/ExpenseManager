@@ -6,6 +6,7 @@
  * - ผลจาก AI เป็นเพียงข้อเสนอ: คืนเป็น params ของ draft.create ซึ่ง Backend ตรวจ/resolve อีกครั้ง (AGENTS.md §11)
  * - ส่งให้ AI เฉพาะข้อความผู้ใช้ วันที่วันนี้ และชื่อ+ID ของบัญชี/หมวด/เจ้าของ/งบทริปที่ใช้งานอยู่ — ไม่ส่งยอดเงินหรือประวัติ
  * - ไม่ log ข้อความผู้ใช้ คำตอบของ AI หรือ key; log เฉพาะผู้ให้บริการและ HTTP status เมื่อผิดพลาด
+ * - ระยะ A6: parseImage อ่านรูปสลิป (base64) ด้วยโมเดลที่อ่านภาพได้ — ไม่เก็บและไม่ log รูป
  */
 var AiParser = (function () {
   var MAX_TEXT = 500;
@@ -70,7 +71,17 @@ var AiParser = (function () {
     return rows.map(function (r) { return cols.map(function (c) { return String(r[c] === undefined ? '' : r[c]); }).join(' | '); }).join('\n');
   }
 
-  function systemPrompt(masters, today) {
+  /** คำแนะนำเพิ่มเมื่อผู้ใช้ส่งรูป (สลิปโอนเงิน/ใบเสร็จ) */
+  var SLIP_RULES = [
+    'The user sent an IMAGE instead of text. If it is a payment slip, transfer slip or receipt, extract ONE transaction from it.',
+    'amount = the paid/transferred total (not fees or balances). transaction_date = the date on the slip (Thai slips often use Buddhist years such as "28 พ.ย. 69" = 2026-11-28).',
+    'item_name = the payee/merchant/receiver name or what was bought (short). description may hold the reference number if shown.',
+    'from_account = the user account whose bank/name matches the SENDER on the slip, only if clearly identifiable; otherwise null.',
+    'Use EXPENSE for payments; use TRANSFER only when the receiver is clearly one of the user own accounts listed below (then set to_account).',
+    'If the image is not a slip or receipt, or the amount is unreadable, set intent OTHER and explain briefly in Thai.'
+  ].join('\n');
+
+  function systemPrompt(masters, today, extra) {
     return [
       'You convert a Thai personal-finance chat message into one transaction record for the Expense Manager app.',
       'Today is ' + today + ' (Asia/Bangkok). Convert Buddhist years (พ.ศ.) to Gregorian by subtracting 543. Resolve relative dates such as "เมื่อวาน" from today.',
@@ -97,7 +108,7 @@ var AiParser = (function () {
       lines(masters.budgets || [], ['budget_id', 'budget_name', 'start_date', 'end_date', 'owner_id']),
       '',
       'Defaults: account_id=' + (masters.defaults.account_id || 'none') + ', owner_id=' + (masters.defaults.owner_id || 'none')
-    ].join('\n');
+    ].concat(extra ? ['', extra] : []).join('\n');
   }
 
   // ---------- Provider adapters ----------
@@ -106,14 +117,17 @@ var AiParser = (function () {
     return { url: url, options: { method: 'post', contentType: 'application/json', headers: headers, payload: JSON.stringify(body), muteHttpExceptions: true } };
   }
 
-  function buildRequest(cfg, system, text, schema) {
-    var user = 'Message:\n' + text;
+  /** image (ถ้ามี): { mime, data (base64) } แนบไปกับข้อความผู้ใช้ตามรูปแบบของแต่ละผู้ให้บริการ */
+  function buildRequest(cfg, system, text, schema, image) {
+    var user = image ? text : 'Message:\n' + text;
     if (cfg.provider === 'ANTHROPIC') {
       return jsonPost('https://api.anthropic.com/v1/messages', { 'x-api-key': cfg.key, 'anthropic-version': '2023-06-01' }, {
         model: cfg.model,
         max_tokens: MAX_TOKENS,
         system: system,
-        messages: [{ role: 'user', content: user }],
+        messages: [{ role: 'user', content: image
+          ? [{ type: 'image', source: { type: 'base64', media_type: image.mime, data: image.data } }, { type: 'text', text: user }]
+          : user }],
         tools: [{ name: TOOL_NAME, description: 'Record the parsed transaction', input_schema: schema }],
         tool_choice: { type: 'tool', name: TOOL_NAME }
       });
@@ -121,11 +135,13 @@ var AiParser = (function () {
     if (cfg.provider === 'GEMINI') {
       return jsonPost('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(cfg.model) + ':generateContent', { 'x-goog-api-key': cfg.key }, {
         systemInstruction: { parts: [{ text: system + '\n\nJSON schema:\n' + JSON.stringify(schema) }] },
-        contents: [{ role: 'user', parts: [{ text: user }] }],
+        contents: [{ role: 'user', parts: image ? [{ inline_data: { mime_type: image.mime, data: image.data } }, { text: user }] : [{ text: user }] }],
         generationConfig: { responseMimeType: 'application/json', maxOutputTokens: MAX_TOKENS }
       });
     }
-    var messages = [{ role: 'system', content: system }, { role: 'user', content: user }];
+    var messages = [{ role: 'system', content: system }, { role: 'user', content: image
+      ? [{ type: 'text', text: user }, { type: 'image_url', image_url: { url: 'data:' + image.mime + ';base64,' + image.data } }]
+      : user }];
     if (cfg.provider === 'OPENAI') {
       return jsonPost(DEFAULT_OPENAI_BASE + '/chat/completions', { Authorization: 'Bearer ' + cfg.key }, {
         model: cfg.model,
@@ -175,8 +191,8 @@ var AiParser = (function () {
     return parseJsonText(msg && msg.content);
   }
 
-  function callProvider(cfg, system, text) {
-    var req = buildRequest(cfg, system, text, outputSchema());
+  function callProvider(cfg, system, text, image) {
+    var req = buildRequest(cfg, system, text, outputSchema(), image);
     var res;
     try {
       res = UrlFetchApp.fetch(req.url, req.options);
@@ -234,7 +250,28 @@ var AiParser = (function () {
     return result;
   }
 
+  var IMAGE_MIME = ['image/jpeg', 'image/png', 'image/webp'];
+  var MAX_IMAGE_BASE64 = 7 * 1024 * 1024; // ~5 MB ก่อนเข้ารหัส
+
+  /**
+   * อ่านรูปสลิป/ใบเสร็จเป็น params ของ draft.create (ไม่เขียนข้อมูล ไม่เก็บรูป)
+   * image: { mime: image/jpeg|png|webp, data: base64 }
+   */
+  function parseImage(image, client) {
+    var img = image || {};
+    var mime = String(img.mime || '').toLowerCase().split(';')[0].trim();
+    if (IMAGE_MIME.indexOf(mime) < 0) throw fail('UNSUPPORTED_IMAGE', 'รองรับเฉพาะรูป JPEG, PNG หรือ WebP');
+    if (typeof img.data !== 'string' || !img.data || img.data.length > MAX_IMAGE_BASE64) throw fail('UNSUPPORTED_IMAGE', 'รูปมีขนาดใหญ่เกินไป (เกิน 5 MB)');
+    var cfg = config();
+    var masters = ApiDrafts.masters(client);
+    var out = callProvider(cfg, systemPrompt(masters, Util.todayIso(), SLIP_RULES), 'Read this slip image and return the JSON.', { mime: mime, data: img.data });
+    var result = normalize(out, '(รูปสลิป)');
+    result.provider = cfg.provider;
+    return result;
+  }
+
   return {
+    parseImage: parseImage,
     MAX_TEXT: MAX_TEXT,
     config: config,
     parse: parse,

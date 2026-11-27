@@ -137,7 +137,7 @@ test('ข้อความที่ไม่ใช่รายการ / ข�
   const before = s.ai.calls;
   assert.deepEqual(s.send([s.textEvent('วิธีใช้')]).results, ['help']);
   assert.equal(s.ai.calls, before);
-  assert.deepEqual(s.send([{ type: 'message', webhookEventId: '01HZZZIMAGE000000000000001', replyToken: 'rt-img', source: { type: 'user', userId: USER }, message: { type: 'image', id: 'i1' } }]).results, ['unsupported']);
+  assert.deepEqual(s.send([{ type: 'message', webhookEventId: '01HZZZSTICK000000000000001', replyToken: 'rt-img', source: { type: 'user', userId: USER }, message: { type: 'sticker', id: 'i1' } }]).results, ['unsupported']);
   assert.deepEqual(s.send([{ type: 'message', webhookEventId: '01HZZZGROUP000000000000001', replyToken: 'rt-g', source: { type: 'group', groupId: 'C1', userId: USER }, message: { type: 'text', text: 'กาแฟ 65' } }]).results, ['ignored']);
   assert.deepEqual(s.send([{ type: 'follow', webhookEventId: '01HZZZFOLLOW00000000000001', replyToken: 'rt-f', source: { type: 'user', userId: USER } }]).results, ['help']);
   s.ctx.__props.AI_API_KEY = '';

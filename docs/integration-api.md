@@ -80,7 +80,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 | A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง — **implement ในเครื่องแล้ว (ข้อ 0.9)** |
 | A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.11)** |
 | A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard — **ผ่านในแชต LINE บน TEST (ข้อ 0.12)** |
-| A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง |
+| A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง — **implement ในเครื่องแล้ว (ข้อ 0.13)** |
 
 คู่มือ API ในแอปปรับตามแต่ละระยะ (ตัดส่วน Make ออก เพิ่มการตั้งค่า LINE webhook และ Script Properties ของ AI)
 
@@ -136,7 +136,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
   - รับเฉพาะ `source.type = user` จาก userId ที่อนุญาต; userId อื่นได้ข้อความแจ้ง userId ให้ผู้ดูแลเพิ่ม (ไม่เรียก AI)
   - ข้อความ → `AiParser.parse` → `ApiDrafts.create` (request_id = `line-<webhookEventId>`) → ตอบ Flex bubble สรุป + ปุ่ม postback `em=1&a=c|x&d=<draft_id>&t=<token>` (< 300 ตัว)
   - postback ยืนยัน → `ApiDrafts.confirm` (บันทึก source AI ครั้งเดียว) / ยกเลิก → `ApiDrafts.cancel`; ข้อผิดพลาดตอบเป็นข้อความภาษาไทย (ชื่อไม่พบแสดงตัวเลือก)
-  - "วิธีใช้"/help และ follow → ข้อความแนะนำ; รูปภาพ → ยังไม่รองรับ; กลุ่ม/ห้อง → ข้าม
+  - "วิธีใช้"/help และ follow → ข้อความแนะนำ; รูปภาพ → อ่านสลิป (ระยะ A6 ข้อ 0.13); กลุ่ม/ห้อง → ข้าม
   - กันเหตุการณ์ซ้ำด้วย webhookEventId ใน CacheService 6 ชั่วโมง (เรียก AI ครั้งเดียว)
   - ตอบกลับด้วย LINE Reply API (`LINE_CHANNEL_ACCESS_TOKEN`); ไม่ได้ตั้ง token → ประมวลผลได้แต่ไม่ตอบ และ log `LINE_NOT_CONFIGURED`; ไม่ log ข้อความ/token/key
 - [x] `LineSettings` + การ์ด "LINE Official Account" ในหน้าเชื่อมต่อภายนอก: ตั้ง token (เฉพาะเจ้าของ, เขียนอย่างเดียว) และวิธีตั้ง Webhook URL; คู่มือ API มีหัวข้อ LINE
@@ -168,6 +168,17 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - [x] `clasp push` ไป HEAD (ผู้ใช้อนุญาต 2026-11-27, 23:00) และ clone กลับมาเทียบตรงกัน 33 ไฟล์; ครั้งแรกได้ `Skipping push.` เพราะ `appsscript.json` ต่างแค่ CRLF/LF → แปลงไฟล์ในเครื่องเป็น LF (เนื้อหาเดิม) แทนการใช้ `--force`; gateway ใช้ Library HEAD จึงไม่ต้อง push/deploy ใหม่
 - [x] ผู้ใช้ทดสอบคำสั่ง `สรุป` / `ยอดเงิน` / `ล่าสุด` / `งบ` ในแชต LINE จริงด้วยฐาน TEST และรายงานว่าผ่านทั้งหมด (2026-11-28)
 - ข้อจำกัด: ยอดเงินส่วนตัวถูกส่งกลับผ่าน LINE (ตอบเฉพาะ userId ที่อนุญาต); ยังไม่ได้วัดเวลาตอบจริง (`summary.month` อ่าน 7–8 ชีต)
+
+### 0.13 สถานะ A6 อ่านสลิปจากรูป (2026-11-28)
+
+- ผู้ใช้สั่งดำเนินการ A6 (2026-11-28) — ถือเป็นการอนุญาตให้ส่งรูปสลิปที่ผู้ใช้ส่งในแชตไปยังผู้ให้บริการ AI ที่ตั้งไว้ (AGENTS.md §10)
+- [x] `LineService.onImage`: ข้อความชนิด image (เฉพาะ `contentProvider.type = line`) → GET `https://api-data.line.me/v2/bot/message/{id}/content` ด้วย Channel access token → ตรวจขนาด ≤ 5 MB และชนิด JPEG/PNG/WebP → `AiParser.parseImage` → ร่าง + Flex ยืนยันเหมือนข้อความ; รูปจากลิงก์ภายนอกไม่ดึง
+- [x] `AiParser.parseImage` + `buildRequest(..., image)`: OPENAI/OPENAI_COMPATIBLE ใช้ `image_url` (data URL), ANTHROPIC ใช้ `image` base64, GEMINI ใช้ `inline_data`; prompt เพิ่มกฎอ่านสลิป (ยอดที่จ่าย, วันที่ พ.ศ., ชื่อผู้รับเป็น item_name, เลขอ้างอิงใน description, บัญชีต้นทางเฉพาะเมื่อชัดเจน, ไม่ใช่สลิป → OTHER)
+- [x] ไม่เก็บรูปและไม่ log รูป/ข้อความ; draft_json เก็บเฉพาะค่าที่ resolve แล้ว (`source_text` = "(รูปสลิป)" ไม่ถูกเก็บ); การยืนยันยังผ่าน `draft.confirm` เดิม
+- [x] ข้อผิดพลาดตอบในแชต: `LINE_CONTENT_ERROR` (ดึงรูปไม่ได้), `UNSUPPORTED_IMAGE` (ชนิด/ขนาด), `LINE_NOT_CONFIGURED`, `AI_ERROR` (แนะนำให้ใช้โมเดลที่อ่านภาพได้)
+- [x] `tests/line-slip.test.js` 5 กรณี; test shim รองรับ `getBlob()` และ `Utilities.base64Encode`; `npm test` ผ่าน
+- [ ] clasp push และทดสอบส่งรูปสลิปจริงในแชต LINE บน TEST (ต้องได้รับอนุญาต; โมเดลที่ตั้งใน AI_MODEL ต้องอ่านภาพได้)
+- ข้อจำกัด: ความแม่นยำขึ้นกับโมเดล AI — ผู้ใช้ต้องตรวจยอด วันที่ และบัญชีในสรุปก่อนยืนยัน; เวลาตอบเพิ่มขึ้นจากการดึงรูปและการอ่านภาพ (ยังไม่ได้วัด); ค่า AI ต่อรูปสูงกว่าข้อความ; ยังไม่รองรับสลิปผ่าน JSON API (`ai.parse` รับเฉพาะข้อความ)
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
 

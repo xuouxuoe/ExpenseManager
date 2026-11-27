@@ -291,7 +291,7 @@
       <li>ตั้ง Channel access token ที่ <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> → LINE Official Account</li>
       <li>สร้างการเชื่อมต่อสิทธิ์ WRITE และกำหนด LINE userId ที่อนุญาต (บังคับสำหรับ LINE)</li>
       <li>Webhook URL ใน LINE Developers: <code class="break-all">&lt;URL /exec&gt;?line_key=&lt;API key&gt;</code> · เปิด Use webhook · ปิดข้อความตอบกลับอัตโนมัติ</li>
-      <li>รองรับ: ข้อความ → ร่าง + ปุ่ม [ยกเลิก][ยืนยัน], "วิธีใช้", การเพิ่มเพื่อน; รับเฉพาะแชต 1:1; รูปภาพยังไม่รองรับ</li>
+      <li>รองรับ: ข้อความ → ร่าง + ปุ่ม [ยกเลิก][ยืนยัน], "วิธีใช้", การเพิ่มเพื่อน; รับเฉพาะแชต 1:1; <strong>รูปสลิป/ใบเสร็จ</strong> → AI อ่านรูปเป็นร่างให้ยืนยัน (ต้องใช้โมเดล AI ที่อ่านภาพได้; ไม่เก็บรูป)</li>
       <li>คำสั่งดูข้อมูล (ต้องมีสิทธิ์ READ เพิ่ม ไม่เรียก AI): <code>สรุป</code> · <code>ยอดเงิน</code> · <code>ล่าสุด</code> · <code>งบ</code></li>
       <li>ใช้งบทริป: ใส่ชื่องบในข้อความ เช่น <code>ราเมน 350 งบญี่ปุ่น</code> — AI เลือกงบเฉพาะเมื่อข้อความระบุชื่องบหรือทริป สรุปร่างแสดง "ใช้จากงบ …" ก่อนยืนยัน</li>
     </ol>
