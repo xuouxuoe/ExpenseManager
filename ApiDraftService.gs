@@ -132,7 +132,10 @@ var ApiDrafts = (function () {
     var rule = Transactions.RULES[type];
     if (rule.from && !from) throw invalid('REQUIRED', 'from_account', 'กรุณาระบุ from_account (บัญชีต้นทาง) หรือตั้งบัญชีเริ่มต้นของการเชื่อมต่อ');
     if (rule.to && !to) throw invalid('REQUIRED', 'to_account', 'กรุณาระบุ to_account (บัญชีปลายทาง)' + (side === 'to' ? ' หรือตั้งบัญชีเริ่มต้นของการเชื่อมต่อ' : ''));
-    if (rule.category && !category) throw invalid('REQUIRED', 'category', 'กรุณาระบุ category (หมวดหมู่' + (rule.category === 'INCOME' ? 'รายรับ' : 'รายจ่าย') + ')');
+    if (rule.category && !category) {
+      throw invalid('REQUIRED', 'category', 'กรุณาระบุ category (หมวดหมู่' + (rule.category === 'INCOME' ? 'รายรับ' : 'รายจ่าย') + ')',
+        { candidates: categories.slice(0, 20).map(function (c) { return { id: c.category_id, name: c.category_name }; }) });
+    }
     if (!owner) throw invalid('REQUIRED', 'owner', 'กรุณาระบุ owner (เจ้าของ) หรือตั้งเจ้าของเริ่มต้นของการเชื่อมต่อ');
     return {
       transaction_type: type,

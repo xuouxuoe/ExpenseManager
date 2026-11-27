@@ -118,3 +118,25 @@ test('AI อ่านรูปไม่ได้ (เช่น โมเดล�
   assert.deepEqual(s.sendImage().results, ['error:AI_ERROR']);
   assert.match(s.lastReply().text, /โมเดล AI ที่อ่านภาพได้/);
 });
+
+test('สลิปที่ AI ไม่เลือกหมวด: มีหมวดทั่วไป ("อื่นๆ") → ใช้หมวดนั้นในร่าง; prompt บังคับให้เลือกหมวด', () => {
+  const s = setup();
+  const other = plain(s.ctx.MasterData.create('category', { category_name: 'อื่นๆ', category_type: 'EXPENSE' }, { idempotencyKey: key(), actor: { actorId: 'owner@example.com' } }));
+  s.state.ai = s.slip({ category: null });
+  assert.deepEqual(s.sendImage().results, ['draft']);
+  assert.match(s.lastReply().contents.body.contents[1].text, /หมวด อื่นๆ/);
+  assert.equal(JSON.parse(s.rows('ApiDrafts')[0].draft_json).category_id, other.category_id);
+  assert.match(s.calls.ai[0].body.messages[0].content, /category is REQUIRED/);
+});
+
+test('สลิปที่ไม่มีหมวดและไม่มีหมวดทั่วไป → ตอบรายชื่อหมวดให้เลือกและวิธีพิมพ์ ไม่สร้างร่าง', () => {
+  const s = setup();
+  s.state.ai = s.slip({ category: null });
+  assert.deepEqual(s.sendImage().results, ['error:VALIDATION_REQUIRED']);
+  const msg = s.lastReply().text;
+  assert.match(msg, /กรุณาระบุ หมวดหมู่รายจ่าย/);
+  assert.match(msg, /ตัวเลือก: อาหาร/);
+  assert.match(msg, /หมวดอาหาร/);
+  assert.doesNotMatch(msg, /category/);
+  assert.equal(s.rows('ApiDrafts').length, 0);
+});

@@ -88,6 +88,9 @@ var LineWebhook = (function () {
     if (candidates && candidates.length) {
       msg += '\nตัวเลือก: ' + candidates.slice(0, 10).map(function (c) { return c.name; }).join(', ');
     }
+    if (e.details && e.details.field === 'category') {
+      msg = msg.replace(/category \(([^)]*)\)/, '$1') + '\nพิมพ์รายการพร้อมหมวด เช่น "ร้านอาหาร 1250 หมวดอาหาร"';
+    }
     return msg;
   }
 

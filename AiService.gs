@@ -87,8 +87,8 @@ var AiParser = (function () {
       'Today is ' + today + ' (Asia/Bangkok). Convert Buddhist years (พ.ศ.) to Gregorian by subtracting 543. Resolve relative dates such as "เมื่อวาน" from today.',
       'transaction_type: EXPENSE = paid from cash/bank/e-wallet; CREDIT_PURCHASE = paid with a credit card or cash card (from_account is that card);',
       'INCOME = money received into to_account; TRANSFER = move money between own asset accounts (from_account and to_account).',
-      'Use ONLY ids from the lists below for from_account, to_account, category and owner. If unsure, use null — the app applies the user defaults.',
-      'Pick a category whose type matches: INCOME categories for INCOME, EXPENSE categories for EXPENSE and CREDIT_PURCHASE, none for TRANSFER.',
+      'Use ONLY ids from the lists below for from_account, to_account, category and owner. If unsure about from_account, to_account or owner, use null — the app applies the user defaults.',
+      'category is REQUIRED for INCOME, EXPENSE and CREDIT_PURCHASE (there is no default): always choose the closest category of the matching type — INCOME categories for INCOME, EXPENSE categories for EXPENSE and CREDIT_PURCHASE. If nothing fits, use a general one such as "อื่นๆ"/"ทั่วไป" when listed. Never null for these types; null only for TRANSFER.',
       'amount must be a positive number (e.g. "1.2k" = 1200, "65 บาท" = 65). item_name is a short name of what was bought or received.',
       'If the message is not a transaction (a question, greeting, or missing amount) set intent OTHER and explain briefly in Thai in message.',
       'budget: set a budget_id from Trip budgets ONLY when the message mentions that budget or trip by name (e.g. "งบญี่ปุ่น", "ทริปเชียงใหม่"); never guess from the date alone.',
@@ -239,13 +239,28 @@ var AiParser = (function () {
     return { intent: 'TRANSACTION', params: params, message: message };
   }
 
+  var GENERAL_CATEGORY_RE = /อื่น|ทั่วไป|เบ็ดเตล็ด|เบ็ดเสร็จ|misc|other|general/i;
+
+  /**
+   * AI ไม่ได้เลือกหมวด: ใช้หมวดทั่วไป (เช่น "อื่นๆ") ของประเภทที่ตรงกันถ้ามีหมวดเดียวที่ตรงชื่อ
+   * ผู้ใช้ยังเห็นหมวดในสรุปร่างและต้องกดยืนยันก่อนบันทึก
+   */
+  function fillGeneralCategory(result, masters) {
+    var p = result.params;
+    if (!p || p.category || !p.transaction_type || p.transaction_type === 'TRANSFER') return result;
+    var want = p.transaction_type === 'INCOME' ? 'INCOME' : 'EXPENSE';
+    var hits = masters.categories.filter(function (c) { return c.category_type === want && GENERAL_CATEGORY_RE.test(c.category_name); });
+    if (hits.length === 1) p.category = hits[0].category_id;
+    return result;
+  }
+
   /** แปลงข้อความเป็น params ของ draft.create (ไม่เขียนข้อมูล) */
   function parse(text, client) {
     var src = Validation.requireText(text, 'text', { required: true, max: MAX_TEXT, multiline: true });
     var cfg = config();
     var masters = ApiDrafts.masters(client);
     var out = callProvider(cfg, systemPrompt(masters, Util.todayIso()), src);
-    var result = normalize(out, src);
+    var result = fillGeneralCategory(normalize(out, src), masters);
     result.provider = cfg.provider;
     return result;
   }
@@ -265,7 +280,7 @@ var AiParser = (function () {
     var cfg = config();
     var masters = ApiDrafts.masters(client);
     var out = callProvider(cfg, systemPrompt(masters, Util.todayIso(), SLIP_RULES), 'Read this slip image and return the JSON.', { mime: mime, data: img.data });
-    var result = normalize(out, '(รูปสลิป)');
+    var result = fillGeneralCategory(normalize(out, '(รูปสลิป)'), masters);
     result.provider = cfg.provider;
     return result;
   }
