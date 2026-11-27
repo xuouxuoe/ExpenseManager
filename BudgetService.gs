@@ -12,6 +12,9 @@
  * งบทริป/โครงการ (budget_kind = EVENT, อนุมัติ 2026-11-27, docs/event-budget-plan.md)
  * - ช่วงวันที่ start_date–end_date ไม่ใช้หมวด: ใช้ไป = รายจ่ายของรายการที่ Transactions.budget_id ตรงกับงบ (ไม่จำกัดวันที่/หมวด/บัญชี)
  * - รายการที่ใช้จากงบทริปไม่นับในงบรายเดือน
+ * - กันเงิน (E3, อนุมัติ 2026-11-28): BudgetReservations RESERVE/RELEASE ต่อบัญชีสินทรัพย์
+ *   เงินกันที่มีผล = MIN(กันไว้สุทธิ, MAX(0, งบ − ใช้ไป)) แบ่งตามสัดส่วนบัญชี; งบที่ปิดแล้ว = 0
+ *   ใช้หักใน "เงินที่ใช้ได้จริง" ทุกจุดผ่าน Budgets.accountHolds
  */
 var Budgets = (function () {
   var SHEET = 'Budgets';
@@ -342,8 +345,110 @@ var Budgets = (function () {
       }).result;
   }
 
-  /** สถานะของงบทริป ณ today: ใช้ไป คงเหลือ ช่วงเวลา และยอดแยกหมวด/บัญชี */
-  function eventStatus(budget, transactions, types, today) {
+  // ---------- เงินกันของงบทริป ----------
+
+  var HOLDS_SHEET = 'BudgetReservations';
+
+  /** ใช้ไปของงบ (สตางค์) */
+  function spentOf(budgetId, transactions, types) {
+    return eventTransactions(budgetId, transactions).reduce(function (s, t) { return s + Ledger.effectsOf(t, types).expenseSatang; }, 0);
+  }
+
+  /**
+   * กันไว้สุทธิ/มีผลของงบหนึ่งงบ (สตางค์)
+   * คืน { net: {account: satang}, netTotal, effective: {account: satang}, effectiveTotal }
+   */
+  function holdOf(budget, reservations, spent) {
+    var net = Object.create(null);
+    reservations.forEach(function (r) {
+      if (r.budget_id !== budget.budget_id) return;
+      var amount = sat(r.amount);
+      net[r.account_id] = (net[r.account_id] || 0) + (r.action_type === 'RESERVE' ? amount : -amount);
+    });
+    var accounts = Object.keys(net).filter(function (a) { return net[a] > 0; }).sort();
+    var netTotal = accounts.reduce(function (s, a) { return s + net[a]; }, 0);
+    var cap = budget.is_active === true ? Math.max(0, sat(budget.amount) - spent) : 0;
+    var effectiveTotal = Math.min(netTotal, cap);
+    var effective = Object.create(null);
+    var left = effectiveTotal;
+    accounts.forEach(function (a, i) {
+      var share = i === accounts.length - 1 ? left : Math.floor(net[a] * effectiveTotal / netTotal);
+      effective[a] = share;
+      left -= share;
+    });
+    return { net: net, netTotal: netTotal, effective: effective, effectiveTotal: effectiveTotal };
+  }
+
+  function readHolds() {
+    return Database.readAll(HOLDS_SHEET).rows;
+  }
+
+  /**
+   * เงินกันที่มีผลของงบทริปทุกงบ รวมต่อบัญชี (สตางค์) สำหรับหักจากเงินที่ใช้ได้
+   * ไม่อ่าน BudgetReservations เมื่อไม่มีงบทริปที่เปิดใช้ (ลดการเรียก Sheets)
+   */
+  function accountHolds(transactions) {
+    var out = Object.create(null);
+    var events = Database.readAll(SHEET).rows.filter(function (b) { return !isMonthly(b) && b.is_active === true; });
+    if (!events.length) return out;
+    var reservations = readHolds();
+    if (!reservations.length) return out;
+    var types = Object.create(null);
+    Database.readAll('Accounts').rows.forEach(function (a) { types[a.account_id] = a.account_type; });
+    var txs = transactions || Database.readAll('Transactions').rows;
+    events.forEach(function (b) {
+      var hold = holdOf(b, reservations, spentOf(b.budget_id, txs, types));
+      Object.keys(hold.effective).forEach(function (a) { out[a] = (out[a] || 0) + hold.effective[a]; });
+    });
+    return out;
+  }
+
+  /**
+   * กัน/ปลดเงินให้งบทริป
+   * input: { budget_id, action: RESERVE|RELEASE, account_id, amount, reservation_date?, note? }
+   */
+  function reserveEvent(input, request) {
+    return Operation.run({ operationType: 'BUDGET_RESERVATION', idempotencyKey: request.idempotencyKey, actor: request.actor, payload: input },
+      function (ctx) {
+        var f = input || {};
+        var id = Validation.requireId(f.budget_id, 'budget_id');
+        var action = Validation.requireEnum(f.action, Config.ENUMS.BUDGET_RESERVATION_ACTION, 'action');
+        var accountId = Validation.requireId(f.account_id, 'account_id');
+        var amount = Validation.toSatang(f.amount, 'amount');
+        var date = Validation.isBlank(f.reservation_date) ? Util.todayIso() : Validation.requireDate(f.reservation_date, 'reservation_date');
+        var note = Validation.requireText(f.note, 'note', { max: Config.TEXT_LIMITS.NOTE, multiline: true });
+        var rowId = ctx.id(HOLDS_SHEET, 'budget-reservation');
+        var reservations = readHolds();
+        if (reservations.some(function (r) { return r.budget_reservation_id === rowId; })) return { budget_reservation_id: rowId }; // replay
+        var budget = Database.readAll(SHEET).rows.filter(function (b) { return b.budget_id === id; })[0];
+        if (!budget || isMonthly(budget)) throw Util.AppError('NOT_FOUND', 'ไม่พบงบทริปที่เลือก');
+        if (budget.is_active !== true) throw fail('budget_id', 'งบนี้ถูกปิดแล้ว');
+        var accountRows = Database.readAll('Accounts').rows;
+        var account = accountRows.filter(function (a) { return a.account_id === accountId; })[0];
+        if (!account || !Ledger.isAsset(account.account_type)) throw fail('account_id', 'กันเงินได้เฉพาะบัญชีเงินสด/ธนาคาร/อี-วอลเล็ต');
+        var types = Object.create(null);
+        accountRows.forEach(function (a) { types[a.account_id] = a.account_type; });
+        var transactions = Database.readAll('Transactions').rows;
+        var hold = holdOf(budget, reservations, spentOf(id, transactions, types));
+        if (action === 'RESERVE') {
+          if (account.is_active !== true) throw fail('account_id', 'บัญชีนี้ถูกปิดใช้งานแล้ว');
+          var need = Math.max(0, sat(budget.amount) - spentOf(id, transactions, types) - hold.netTotal);
+          if (amount > need) throw fail('amount', 'ยอดกันเงินเกินยอดที่ยังต้องกัน (' + baht(need) + ' บาท)');
+          var ledger = Ledger.balances(accountRows, transactions);
+          var planHeld = PaymentActivity.balances(Database.readAll('Reservations').rows, transactions).accounts;
+          var available = (ledger[accountId] || 0) - (planHeld[accountId] || 0) - (accountHolds(transactions)[accountId] || 0);
+          if (amount > available) throw fail('amount', 'เงินที่ใช้ได้ในบัญชีไม่พอ (ใช้ได้ ' + baht(Math.max(0, available)) + ' บาท)');
+        } else if (amount > Math.max(0, hold.net[accountId] || 0)) {
+          throw fail('amount', 'ยอดปลดเงินเกินที่กันไว้ในบัญชีนี้ (' + baht(Math.max(0, hold.net[accountId] || 0)) + ' บาท)');
+        }
+        Database.appendRowsIfAbsent(HOLDS_SHEET, [{ budget_reservation_id: rowId, budget_id: id, reservation_date: date, account_id: accountId,
+          action_type: action, amount: baht(amount), note: note, created_at: ctx.now }]);
+        return { budget_reservation_id: rowId };
+      }).result;
+  }
+
+  /** สถานะของงบทริป ณ today: ใช้ไป คงเหลือ ช่วงเวลา ยอดแยกหมวด/บัญชี และเงินกัน */
+  function eventStatus(budget, transactions, types, today, reservations, accountNames) {
     var amount = sat(budget.amount);
     var spent = 0;
     var count = 0;
@@ -381,6 +486,13 @@ var Budgets = (function () {
       out.days_left = e0 - t0 + 1;
       out.per_day = baht(Math.max(0, Math.floor(remaining / out.days_left)));
     }
+    var hold = holdOf(budget, reservations || [], spent);
+    out.reserved = baht(hold.effectiveTotal);
+    out.reserved_net = baht(hold.netTotal);
+    out.to_reserve = baht(Math.max(0, Math.max(0, remaining) - hold.netTotal));
+    out.reserved_accounts = Object.keys(hold.net).filter(function (a) { return hold.net[a] > 0; }).sort().map(function (a) {
+      return { account_id: a, name: (accountNames && accountNames[a]) || a, net: baht(hold.net[a]), effective: baht(hold.effective[a] || 0) };
+    });
     return out;
   }
 
@@ -393,11 +505,14 @@ var Budgets = (function () {
     var events = Database.readAll(SHEET).rows.filter(function (b) { return !isMonthly(b) && (opts.includeInactive || b.is_active === true); });
     if (!events.length) return [];
     var types = Object.create(null);
-    Database.readAll('Accounts').rows.forEach(function (a) { types[a.account_id] = a.account_type; });
+    var names = MasterData.displayNames();
+    var accountNames = Object.create(null);
+    Database.readAll('Accounts').rows.forEach(function (a) { types[a.account_id] = a.account_type; accountNames[a.account_id] = names[a.account_id] || a.account_name; });
     var transactions = Database.readAll('Transactions').rows;
+    var reservations = readHolds();
     var today = opts.today || Util.todayIso();
     var order = { ACTIVE: 0, UPCOMING: 1, ENDED: 2 };
-    return events.map(function (b) { return eventStatus(b, transactions, types, today); }).sort(function (a, b) {
+    return events.map(function (b) { return eventStatus(b, transactions, types, today, reservations, accountNames); }).sort(function (a, b) {
       if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
       if (a.phase !== b.phase) return order[a.phase] - order[b.phase];
       return a.phase === 'ENDED' ? b.end_date.localeCompare(a.end_date) : a.start_date.localeCompare(b.start_date);
@@ -415,6 +530,7 @@ var Budgets = (function () {
   }
 
   return { list: list, save: save, setActive: setActive, copyMonth: copyMonth, weeksOf: weeksOf, status: status,
-    saveEvent: saveEvent, listEvents: listEvents, eventStatus: eventStatus, eventOptions: eventOptions };
+    saveEvent: saveEvent, listEvents: listEvents, eventStatus: eventStatus, eventOptions: eventOptions,
+    reserveEvent: reserveEvent, accountHolds: accountHolds };
 
 })();

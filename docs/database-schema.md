@@ -78,6 +78,7 @@ Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`t
 | OperationJournal | หนึ่งคำขอเขียนข้อมูล | Idempotency / Recovery |
 | Budgets | หนึ่งงบใช้จ่ายของหนึ่งเดือน หรือหนึ่งงบทริป/โครงการ (EVENT) | Config (อนุมัติ 2026-11-26; EVENT 2026-11-27) |
 | BudgetCategories | หนึ่งหมวดที่นับเข้างบหนึ่งงบ | Bridge |
+| BudgetReservations | หนึ่งเหตุการณ์กัน/ปลดเงินให้งบทริป | Event (อนุมัติ 2026-11-28) |
 | ApiClients | หนึ่งผู้เรียก Integration API (เช่น LINE OA / สคริปต์) | Config / Security (อนุมัติ 2026-11-27) |
 | ApiDrafts | หนึ่งร่างรายการจาก Integration API รอยืนยัน | Workflow (อนุมัติ 2026-11-27) |
 | Pivot_Saving / Pivot_Payment / Pivot_Transactions | — | รายงาน ไม่ใช่ข้อมูลต้นฉบับ |
@@ -99,11 +100,12 @@ AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operati
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
 Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at, budget_kind, start_date, end_date
 BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
+BudgetReservations: budget_reservation_id, budget_id, reservation_date, account_id, action_type, amount, note, created_at
 ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_user_ids, default_account_id, default_owner_id, is_active, created_at, updated_at
 ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_json, confirm_token_hash, transaction_id, error_code, expires_at, created_at, updated_at
 ```
 
-จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 27, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 14, BudgetCategories 5, ApiClients 11, ApiDrafts 12
+จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 27, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 14, BudgetCategories 5, BudgetReservations 8, ApiClients 11, ApiDrafts 12
 
 ### บัญชีย่อยสำหรับรายงาน (อนุมัติ 2026-11-26)
 
@@ -345,6 +347,21 @@ ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_j
 | BudgetCategories | created_at | Timestamp | SYS | |
 
 ทั้งสองชีตถูกสร้างอัตโนมัติเมื่อบันทึกงบครั้งแรก (เหมือน SubAccounts) และอ่านเป็นตารางว่างถ้ายังไม่มี `initializeDatabase()` / `initializeTestDatabase()` ก็สร้างให้ได้โดยไม่แตะข้อมูลเดิม
+
+### 4.10.1 BudgetReservations (อนุมัติ 2026-11-28)
+
+| Column | Type | Kind | คำอธิบาย |
+|---|---|---|---|
+| budget_reservation_id | ID | KEY | running number |
+| budget_id | ID | FK → Budgets (EVENT) | |
+| reservation_date | Date | INPUT | วันที่กัน/ปลด |
+| account_id | ID | FK → Accounts | บัญชีสินทรัพย์ (CASH/BANK/E_WALLET) เท่านั้น |
+| action_type | Enum | INPUT | RESERVE / RELEASE (ไม่มี CONSUME: เงินกันที่มีผลลดลงตามยอดใช้ไปของงบ) |
+| amount | Money | INPUT | > 0 |
+| note | Text(1000) | INPUT | |
+| created_at | Timestamp | SYS | |
+
+สร้างอัตโนมัติเมื่อกันเงินครั้งแรก · เงินกันที่มีผล = MIN(Σ RESERVE − Σ RELEASE, MAX(0, งบ − ใช้ไป)) แบ่งตามสัดส่วนบัญชี; งบที่ปิดแล้วมีผล 0 · กฎละเอียด: business-rules §4.12
 
 ### 4.11 ApiClients (อนุมัติ 2026-11-27)
 

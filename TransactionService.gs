@@ -429,6 +429,8 @@ var Transactions = (function () {
     var transactions = Database.readAll(SHEET).rows;
     var bal = Ledger.balances(accounts, transactions);
     var held = PaymentActivity.balances(Database.readAll('Reservations').rows, transactions).accounts;
+    var tripHeld = Budgets.accountHolds(transactions); // เงินกันของงบทริป (E3)
+    Object.keys(tripHeld).forEach(function (a) { held[a] = (held[a] || 0) + tripHeld[a]; });
     var names = MasterData.displayNames();
     return accounts.filter(function (a) { return a.is_active === true || bal[a.account_id]; }).map(function (a) {
       var id = a.account_id;

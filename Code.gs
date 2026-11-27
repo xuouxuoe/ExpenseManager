@@ -229,6 +229,7 @@ function api_budgetPage(month) {
   return handleApi_(function () {
     var out = budgetPage_(month);
     out.masters = MasterData.listAll({ includeInactive: true });
+    out.accounts = Transactions.accountSummary(); // เงินที่ใช้ได้ของแต่ละบัญชีสำหรับกันเงินงบทริป
     return out;
   });
 }
@@ -245,6 +246,16 @@ function api_saveEventBudget(input, idempotencyKey, month) {
   return handleApi_(function (actor) {
     var result = Budgets.saveEvent(input, { idempotencyKey: idempotencyKey, actor: actor });
     return { result: result, page: budgetPage_(month || Number(Util.todayIso().slice(0, 7).replace('-', ''))) };
+  });
+}
+
+/** กัน/ปลดเงินให้งบทริป (E3): input { budget_id, action, account_id, amount, reservation_date, note } */
+function api_budgetReservation(input, idempotencyKey, month) {
+  return handleApi_(function (actor) {
+    var result = Budgets.reserveEvent(input, { idempotencyKey: idempotencyKey, actor: actor });
+    var page = budgetPage_(month || Number(Util.todayIso().slice(0, 7).replace('-', '')));
+    page.accounts = Transactions.accountSummary();
+    return { result: result, page: page };
   });
 }
 

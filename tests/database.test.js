@@ -41,10 +41,10 @@ test('Config.columnKind จัดชนิดคอลัมน์ตัวเ�
     .forEach((c) => assert.equal(kinds[c], 'text', c));
 });
 
-test('TC-SC-01: initialize บนไฟล์ว่างสร้างครบ 16 ชีต header ตรง และไม่แตะ ชีต1', () => {
+test('TC-SC-01: initialize บนไฟล์ว่างสร้างครบ 17 ชีต header ตรง และไม่แตะ ชีต1', () => {
   const ctx = createDbContext({ initialize: false });
   const report = ctx.Database.initialize();
-  assert.equal(report.length, 16);
+  assert.equal(report.length, 17);
   assert.ok(report.every((r) => r.status === 'CREATED'));
   assert.ok(ctx.__ss.getSheetByName('ชีต1'));
   Object.entries(ctx.Config.HEADERS).forEach(([name, cols]) => {

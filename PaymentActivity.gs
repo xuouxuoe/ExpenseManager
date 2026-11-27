@@ -325,7 +325,8 @@ var PaymentActivity = (function () {
       });
     } else {
       var account = requireAsset(state.accounts, f.account_id, action !== 'RELEASE');
-      var available = (ledger[account] || 0) - (reserved.accounts[account] || 0) + (released[account] || 0);
+      var available = (ledger[account] || 0) - (reserved.accounts[account] || 0) + (released[account] || 0) -
+        (Budgets.accountHolds(state.transactions)[account] || 0); // เงินกันของงบทริป (E3)
       var row = targets[0];
       if (action === 'RESERVE' || action === 'RELEASE') {
         var amount = Validation.toSatang(f.amount, 'amount');
@@ -625,7 +626,7 @@ var PaymentActivity = (function () {
     // ปลายทางต้องมีเงินที่ใช้ได้พอ (รวมเงินที่โอนเข้ามาในชุดนี้)
     var ledger = Ledger.balances(state.accounts, state.transactions.concat(batch.transactions));
     var reservedByAccount = balances(state.reservations, state.transactions).accounts;
-    var available = (ledger[to] || 0) - (reservedByAccount[to] || 0);
+    var available = (ledger[to] || 0) - (reservedByAccount[to] || 0) - (Budgets.accountHolds(state.transactions)[to] || 0);
     if (total > available) {
       fail('เงินที่ใช้ได้ในบัญชีปลายทางไม่พอ (' + (transfer ? 'หลังโอนแล้วใช้ได้ ' : 'ใช้ได้ ') + Validation.fromSatang(Math.max(0, available)) + ' บาท)' +
         (transfer ? ' ลดยอดที่ย้าย หรือบันทึกรายรับเข้าบัญชีปลายทางก่อน' : ' ติ๊ก “บันทึกการโอนเงินจริงด้วย” ถ้าโอนเงินไปแล้ว'));

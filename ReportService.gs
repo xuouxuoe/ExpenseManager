@@ -77,6 +77,12 @@ var FinanceReports = (function () {
         if (group) group.reserved += reserved[id].accounts[parent];
       });
     });
+    // เงินกันของงบทริปไม่มีบัญชีย่อย: อยู่ในกลุ่มยังไม่ระบุบัญชีย่อยของบัญชีนั้น
+    var tripHeld = Budgets.accountHolds(d.allTransactions);
+    Object.keys(tripHeld).forEach(function (parent) {
+      var group = groups[key(parent, '')];
+      if (group) group.reserved += tripHeld[parent];
+    });
     return Object.keys(groups).map(function (id) {
       var group = groups[id];
       group.balance = baht(balances[id] || 0);
@@ -251,6 +257,8 @@ var FinanceReports = (function () {
 
     var balances = Ledger.balances(d.accounts, d.allTransactions);
     var reserves = PaymentActivity.balances(d.reservations, d.allTransactions).accounts;
+    var tripHeld = Budgets.accountHolds(d.allTransactions); // เงินกันของงบทริป (E3)
+    Object.keys(tripHeld).forEach(function (a) { reserves[a] = (reserves[a] || 0) + tripHeld[a]; });
     var accountTotals = { assets: 0, reserved: 0, available: 0, liabilities: 0 };
     d.accounts.forEach(function (row) {
       var id = row.account_id;

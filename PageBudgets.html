@@ -97,6 +97,32 @@
   </form>
 </dialog>
 
+<dialog id="bg-hold-dialog" class="w-[min(28rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="bg-hold-title">
+  <form id="bg-hold-form" novalidate class="flex max-h-[88vh] flex-col">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 id="bg-hold-title" class="text-base font-semibold">กันเงินให้งบทริป</h2>
+      <button type="button" id="bg-hold-close" class="btn btn-ghost" aria-label="ปิดหน้าต่าง">✕</button>
+    </div>
+    <div class="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+      <p id="bg-hold-summary" class="rounded-xl bg-violet-50 px-3 py-2 text-sm text-violet-900"></p>
+      <label class="block"><span class="field-label">บัญชี *</span><select name="account_id" class="field-input" required aria-describedby="bg-hold-account-help"></select></label>
+      <p id="bg-hold-account-help" class="field-hint"></p>
+      <div class="grid grid-cols-2 gap-3">
+        <label class="block"><span class="field-label">จำนวนเงิน (บาท) *</span>
+          <input name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" class="field-input" required></label>
+        <label class="block"><span class="field-label">วันที่</span><input name="reservation_date" type="date" class="field-input"></label>
+      </div>
+      <label class="block"><span class="field-label">หมายเหตุ</span><input name="note" maxlength="1000" class="field-input"></label>
+      <p class="field-hint">การกันเงินไม่ใช่รายจ่าย ยอดบัญชีไม่เปลี่ยน แต่ “ใช้ได้จริง” ลดลง · เงินกันลดลงเองตามยอดที่ใช้ไปในงบ · ปิดงบแล้วเงินกันหมดผลทันที</p>
+      <p id="bg-hold-error" role="alert" class="text-sm text-rose-700 empty:hidden"></p>
+    </div>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+      <button type="button" id="bg-hold-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="bg-hold-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
 <style>
   .bg-weeks { width: 100%; border-collapse: collapse; font-size: .8125rem; }
   .bg-weeks th, .bg-weeks td { padding: .375rem .5rem; border-top: 1px solid #f1f5f9; text-align: right; white-space: nowrap; }
@@ -169,7 +195,7 @@
     var form = document.getElementById('bg-form');
     var formError = document.getElementById('bg-form-error');
     var saveButton = document.getElementById('bg-form-save');
-    var state = { month: Number(App.todayIso().slice(0, 7).replace('-', '')), budgets: [], events: [], masters: null, loading: false, editing: null, editingEvent: null };
+    var state = { month: Number(App.todayIso().slice(0, 7).replace('-', '')), budgets: [], events: [], accounts: [], holding: null, masters: null, loading: false, editing: null, editingEvent: null };
     var eventsBox = document.getElementById('bg-events');
     var view = App.pref('budgetView') === 'table' ? 'table' : 'cards';
     var submit = App.createSubmitter();
@@ -502,6 +528,10 @@
       var buttons = el('div', { class: 'flex flex-wrap gap-1' },
         el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'ดูรายการของงบ ' + b.budget_name, onclick: function () { viewTransactions(b); } }, 'ดูรายการ'));
       if (b.is_active) {
+        buttons.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'กันเงินให้งบ ' + b.budget_name, onclick: function () { openHold(b, 'RESERVE'); } }, 'กันเงิน'));
+        if (b.reserved_accounts && b.reserved_accounts.length) {
+          buttons.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'ปลดเงินกันของงบ ' + b.budget_name, onclick: function () { openHold(b, 'RELEASE'); } }, 'ปลดเงิน'));
+        }
         buttons.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'แก้งบ ' + b.budget_name, onclick: function () { openEventForm(b); } }, 'แก้ไข'));
         buttons.appendChild(el('button', { type: 'button', class: 'btn btn-ghost text-rose-600', 'aria-label': 'ปิดงบ ' + b.budget_name, onclick: function () { setEventActive(b, false); } }, 'ปิดงบ'));
       } else {
@@ -525,9 +555,86 @@
             el('p', { class: 'mt-0.5 text-xs text-slate-500', text: dateTh(b.start_date) + ' – ' + dateTh(b.end_date) + ' · ' + when + ' · เจ้าของ: ' + (b.owner_name || 'ทุกคน') })),
           buttons),
         el('div', { class: 'mt-3 flex flex-wrap items-center gap-4' }, donut(b.spent, Number(b.amount), 76, b.budget_name), stats),
+        holdLine(b),
         details.childNodes.length ? details : el('p', { class: 'mt-3 text-sm text-slate-500', text: 'ยังไม่มีรายการ เลือก “ใช้จากงบทริป” ตอนบันทึกรายการ' }),
         b.note ? el('p', { class: 'mt-2 text-xs text-slate-500 [overflow-wrap:anywhere]', text: b.note }) : null);
     }
+
+    /** เงินกันของงบทริป: กันไว้ (มีผล) แยกบัญชี และยอดที่ยังต้องกัน */
+    function holdLine(b) {
+      var parts = (b.reserved_accounts || []).map(function (a) { return a.name + ' ' + money(a.effective); });
+      if (!parts.length && !b.is_active) return null;
+      var text = parts.length ? 'กันเงินไว้ ' + money(b.reserved) + ' บาท (' + parts.join(' · ') + ')' : 'ยังไม่ได้กันเงิน';
+      if (b.is_active && b.to_reserve > 0) text += ' · ยังต้องกันอีก ' + money(b.to_reserve) + ' บาท';
+      if (!b.is_active && parts.length) text += ' · งบปิดแล้ว เงินกันไม่มีผล';
+      if (b.is_active && b.phase === 'ENDED' && b.reserved > 0) text += ' · ทริปจบแล้ว ปิดงบหรือปลดเงินเพื่อคืนเงินที่ใช้ได้';
+      return el('p', { class: 'mt-3 rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900 [overflow-wrap:anywhere]', text: text });
+    }
+
+    var holdDialog = document.getElementById('bg-hold-dialog');
+    var holdForm = document.getElementById('bg-hold-form');
+    var holdError = document.getElementById('bg-hold-error');
+    var holdSave = document.getElementById('bg-hold-save');
+    var holdSubmit = App.createSubmitter();
+    var holdRetry = null;
+    function hfield(name) { return holdForm.elements.namedItem(name); }
+
+    function holdAccountHelp() {
+      var h = state.holding;
+      var id = hfield('account_id').value;
+      var help = document.getElementById('bg-hold-account-help');
+      if (!h || !id) { help.textContent = ''; return; }
+      if (h.action === 'RESERVE') {
+        var acc = state.accounts.filter(function (a) { return a.account_id === id; })[0];
+        help.textContent = acc ? 'ใช้ได้ตอนนี้ ' + money(acc.available) + ' บาท' : '';
+      } else {
+        var held = (h.budget.reserved_accounts || []).filter(function (a) { return a.account_id === id; })[0];
+        help.textContent = held ? 'กันไว้ในบัญชีนี้ ' + money(held.net) + ' บาท' : '';
+      }
+    }
+
+    function openHold(b, action) {
+      state.holding = { budget: b, action: action };
+      holdRetry = null;
+      holdError.textContent = '';
+      holdForm.reset();
+      document.getElementById('bg-hold-title').textContent = (action === 'RESERVE' ? 'กันเงินให้ ' : 'ปลดเงินกันของ ') + b.budget_name;
+      document.getElementById('bg-hold-summary').textContent = 'งบ ' + money(b.amount) + ' · ใช้ไป ' + money(b.spent) + ' · กันไว้ ' + money(b.reserved) +
+        (action === 'RESERVE' ? ' · ยังต้องกัน ' + money(b.to_reserve) : '');
+      var select = hfield('account_id');
+      select.textContent = '';
+      var rows = action === 'RESERVE'
+        ? state.accounts.filter(function (a) { return a.is_asset && a.is_active; }).map(function (a) { return [a.account_id, a.name + ' · ใช้ได้ ' + money(a.available)]; })
+        : (b.reserved_accounts || []).map(function (a) { return [a.account_id, a.name + ' · กันไว้ ' + money(a.net)]; });
+      rows.forEach(function (r) { select.appendChild(el('option', { value: r[0], text: r[1] })); });
+      hfield('amount').value = action === 'RESERVE' ? (b.to_reserve || '') : (b.reserved_accounts && b.reserved_accounts[0] ? b.reserved_accounts[0].net : '');
+      hfield('reservation_date').value = App.todayIso();
+      holdAccountHelp();
+      holdDialog.showModal();
+      hfield('amount').focus();
+    }
+
+    holdForm.addEventListener('change', holdAccountHelp);
+    holdForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (holdSave.disabled || !state.holding) return;
+      var payload = holdRetry || { budget_id: state.holding.budget.budget_id, action: state.holding.action, account_id: hfield('account_id').value,
+        amount: hfield('amount').value, reservation_date: hfield('reservation_date').value, note: hfield('note').value };
+      if (!holdRetry && !holdForm.reportValidity()) return;
+      holdError.textContent = '';
+      App.setBusy(holdSave, true);
+      holdSubmit(payload, function (key) { return App.call('api_budgetReservation', payload, key, state.month); }).then(function (res) {
+        holdRetry = null;
+        holdDialog.close();
+        apply(res.page);
+        App.toast(payload.action === 'RESERVE' ? 'กันเงินแล้ว' : 'ปลดเงินแล้ว', 'success');
+      }, function (err) {
+        holdRetry = ['NETWORK', 'BUSY', 'INTERNAL_ERROR'].indexOf(err.code) >= 0 ? payload : null;
+        holdError.textContent = holdRetry ? 'ยังยืนยันผลไม่ได้ กดบันทึกอีกครั้งเพื่อส่งข้อมูลชุดเดิม' : err.message;
+      }).finally(function () { App.setBusy(holdSave, false); });
+    });
+    document.getElementById('bg-hold-close').addEventListener('click', function () { holdDialog.close(); });
+    document.getElementById('bg-hold-cancel').addEventListener('click', function () { holdDialog.close(); });
 
     function renderEvents() {
       eventsBox.textContent = '';
@@ -627,6 +734,7 @@
     function apply(page) {
       state.budgets = page.budgets || [];
       if (page.events) state.events = page.events;
+      if (page.accounts) state.accounts = page.accounts;
       if (page.masters) state.masters = page.masters;
       state.loading = false;
       render();

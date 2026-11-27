@@ -187,3 +187,10 @@ Config.HEADERS.Transactions = Config.HEADERS.Transactions.concat(['budget_id', '
 Config.ENUMS.BUDGET_KIND = ['MONTHLY', 'EVENT'];
 /** ประเภทรายการที่เลือก "ใช้จากงบ" ได้ (รับรู้รายจ่ายตาม Ledger หรือคืนยอดรายจ่าย) */
 Config.BUDGET_TRANSACTION_TYPES = ['EXPENSE', 'CREDIT_PURCHASE', 'INTEREST', 'FEE', 'REFUND'];
+
+// กันเงินให้งบทริป (E3, อนุมัติ 2026-11-28): ชีตแยกจาก Reservations ของแผนชำระ
+Config.SHEETS.BUDGET_RESERVATIONS = 'BudgetReservations';
+Config.HEADERS.BudgetReservations = ['budget_reservation_id', 'budget_id', 'reservation_date', 'account_id', 'action_type', 'amount', 'note', 'created_at'];
+Config.PRIMARY_KEYS.BudgetReservations = 'budget_reservation_id';
+Config.AUTO_CREATE_SHEETS.push('BudgetReservations');
+Config.ENUMS.BUDGET_RESERVATION_ACTION = ['RESERVE', 'RELEASE'];
