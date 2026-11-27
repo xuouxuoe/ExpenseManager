@@ -126,7 +126,8 @@ var Config = {
       ['from_account_id', 'from_account_name', 'accounts'],
       ['to_account_id', 'to_account_name', 'accounts'],
       ['owner_id', 'owner_name', 'owners'],
-      ['category_id', 'category_name', 'categories']
+      ['category_id', 'category_name', 'categories'],
+      ['budget_id', 'budget_name', 'budgets']
     ],
     PaymentPlans: [
       ['sub_account_id', 'sub_account_name', 'subAccounts'],
@@ -178,3 +179,11 @@ Config.HEADERS.Transactions = Config.HEADERS.Transactions.concat(['from_sub_acco
 Config.HEADERS.PaymentPlans = Config.HEADERS.PaymentPlans.concat(['sub_account_id', 'sub_account_name']);
 Config.HEADERS.PaymentSchedules = Config.HEADERS.PaymentSchedules.concat(['sub_account_id', 'sub_account_name']);
 Config.PLAN_TO_SCHEDULE_FIELDS.push('sub_account_id');
+
+// งบทริป/โครงการ (EVENT budget, อนุมัติ 2026-11-27, docs/event-budget-plan.md): ต่อท้าย header เดิม
+Config.LEGACY_HEADERS.Budgets = Config.HEADERS.Budgets.slice();
+Config.HEADERS.Budgets = Config.HEADERS.Budgets.concat(['budget_kind', 'start_date', 'end_date']);
+Config.HEADERS.Transactions = Config.HEADERS.Transactions.concat(['budget_id', 'budget_name']);
+Config.ENUMS.BUDGET_KIND = ['MONTHLY', 'EVENT'];
+/** ประเภทรายการที่เลือก "ใช้จากงบ" ได้ (รับรู้รายจ่ายตาม Ledger หรือคืนยอดรายจ่าย) */
+Config.BUDGET_TRANSACTION_TYPES = ['EXPENSE', 'CREDIT_PURCHASE', 'INTEREST', 'FEE', 'REFUND'];

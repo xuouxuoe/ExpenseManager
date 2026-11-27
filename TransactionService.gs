@@ -164,6 +164,7 @@ var Transactions = (function () {
     if (!owner) throw fail('FK_NOT_FOUND', 'owner_id', 'ไม่พบเจ้าของที่เลือก');
     if (!owner.isActive && ownerId !== cur.owner_id) throw fail('FK_INACTIVE', 'owner_id', 'เจ้าของที่เลือกถูกปิดใช้งานแล้ว');
 
+    var budgetId = validateBudget(input, type, ownerId, masters, cur);
     var note = Validation.requireText(input.note, 'note', { max: Config.TEXT_LIMITS.NOTE, multiline: true, required: !!rule.noteRequired });
     var source = Validation.isBlank(input.source) ? (cur.source || 'MANUAL') : Validation.requireEnum(input.source, CLIENT_SOURCES, 'source');
 
@@ -181,8 +182,28 @@ var Transactions = (function () {
       amount: Validation.fromSatang(Validation.toSatang(input.amount, 'amount')),
       external_ref: Validation.requireText(input.external_ref, 'external_ref', { max: Config.TEXT_LIMITS.EXTERNAL_REF }),
       source: source,
-      note: note
+      note: note,
+      budget_id: budgetId
     };
+  }
+
+  /**
+   * "ใช้จากงบ" (งบทริป EVENT, docs/event-budget-plan.md §4.2)
+   * ไม่ส่ง budget_id ตอนแก้ไข = คงค่าเดิม (ถ้าประเภทใหม่ยังใช้งบได้); งบปิดแล้วคงไว้ได้เฉพาะค่าเดิม
+   */
+  function validateBudget(input, type, ownerId, masters, cur) {
+    var allowed = Config.BUDGET_TRANSACTION_TYPES.indexOf(type) >= 0;
+    var raw = input.budget_id === undefined ? (allowed ? cur.budget_id : '') : input.budget_id;
+    var id = Validation.requireId(raw, 'budget_id', { required: false }) || '';
+    if (!id) return '';
+    if (!allowed) throw fail('RULE', 'budget_id', 'เลือกงบได้เฉพาะรายการรายจ่าย ซื้อด้วยบัตร ดอกเบี้ย ค่าธรรมเนียม หรือคืนเงิน');
+    var budget = Projection.sourceOf(masters, 'budgets')[id];
+    if (!budget || budget.type !== 'EVENT') throw fail('FK_NOT_FOUND', 'budget_id', 'ไม่พบงบทริปที่เลือก');
+    if (!budget.isActive && id !== cur.budget_id) throw fail('FK_INACTIVE', 'budget_id', 'งบที่เลือกถูกปิดแล้ว');
+    if (budget.ownerId && budget.ownerId !== ownerId) {
+      throw fail('RULE', 'budget_id', 'งบ "' + budget.name + '" เป็นของ' + (budget.ownerName || 'เจ้าของอื่น') + ' เลือกได้เฉพาะรายการของเจ้าของคนนี้');
+    }
+    return id;
   }
 
   function normalize(text) {
@@ -343,6 +364,7 @@ var Transactions = (function () {
     var accountId = Validation.requireId(f.account_id, 'account_id', { required: false });
     var ownerId = Validation.requireId(f.owner_id, 'owner_id', { required: false });
     var categoryId = Validation.requireId(f.category_id, 'category_id', { required: false });
+    var budgetId = Validation.requireId(f.budget_id, 'budget_id', { required: false });
     var q = normalize(Validation.requireText(f.q, 'q', { max: 100 }));
     var page = Validation.isBlank(f.page) ? 1 : Validation.requireInt(f.page, 'page', { min: 1 });
     var pageSize = Validation.isBlank(f.page_size) ? PAGE_SIZE_DEFAULT : Validation.requireInt(f.page_size, 'page_size', { min: 1, max: PAGE_SIZE_MAX });
@@ -359,8 +381,9 @@ var Transactions = (function () {
       if (accountId && r.from_account_id !== accountId && r.to_account_id !== accountId) return false;
       if (ownerId && r.owner_id !== ownerId) return false;
       if (categoryId && r.category_id !== categoryId) return false;
+      if (budgetId && r.budget_id !== budgetId) return false;
       if (q) {
-        var hay = normalize([r.item_name, r.description, r.note, r.from_account_name, r.to_account_name, r.category_name, r.owner_name, r.external_ref].join(' '));
+        var hay = normalize([r.item_name, r.description, r.note, r.from_account_name, r.to_account_name, r.category_name, r.owner_name, r.external_ref, r.budget_name].join(' '));
         if (hay.indexOf(q) < 0) return false;
       }
       return true;

@@ -7,22 +7,38 @@ var Projection = (function () {
     subAccounts: { sheet: 'SubAccounts', id: 'sub_account_id', name: 'sub_account_name' },
     accounts: { sheet: 'Accounts', id: 'account_id', name: 'account_name', type: 'account_type' },
     owners: { sheet: 'Owners', id: 'owner_id', name: 'owner_name' },
-    categories: { sheet: 'Categories', id: 'category_id', name: 'category_name', type: 'category_type' }
+    categories: { sheet: 'Categories', id: 'category_id', name: 'category_name', type: 'category_type' },
+    // งบใช้จ่าย (ชื่องบใน Transactions.budget_name): โหลดเมื่อจำเป็นเท่านั้น เพื่อไม่เพิ่มการอ่านชีตในเส้นทางบันทึกปกติ
+    budgets: { sheet: 'Budgets', id: 'budget_id', name: 'budget_name', lazy: true }
   };
 
-  /** อ่าน Master ทั้งสามตาราง: { accounts: {id: {name, isActive, type}}, owners, categories } */
+  function loadSource(key, displayNames) {
+    var src = MASTER_SOURCES[key];
+    var map = {};
+    Database.readAll(src.sheet).rows.forEach(function (r) {
+      if (key === 'budgets') {
+        map[r.budget_id] = { name: r.budget_name, isActive: r.is_active === true, type: r.budget_kind || 'MONTHLY', ownerId: r.owner_id || '', ownerName: r.owner_name || '' };
+        return;
+      }
+      map[r[src.id]] = { name: key === 'accounts' ? (displayNames[r[src.id]] || r[src.name]) : r[src.name], isActive: r.is_active === true, type: src.type ? r[src.type] : '', accountId: r.account_id };
+    });
+    return map;
+  }
+
+  /** อ่าน Master: { accounts: {id: {name, isActive, type}}, owners, categories, subAccounts } (budgets โหลดเมื่อใช้ผ่าน sourceOf) */
   function loadMasters() {
     var masters = {};
     var displayNames = MasterData.displayNames();
     Object.keys(MASTER_SOURCES).forEach(function (key) {
-      var src = MASTER_SOURCES[key];
-      var map = {};
-      Database.readAll(src.sheet).rows.forEach(function (r) {
-        map[r[src.id]] = { name: key === 'accounts' ? (displayNames[r[src.id]] || r[src.name]) : r[src.name], isActive: r.is_active === true, type: src.type ? r[src.type] : '', accountId: r.account_id };
-      });
-      masters[key] = map;
+      if (!MASTER_SOURCES[key].lazy) masters[key] = loadSource(key, displayNames);
     });
     return masters;
+  }
+
+  /** map ของ master ตาม key โหลดเพิ่มเมื่อยังไม่มี (เช่น budgets) */
+  function sourceOf(masters, key) {
+    if (!masters[key]) masters[key] = loadSource(key, {});
+    return masters[key];
   }
 
   function validateSubAccount(rawId, accountId, masters, currentId) {
@@ -51,7 +67,7 @@ var Projection = (function () {
         row[nameCol] = '';
         return;
       }
-      var master = masters[spec[2]][id];
+      var master = sourceOf(masters, spec[2])[id];
       if (!master) {
         throw Util.AppError('VALIDATION_FK_NOT_FOUND', 'ไม่พบข้อมูลที่อ้างอิงใน ' + idCol, { field: idCol });
       }
@@ -97,7 +113,7 @@ var Projection = (function () {
         var values = data.rows.map(function (r, i) {
           var id = r[spec[0]];
           if (Validation.isBlank(id)) return '';
-          var m = masters[spec[2]][id];
+          var m = sourceOf(masters, spec[2])[id];
           if (!m) {
             report.orphans.push({ sheet: sheetName, column: spec[0], rowNumber: data.rowNumbers[i] });
             return r[spec[1]]; // ไม่ลบชื่อเดิมเมื่อหา Master ไม่พบ
@@ -142,6 +158,7 @@ var Projection = (function () {
   return {
     validateSubAccount: validateSubAccount,
     loadMasters: loadMasters,
+    sourceOf: sourceOf,
     apply: apply,
     applyPlanToSchedule: applyPlanToSchedule,
     refresh: refresh

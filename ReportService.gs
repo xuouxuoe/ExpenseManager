@@ -294,11 +294,11 @@ var FinanceReports = (function () {
     var rows;
     if (type === 'TRANSACTIONS') {
       headers = ['transaction_date', 'month', 'transaction_type', 'owner_name', 'category_name', 'from_account_name',
-        'to_account_name', 'item_name', 'amount', 'income', 'expense', 'reversal_of', 'from_sub_account_name', 'to_sub_account_name'];
+        'to_account_name', 'item_name', 'amount', 'income', 'expense', 'reversal_of', 'from_sub_account_name', 'to_sub_account_name', 'budget_name'];
       rows = d.transactions.map(function (r) {
         var effect = Ledger.effectsOf(r, d.types);
         return [r.transaction_date, dateMonth(r.transaction_date), r.transaction_type, r.owner_name, r.category_name, r.from_account_name,
-          r.to_account_name, r.item_name, r.amount, baht(effect.incomeSatang), baht(effect.expenseSatang), r.reversal_of, r.from_sub_account_name || '', r.to_sub_account_name || ''];
+          r.to_account_name, r.item_name, r.amount, baht(effect.incomeSatang), baht(effect.expenseSatang), r.reversal_of, r.from_sub_account_name || '', r.to_sub_account_name || '', r.budget_name || ''];
       });
     } else {
       var isSaving = type === 'SAVING';

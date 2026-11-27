@@ -239,8 +239,15 @@ var Database = (function () {
     return actual.length === expected.length && actual.every(function (h, i) { return h === expected[i]; });
   }
 
+  /**
+   * header รุ่นก่อน = ส่วนต้นของ header ปัจจุบันที่ยาวอย่างน้อยเท่ารุ่นแรกใน Config.LEGACY_HEADERS
+   * (รองรับการเพิ่มคอลัมน์ต่อท้ายหลายรอบ เช่น Transactions 21 → 25 → 27 คอลัมน์)
+   */
   function isLegacyHeader(name, actual) {
-    return Config.LEGACY_HEADERS[name] && sameHeader(actual, Config.LEGACY_HEADERS[name]);
+    var oldest = Config.LEGACY_HEADERS[name];
+    var headers = Config.HEADERS[name];
+    if (!oldest || !headers || actual.length < oldest.length || actual.length >= headers.length) return false;
+    return sameHeader(actual, headers.slice(0, actual.length));
   }
 
   function schemaError(sheetName, status) {

@@ -207,7 +207,7 @@
 | Settings | หนึ่งค่าตั้งค่า |
 | AuditLogs | หนึ่งเหตุการณ์ตรวจสอบ |
 | OperationJournal | หนึ่งคำขอเขียนข้อมูลเพื่อป้องกันซ้ำและกู้คืน |
-| Budgets | หนึ่งงบใช้จ่ายรายเดือน (อนุมัติ 2026-11-26) |
+| Budgets | หนึ่งงบใช้จ่ายรายเดือน (อนุมัติ 2026-11-26) หรือหนึ่งงบทริป/โครงการ `budget_kind = EVENT` (อนุมัติ 2026-11-27) |
 | BudgetCategories | หนึ่งหมวดที่นับเข้างบ |
 | ApiClients | หนึ่งผู้เรียก Integration API เช่น LINE OA / สคริปต์ (อนุมัติ 2026-11-27; เก็บเฉพาะ hash ของ key) |
 | ApiDrafts | หนึ่งร่างรายการจาก Integration API ที่รอผู้ใช้ยืนยัน (อนุมัติ 2026-11-27; เก็บเฉพาะ hash ของ confirm token) |
@@ -220,7 +220,7 @@ SubAccounts: sub_account_id, sub_account_name, account_id, is_active, created_at
 Accounts: account_id, account_name, account_type, account_subtype, owner_id, institution, opening_balance, opening_date, credit_limit, statement_day, due_day, is_active, note, created_at, updated_at
 Owners: owner_id, owner_name, is_active, created_at, updated_at
 Categories: category_id, category_name, category_type, icon, color, is_active, created_at, updated_at
-Transactions: transaction_id, transaction_date, transaction_type, from_account_id, from_account_name, to_account_id, to_account_name, owner_id, owner_name, category_id, category_name, item_name, description, amount, plan_id, external_ref, source, reversal_of, note, created_at, updated_at, from_sub_account_id, from_sub_account_name, to_sub_account_id, to_sub_account_name
+Transactions: transaction_id, transaction_date, transaction_type, from_account_id, from_account_name, to_account_id, to_account_name, owner_id, owner_name, category_id, category_name, item_name, description, amount, plan_id, external_ref, source, reversal_of, note, created_at, updated_at, from_sub_account_id, from_sub_account_name, to_sub_account_id, to_sub_account_name, budget_id, budget_name
 PaymentPlans: plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, principal_amount, interest_amount, fee_amount, total_amount, installment_count, first_saving_month, first_payment_month, due_day, external_ref, plan_status, note, created_at, updated_at, sub_account_id, sub_account_name
 PaymentSchedules: schedule_id, plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, installment_no, installment_count, saving_month, payment_month, due_date, amount_due, amount_saved, amount_reserved, amount_paid, remaining_to_save, remaining_to_pay, saving_status, payment_status, is_overdue, is_cancelled, is_month_different, saving_year, saving_month_no, payment_year, payment_month_no, remaining_installments, saving_completed_date, paid_date, note, created_at, updated_at, sub_account_id, sub_account_name
 Reservations: reservation_id, reservation_date, schedule_id, account_id, action_type, amount, transaction_id, note, created_at
@@ -228,7 +228,7 @@ PaymentAllocations: allocation_id, transaction_id, schedule_id, allocated_amount
 Settings: setting_key, setting_value, description, updated_at
 AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operation_id, result
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
-Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
+Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at, budget_kind, start_date, end_date
 BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
 ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_user_ids, default_account_id, default_owner_id, is_active, created_at, updated_at
 ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_json, confirm_token_hash, transaction_id, error_code, expires_at, created_at, updated_at

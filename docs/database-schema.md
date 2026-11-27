@@ -76,7 +76,7 @@ Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`t
 | Settings | หนึ่งค่าตั้งค่า | Config |
 | AuditLogs | หนึ่งเหตุการณ์ตรวจสอบ | Append-only |
 | OperationJournal | หนึ่งคำขอเขียนข้อมูล | Idempotency / Recovery |
-| Budgets | หนึ่งงบใช้จ่ายของหนึ่งเดือน | Config (อนุมัติ 2026-11-26) |
+| Budgets | หนึ่งงบใช้จ่ายของหนึ่งเดือน หรือหนึ่งงบทริป/โครงการ (EVENT) | Config (อนุมัติ 2026-11-26; EVENT 2026-11-27) |
 | BudgetCategories | หนึ่งหมวดที่นับเข้างบหนึ่งงบ | Bridge |
 | ApiClients | หนึ่งผู้เรียก Integration API (เช่น LINE OA / สคริปต์) | Config / Security (อนุมัติ 2026-11-27) |
 | ApiDrafts | หนึ่งร่างรายการจาก Integration API รอยืนยัน | Workflow (อนุมัติ 2026-11-27) |
@@ -89,7 +89,7 @@ SubAccounts: sub_account_id, sub_account_name, account_id, is_active, created_at
 Accounts: account_id, account_name, account_type, account_subtype, owner_id, institution, opening_balance, opening_date, credit_limit, statement_day, due_day, is_active, note, created_at, updated_at
 Owners: owner_id, owner_name, is_active, created_at, updated_at
 Categories: category_id, category_name, category_type, icon, color, is_active, created_at, updated_at
-Transactions: transaction_id, transaction_date, transaction_type, from_account_id, from_account_name, to_account_id, to_account_name, owner_id, owner_name, category_id, category_name, item_name, description, amount, plan_id, external_ref, source, reversal_of, note, created_at, updated_at, from_sub_account_id, from_sub_account_name, to_sub_account_id, to_sub_account_name
+Transactions: transaction_id, transaction_date, transaction_type, from_account_id, from_account_name, to_account_id, to_account_name, owner_id, owner_name, category_id, category_name, item_name, description, amount, plan_id, external_ref, source, reversal_of, note, created_at, updated_at, from_sub_account_id, from_sub_account_name, to_sub_account_id, to_sub_account_name, budget_id, budget_name
 PaymentPlans: plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, principal_amount, interest_amount, fee_amount, total_amount, installment_count, first_saving_month, first_payment_month, due_day, external_ref, plan_status, note, created_at, updated_at, sub_account_id, sub_account_name
 PaymentSchedules: schedule_id, plan_id, purchase_date, plan_type, account_id, account_name, owner_id, owner_name, category_id, category_name, item_name, description, installment_no, installment_count, saving_month, payment_month, due_date, amount_due, amount_saved, amount_reserved, amount_paid, remaining_to_save, remaining_to_pay, saving_status, payment_status, is_overdue, is_cancelled, is_month_different, saving_year, saving_month_no, payment_year, payment_month_no, remaining_installments, saving_completed_date, paid_date, note, created_at, updated_at, sub_account_id, sub_account_name
 Reservations: reservation_id, reservation_date, schedule_id, account_id, action_type, amount, transaction_id, note, created_at
@@ -97,13 +97,13 @@ PaymentAllocations: allocation_id, transaction_id, schedule_id, allocated_amount
 Settings: setting_key, setting_value, description, updated_at
 AuditLogs: audit_id, event_at, actor_id, action, entity_type, entity_id, operation_id, result
 OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operation_type, status, recovery_data, result_ref, created_at, updated_at
-Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
+Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at, budget_kind, start_date, end_date
 BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
 ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_user_ids, default_account_id, default_owner_id, is_active, created_at, updated_at
 ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_json, confirm_token_hash, transaction_id, error_code, expires_at, created_at, updated_at
 ```
 
-จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 11, BudgetCategories 5, ApiClients 11, ApiDrafts 12
+จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 27, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 14, BudgetCategories 5, ApiClients 11, ApiDrafts 12
 
 ### บัญชีย่อยสำหรับรายงาน (อนุมัติ 2026-11-26)
 
@@ -193,6 +193,9 @@ ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_j
 | 19 | note | Text(1000) | N | INPUT | หมายเหตุเพิ่มเติม |
 | 20 | created_at | Timestamp | Y | SYS | |
 | 21 | updated_at | Timestamp | Y | SYS | |
+| 22–25 | from_sub_account_id … to_sub_account_name | | | | บัญชีย่อย (ดู §3) |
+| 26 | budget_id | ID | N | FK → Budgets (EVENT) | "ใช้จากงบ" ทริป/โครงการ เฉพาะ EXPENSE, CREDIT_PURCHASE, INTEREST, FEE, REFUND; รายการกลับรายการคัดลอกจากต้นฉบับ (อนุมัติ 2026-11-27) |
+| 27 | budget_name | Text(100) | N | PROJ | ชื่องบ refresh เมื่อเปลี่ยนชื่องบ |
 
 ### 4.5 PaymentPlans
 
@@ -333,6 +336,8 @@ ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_j
 | Budgets | note | Text(1000) | INPUT | |
 | Budgets | is_active | Boolean | INPUT | แก้หมวดของงบ = ปิดงบเดิมแล้วสร้างงบใหม่ (เก็บประวัติ) |
 | Budgets | created_at / updated_at | Timestamp | SYS | |
+| Budgets | budget_kind | Enum | INPUT | MONTHLY (ว่างในแถวเดิม = MONTHLY) / EVENT (อนุมัติ 2026-11-27) |
+| Budgets | start_date / end_date | Date | INPUT | EVENT: ช่วงวันที่ (บังคับ, end ≥ start, ไม่เกิน 366 วัน); MONTHLY: ว่าง · EVENT ตั้ง budget_month = เดือนของ start_date และ weekly_amount = 0 ไม่มีแถวใน BudgetCategories |
 | BudgetCategories | budget_category_id | ID | KEY | |
 | BudgetCategories | budget_id | ID | FK → Budgets | |
 | BudgetCategories | category_id | ID | INPUT | FK → Categories ประเภท EXPENSE |

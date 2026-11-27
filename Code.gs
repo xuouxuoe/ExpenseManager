@@ -70,7 +70,7 @@ function api_setMasterActive(type, id, isActive, idempotencyKey) {
   });
 }
 
-/** filters: { date_from, date_to, transaction_type, account_id, owner_id, category_id, q, page, page_size } */
+/** filters: { date_from, date_to, transaction_type, account_id, owner_id, category_id, budget_id, q, page, page_size } */
 function api_listTransactions(filters) {
   return handleApi_(function () {
     return Transactions.list(filters);
@@ -105,7 +105,9 @@ function api_reverseTransaction(id, input, idempotencyKey, filters) {
 
 function transactionPage_(filters) {
   return { list: Transactions.list(filters), suggestions: Transactions.suggestions({ limit: 8 }), accounts: Transactions.accountSummary(),
-    budgets: Budgets.list(Number(Util.todayIso().slice(0, 7).replace('-', ''))) };
+    budgets: Budgets.list(Number(Util.todayIso().slice(0, 7).replace('-', ''))),
+    // งบทริปที่เลือก "ใช้จากงบ" ได้ (อ่าน Budgets/Accounts/Transactions จาก cache ของคำขอเดียวกัน)
+    event_budgets: Budgets.eventOptions() };
 }
 
 /** เมื่อเขียนสำเร็จแล้ว ผลอ่านหน้าที่มีปัญหาไม่เปลี่ยนสถานะการบันทึก */
@@ -211,6 +213,8 @@ function api_dashboard(filters) {
     var out = FinanceReports.dashboard(filters);
     // งบใช้จ่ายของเดือนปัจจุบันเสมอ (การ์ด "งบใช้จ่ายเดือนนี้")
     out.budgets = Budgets.list(Number(Util.todayIso().slice(0, 7).replace('-', '')));
+    // งบทริปที่ยังไม่จบ (การ์ดงบในหน้าภาพรวม)
+    out.event_budgets = Budgets.eventOptions().filter(function (b) { return b.phase !== 'ENDED'; });
     return out;
   });
 }
@@ -218,7 +222,7 @@ function api_dashboard(filters) {
 // ---------- งบใช้จ่าย ----------
 
 function budgetPage_(month) {
-  return { month: Number(month), budgets: Budgets.list(month) };
+  return { month: Number(month), budgets: Budgets.list(month), events: Budgets.listEvents({ includeInactive: true }) };
 }
 
 function api_budgetPage(month) {
@@ -233,6 +237,14 @@ function api_saveBudget(input, idempotencyKey) {
   return handleApi_(function (actor) {
     var result = Budgets.save(input, { idempotencyKey: idempotencyKey, actor: actor });
     return { result: result, page: budgetPage_(input && input.budget_month) };
+  });
+}
+
+/** งบทริป/โครงการ (EVENT): input { budget_id?, budget_name, owner_id, amount, start_date, end_date, note } */
+function api_saveEventBudget(input, idempotencyKey, month) {
+  return handleApi_(function (actor) {
+    var result = Budgets.saveEvent(input, { idempotencyKey: idempotencyKey, actor: actor });
+    return { result: result, page: budgetPage_(month || Number(Util.todayIso().slice(0, 7).replace('-', ''))) };
   });
 }
 

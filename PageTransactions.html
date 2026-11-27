@@ -48,6 +48,11 @@
       <label for="tx-f-q" class="field-label">ค้นหา</label>
       <input id="tx-f-q" type="search" class="field-input" placeholder="ชื่อรายการ, หมายเหตุ…" autocomplete="off">
     </div>
+    <div id="tx-f-budget-box" class="col-span-2 sm:col-span-4" hidden>
+      <label for="tx-f-budget" class="field-label">งบทริป/โครงการ</label>
+      <select id="tx-f-budget" class="field-input" aria-describedby="tx-f-budget-hint"></select>
+      <p id="tx-f-budget-hint" class="field-hint empty:hidden"></p>
+    </div>
   </form>
 
   <p id="tx-queue-warning" class="mt-3 hidden text-sm text-amber-800" role="status"></p>
@@ -119,6 +124,12 @@
         <select id="tf-category_id" name="category_id" class="field-input" aria-describedby="tf-category_id-error tf-budget-hint"></select>
         <p class="field-error hidden" id="tf-category_id-error"></p>
         <p id="tf-budget-hint" class="mt-1 whitespace-pre-line rounded-lg bg-indigo-50 px-2 py-1 text-xs text-indigo-800 empty:hidden" aria-live="polite"></p>
+      </div>
+      <div data-side="budget" hidden>
+        <label for="tf-budget_id" class="field-label">ใช้จากงบทริป/โครงการ</label>
+        <select id="tf-budget_id" name="budget_id" class="field-input" aria-describedby="tf-budget_id-error tf-event-hint"></select>
+        <p class="field-error hidden" id="tf-budget_id-error"></p>
+        <p id="tf-event-hint" class="mt-1 rounded-lg bg-indigo-50 px-2 py-1 text-xs text-indigo-800 empty:hidden" aria-live="polite"></p>
       </div>
 
       <div>
@@ -243,12 +254,13 @@
     var FIELD_LABELS = {
       transaction_type: 'ประเภทรายการ', amount: 'จำนวนเงิน', transaction_date: 'วันที่ทำรายการ', from_account_id: 'บัญชีต้นทาง',
       to_account_id: 'บัญชีปลายทาง', category_id: 'หมวดหมู่', item_name: 'ชื่อรายการ', owner_id: 'เจ้าของรายการ',
-      description: 'รายละเอียด', note: 'หมายเหตุ', external_ref: 'เลขอ้างอิง'
+      description: 'รายละเอียด', note: 'หมายเหตุ', external_ref: 'เลขอ้างอิง', budget_id: 'งบทริป'
     };
 
     var state = {
       masters: { accounts: [], owners: [], categories: [] },
-      filters: { month: '', type: '', account: '', q: '' },
+      filters: { month: '', type: '', account: '', q: '', budget: '' },
+      events: [],
       rows: [], total: 0, page: 1, hasMore: false, summary: null,
       status: 'idle', errorMessage: '', loadingMore: false,
       editing: null, submit: null, reversing: null, reverseSubmit: null,
@@ -291,6 +303,64 @@
       fillSelect(document.getElementById('tx-f-account'), [['', 'ทุกบัญชี']].concat(state.masters.accounts.map(function (a) {
         return [a.account_id, a.account_name + (a.is_active ? '' : ' (ปิดใช้งาน)')];
       })), state.filters.account);
+      renderBudgetFilter();
+    }
+
+    // ---------- งบทริป/โครงการ (EVENT budget) ----------
+    var BUDGET_TYPES = ['EXPENSE', 'CREDIT_PURCHASE', 'INTEREST', 'FEE', 'REFUND'];
+
+    /** งบที่เลือกได้ + งบที่ใช้กรองอยู่ (กรณีงบจบแล้วหรือมาจากหน้างบ) */
+    function renderBudgetFilter() {
+      var box = document.getElementById('tx-f-budget-box');
+      var events = state.events || [];
+      var known = events.some(function (b) { return b.budget_id === state.filters.budget; });
+      box.hidden = !events.length && !state.filters.budget;
+      var opts = [['', 'ทุกรายการ']].concat(events.map(function (b) { return [b.budget_id, b.budget_name]; }));
+      if (state.filters.budget && !known) opts.push([state.filters.budget, state.filters.budgetName || 'งบที่เลือก']);
+      fillSelect(document.getElementById('tx-f-budget'), opts, state.filters.budget);
+      document.getElementById('tx-f-budget-hint').textContent = state.filters.budget ? 'แสดงทุกวันที่ของงบนี้ (ไม่กรองตามเดือน)' : '';
+      document.getElementById('tx-f-month').disabled = !!state.filters.budget;
+    }
+
+    function shortDate(iso) {
+      var p = String(iso).split('-');
+      return new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2])).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+    }
+
+    function eventLabel(b) {
+      return b.budget_name + ' (' + shortDate(b.start_date) + '–' + shortDate(b.end_date) + ') · เหลือ ' + App.formatMoney(b.remaining);
+    }
+
+    /** ตัวเลือกงบในฟอร์ม: งบที่เปิดอยู่ของเจ้าของนี้หรือของทุกคน + งบเดิมของรายการที่แก้ */
+    function syncBudgetField(current) {
+      var box = form.querySelector('[data-side="budget"]');
+      var select = document.getElementById('tf-budget_id');
+      var type = typeSelect.value;
+      var owner = document.getElementById('tf-owner_id').value;
+      var keep = current !== undefined ? current : select.value;
+      var events = (state.events || []).filter(function (b) { return !b.owner_id || b.owner_id === owner || b.budget_id === keep; });
+      var opts = [['', 'ไม่ใช้งบทริป']].concat(events.map(function (b) { return [b.budget_id, eventLabel(b)]; }));
+      if (keep && !events.some(function (b) { return b.budget_id === keep; })) {
+        opts.push([keep, (state.editing && state.editing.budget_name ? state.editing.budget_name : 'งบเดิม') + ' (ปิดแล้ว)']);
+      }
+      var allowed = BUDGET_TYPES.indexOf(type) >= 0;
+      box.hidden = !allowed || opts.length < 2;
+      fillSelect(select, opts, allowed ? keep : '');
+      updateEventHint();
+    }
+
+    function updateEventHint() {
+      var hint = document.getElementById('tf-event-hint');
+      var id = document.getElementById('tf-budget_id').value;
+      var b = (state.events || []).filter(function (x) { return x.budget_id === id; })[0];
+      if (!b || form.querySelector('[data-side="budget"]').hidden) { hint.textContent = ''; return; }
+      var amount = Number(String(document.getElementById('tf-amount').value).replace(/,/g, '')) || 0;
+      var editing = state.editing && state.editing.budget_id === id ? Number(state.editing.amount) || 0 : 0;
+      var after = Math.round((b.remaining + editing - amount) * 100) / 100;
+      hint.textContent = 'งบ “' + b.budget_name + '” เหลือ ' + App.formatMoney(b.remaining) + ' บาท' +
+        (amount ? ' · หลังบันทึกเหลือ ' + App.formatMoney(after) + ' บาท' : '') + ' · ไม่นับในงบรายเดือน';
+      hint.classList.toggle('bg-rose-50', after < 0);
+      hint.classList.toggle('text-rose-700', after < 0);
     }
 
     // ---------- โหลดข้อมูล ----------
@@ -371,10 +441,11 @@
     }
 
     function currentFilters(page) {
-      var range = monthRange(state.filters.month);
+      // กรองตามงบทริป: แสดงทุกวันที่ของงบ (ค่าที่พักจ่ายล่วงหน้าอยู่คนละเดือนได้)
+      var range = state.filters.budget ? { from: '', to: '' } : monthRange(state.filters.month);
       return {
         date_from: range.from, date_to: range.to, transaction_type: state.filters.type,
-        account_id: state.filters.account, q: state.filters.q, page: page || 1, page_size: 30
+        account_id: state.filters.account, budget_id: state.filters.budget, q: state.filters.q, page: page || 1, page_size: 30
       };
     }
 
@@ -392,6 +463,11 @@
       state.suggestions = data.suggestions;
       if (data.accounts) state.accountSummary = data.accounts;
       if (data.budgets) { state.budgets = data.budgets; updateBudgetHint(); }
+      if (data.event_budgets) {
+        state.events = data.event_budgets;
+        renderBudgetFilter();
+        if (dialog.open) syncBudgetField();
+      }
       renderHelpers();
       applyList(data.list, false);
       render();
@@ -677,6 +753,7 @@
       if (r.reversal_of) badges.appendChild(el('span', { class: 'rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700', text: 'รายการกลับ' }));
       if (r.is_reversed) badges.appendChild(el('span', { class: 'rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600', text: 'กลับรายการแล้ว' }));
       if (r.plan_id) badges.appendChild(el('span', { class: 'rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700', text: 'จากแผนชำระ' }));
+      if (r.budget_id) badges.appendChild(el('span', { class: 'tx-wrap rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700', text: '🧳 ' + (r.budget_name || 'งบทริป') }));
       var actions = el('div', { class: 'mt-1 flex justify-end gap-1' });
       if (canEdit(r)) actions.appendChild(el('button', { type: 'button', class: 'btn btn-ghost', 'aria-label': 'แก้ไข ' + r.item_name, onclick: function () { openForm(r); } }, 'แก้ไข'));
       if (canReverse(r)) actions.appendChild(el('button', { type: 'button', class: 'btn btn-ghost text-rose-600', 'aria-label': 'กลับรายการ ' + r.item_name, onclick: function () { openReverse(r); } }, 'กลับรายการ'));
@@ -710,7 +787,7 @@
         return;
       }
       if (!state.rows.length) {
-        var filtered = state.filters.type || state.filters.account || state.filters.q;
+        var filtered = state.filters.type || state.filters.account || state.filters.q || state.filters.budget;
         var needSetup = !state.masters.accounts.some(function (a) { return a.is_active; }) || !state.masters.owners.some(function (o) { return o.is_active; });
         panel.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center' },
           el('p', { class: 'font-medium text-slate-700', text: filtered ? 'ไม่พบรายการตามตัวกรอง' : 'ยังไม่มีรายการในเดือนนี้' }),
@@ -781,6 +858,7 @@
       } else {
         document.getElementById('tf-category_id').textContent = '';
       }
+      syncBudgetField(cur.budget_id !== undefined ? (cur.budget_id || '') : undefined);
     }
 
     function clearErrors() {
@@ -835,6 +913,7 @@
       document.getElementById('tf-external_ref').value = r.external_ref || '';
       saveBtn.disabled = false;
       saveNextBtn.disabled = false;
+      syncBudgetField(row || draft ? (r.budget_id || '') : (state.filters.budget || ''));
       renderHelpers();
       updateBudgetHint();
       dialog.showModal();
@@ -867,6 +946,7 @@
       data.from_sub_account_id = meta.from === null ? '' : document.getElementById('tf-from_sub_account_id').value;
       data.to_sub_account_id = meta.to === null ? '' : document.getElementById('tf-to_sub_account_id').value;
       data.category_id = meta.category === null ? '' : document.getElementById('tf-category_id').value;
+      data.budget_id = form.querySelector('[data-side="budget"]').hidden ? '' : document.getElementById('tf-budget_id').value;
       data.amount = data.amount.replace(/,/g, '');
       return data;
     }
@@ -1021,8 +1101,26 @@
     document.getElementById('tx-f-type').addEventListener('change', function (e) { state.filters.type = e.target.value; loadList(false); });
     document.getElementById('tx-f-account').addEventListener('change', function (e) { state.filters.account = e.target.value; loadList(false); renderBalances(); });
     document.getElementById('tx-f-q').addEventListener('input', App.debounce(function (e) { state.filters.q = e.target.value.trim(); loadList(false); }, 300));
+    document.getElementById('tx-f-budget').addEventListener('change', function (e) {
+      state.filters.budget = e.target.value;
+      state.filters.budgetName = e.target.selectedOptions[0] ? e.target.selectedOptions[0].textContent : '';
+      renderBudgetFilter();
+      loadList(false);
+    });
+    document.getElementById('tf-owner_id').addEventListener('change', function () { syncBudgetField(); });
+    document.getElementById('tf-budget_id').addEventListener('change', updateEventHint);
+    document.getElementById('tf-amount').addEventListener('input', updateEventHint);
     document.getElementById('tx-filters').addEventListener('submit', function (e) { e.preventDefault(); });
 
-    App.onShow('transactions', function () { refreshAll(true); });
+    App.onShow('transactions', function () {
+      var next = App.nextTxBudget;
+      if (next) {
+        App.nextTxBudget = null;
+        state.filters.budget = next.id;
+        state.filters.budgetName = next.name;
+        renderBudgetFilter();
+      }
+      refreshAll(true);
+    });
   })();
 </script>
