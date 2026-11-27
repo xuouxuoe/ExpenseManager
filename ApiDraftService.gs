@@ -7,6 +7,7 @@
  * - confirm_token = hash(API_DRAFT_SECRET, draft_id, client_id) จึงคำนวณซ้ำได้เมื่อ retry โดยไม่ต้องเก็บ token จริง
  *   (journal/audit/ชีตเก็บเฉพาะ confirm_token_hash)
  * - ยืนยันซ้ำ/ส่งซ้ำได้ผลเดิม: idempotency key ของการยืนยันผูกกับ draft_id
+ * - ระยะ E2 (docs/event-budget-plan.md): params.budget = ID หรือชื่องบทริปที่เปิดใช้ → budget_id ของรายการ
  */
 var ApiDrafts = (function () {
   var SHEET = 'ApiDrafts';
@@ -14,7 +15,7 @@ var ApiDrafts = (function () {
   var TOKEN_RE = /^[a-f0-9]{32}$/;
   var TYPES = ['INCOME', 'EXPENSE', 'TRANSFER', 'CREDIT_PURCHASE'];
   var PARAM_KEYS = ['transaction_type', 'transaction_date', 'amount', 'from_account', 'to_account', 'category', 'owner',
-    'item_name', 'description', 'note', 'source_text'];
+    'item_name', 'description', 'note', 'source_text', 'budget'];
   /** บัญชีหลักของแต่ละประเภทที่ใช้ default_account_id ของการเชื่อมต่อเมื่อไม่ระบุ */
   var DEFAULT_SIDE = { INCOME: 'to', EXPENSE: 'from', TRANSFER: 'from', CREDIT_PURCHASE: 'from' };
   var TYPE_LABEL = { INCOME: 'รายรับ', EXPENSE: 'รายจ่าย', TRANSFER: 'โอนเงิน', CREDIT_PURCHASE: 'ซื้อด้วยบัตร' };
@@ -67,7 +68,11 @@ var ApiDrafts = (function () {
         return { account_id: a.account_id, account_name: a.account_name, real_account_name: a.real_account_name || a.account_name, account_type: a.account_type };
       }),
       categories: all.categories.map(function (c) { return { category_id: c.category_id, category_name: c.category_name, category_type: c.category_type }; }),
-      owners: all.owners.map(function (o) { return { owner_id: o.owner_id, owner_name: o.owner_name }; })
+      owners: all.owners.map(function (o) { return { owner_id: o.owner_id, owner_name: o.owner_name }; }),
+      // งบทริป/โครงการที่เลือกได้ (เปิดใช้ และจบไม่เกิน 30 วัน) — ไม่ส่งยอดเงินของงบ
+      budgets: Budgets.eventOptions().map(function (b) {
+        return { budget_id: b.budget_id, budget_name: b.budget_name, owner_id: b.owner_id, start_date: b.start_date, end_date: b.end_date };
+      })
     };
   }
 
@@ -77,6 +82,7 @@ var ApiDrafts = (function () {
       accounts: m.accounts.map(function (a) { return { account_id: a.account_id, account_name: a.account_name, account_type: a.account_type }; }),
       categories: m.categories,
       owners: m.owners,
+      budgets: m.budgets,
       defaults: { account_id: client.default_account_id || '', owner_id: client.default_owner_id || '' }
     };
   }
@@ -117,7 +123,11 @@ var ApiDrafts = (function () {
     var wantCategory = type === 'INCOME' ? 'INCOME' : (type === 'TRANSFER' ? '' : 'EXPENSE');
     var categories = wantCategory ? m.categories.filter(function (c) { return c.category_type === wantCategory; }) : m.categories;
     var category = resolve(src.category, categories, 'category_id', ['category_name'], 'category', 'หมวดหมู่');
-    var owner = resolve(src.owner, m.owners, 'owner_id', ['owner_name'], 'owner', 'เจ้าของ') || client.default_owner_id || '';
+    var budget = resolve(src.budget, m.budgets, 'budget_id', ['budget_name'], 'budget', 'งบทริป');
+    var budgetRow = budget ? m.budgets.filter(function (b) { return b.budget_id === budget; })[0] : null;
+    // งบที่ระบุเจ้าของ: ใช้เจ้าของของงบเมื่อไม่ได้ระบุ owner (Transactions.validate ยังตรวจให้ตรงกันอีกชั้น)
+    var owner = resolve(src.owner, m.owners, 'owner_id', ['owner_name'], 'owner', 'เจ้าของ') ||
+      (budgetRow && budgetRow.owner_id) || client.default_owner_id || '';
     // แจ้งด้วยชื่อฟิลด์ของ API (ไม่ใช่ *_id ภายใน) และบอกทางแก้เมื่อไม่มีค่าเริ่มต้น
     var rule = Transactions.RULES[type];
     if (rule.from && !from) throw invalid('REQUIRED', 'from_account', 'กรุณาระบุ from_account (บัญชีต้นทาง) หรือตั้งบัญชีเริ่มต้นของการเชื่อมต่อ');
@@ -134,7 +144,8 @@ var ApiDrafts = (function () {
       item_name: src.item_name,
       description: src.description,
       note: src.note,
-      amount: src.amount
+      amount: src.amount,
+      budget_id: budget
     };
   }
 
@@ -151,7 +162,8 @@ var ApiDrafts = (function () {
       item_name: clean.item_name,
       description: clean.description,
       note: clean.note,
-      amount: clean.amount
+      amount: clean.amount,
+      budget_id: clean.budget_id || ''
     };
   }
 
@@ -176,7 +188,8 @@ var ApiDrafts = (function () {
       owner_id: tx.owner_id, owner_name: name(masters.owners, tx.owner_id),
       item_name: tx.item_name,
       description: tx.description,
-      note: tx.note
+      note: tx.note,
+      budget_id: tx.budget_id || '', budget_name: name(Projection.sourceOf(masters, 'budgets'), tx.budget_id)
     };
   }
 
@@ -191,6 +204,7 @@ var ApiDrafts = (function () {
     else if (view.to_account_name) lines.push('เข้าบัญชี ' + view.to_account_name);
     if (view.category_name) lines.push('หมวด ' + view.category_name);
     if (view.owner_name) lines.push('เจ้าของ ' + view.owner_name);
+    if (view.budget_name) lines.push('ใช้จากงบ ' + view.budget_name);
     if (view.description) lines.push(view.description);
     if (status === 'PENDING' && duplicates && duplicates.length) lines.push('⚠️ พบรายการที่อาจซ้ำ ' + duplicates.length + ' รายการ ตรวจก่อนยืนยัน');
     return lines.join('\n');

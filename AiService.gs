@@ -4,7 +4,7 @@
  * - ผู้ให้บริการเลือกด้วย Script Property AI_PROVIDER: OPENAI (ค่าเริ่มต้น), OPENAI_COMPATIBLE (custom endpoint
  *   ที่ใช้รูปแบบ Chat Completions; ต้องตั้ง AI_BASE_URL), ANTHROPIC, GEMINI; ชื่อโมเดลใน AI_MODEL; key ใน AI_API_KEY
  * - ผลจาก AI เป็นเพียงข้อเสนอ: คืนเป็น params ของ draft.create ซึ่ง Backend ตรวจ/resolve อีกครั้ง (AGENTS.md §11)
- * - ส่งให้ AI เฉพาะข้อความผู้ใช้ วันที่วันนี้ และชื่อ+ID ของบัญชี/หมวด/เจ้าของที่ใช้งานอยู่ — ไม่ส่งยอดเงินหรือประวัติ
+ * - ส่งให้ AI เฉพาะข้อความผู้ใช้ วันที่วันนี้ และชื่อ+ID ของบัญชี/หมวด/เจ้าของ/งบทริปที่ใช้งานอยู่ — ไม่ส่งยอดเงินหรือประวัติ
  * - ไม่ log ข้อความผู้ใช้ คำตอบของ AI หรือ key; log เฉพาะผู้ให้บริการและ HTTP status เมื่อผิดพลาด
  */
 var AiParser = (function () {
@@ -13,7 +13,7 @@ var AiParser = (function () {
   var TOOL_NAME = 'record_transaction';
   var DEFAULT_OPENAI_BASE = 'https://api.openai.com/v1';
   var BASE_URL_RE = /^https:\/\/[A-Za-z0-9.-]+(:\d{1,5})?(\/[A-Za-z0-9._~\/-]*)?$/;
-  var FIELDS = ['transaction_type', 'transaction_date', 'amount', 'from_account', 'to_account', 'category', 'owner', 'item_name', 'description', 'note'];
+  var FIELDS = ['transaction_type', 'transaction_date', 'amount', 'from_account', 'to_account', 'category', 'owner', 'item_name', 'description', 'note', 'budget'];
 
   function fail(code, message) {
     return Util.AppError(code, message);
@@ -59,6 +59,7 @@ var AiParser = (function () {
       item_name: nullable('string', { description: 'Short item name in the user language' }),
       description: nullable('string', {}),
       note: nullable('string', {}),
+      budget: nullable('string', { description: 'budget_id from the trip/project budget list only when the message names that budget or trip; otherwise null' }),
       message: nullable('string', { description: 'Short Thai message to the user when intent is OTHER or information is missing' })
     };
     return { type: 'object', additionalProperties: false, required: Object.keys(props), properties: props };
@@ -79,6 +80,8 @@ var AiParser = (function () {
       'Pick a category whose type matches: INCOME categories for INCOME, EXPENSE categories for EXPENSE and CREDIT_PURCHASE, none for TRANSFER.',
       'amount must be a positive number (e.g. "1.2k" = 1200, "65 บาท" = 65). item_name is a short name of what was bought or received.',
       'If the message is not a transaction (a question, greeting, or missing amount) set intent OTHER and explain briefly in Thai in message.',
+      'budget: set a budget_id from Trip budgets ONLY when the message mentions that budget or trip by name (e.g. "งบญี่ปุ่น", "ทริปเชียงใหม่"); never guess from the date alone.',
+      'Budgets are for spending only (EXPENSE or CREDIT_PURCHASE). If the chosen budget has an owner_id, use that owner_id as owner.',
       'Return only the JSON object.',
       '',
       'Accounts (account_id | name | type):',
@@ -89,6 +92,9 @@ var AiParser = (function () {
       '',
       'Owners (owner_id | name):',
       lines(masters.owners, ['owner_id', 'owner_name']),
+      '',
+      'Trip budgets (budget_id | name | start_date | end_date | owner_id):',
+      lines(masters.budgets || [], ['budget_id', 'budget_name', 'start_date', 'end_date', 'owner_id']),
       '',
       'Defaults: account_id=' + (masters.defaults.account_id || 'none') + ', owner_id=' + (masters.defaults.owner_id || 'none')
     ].join('\n');

@@ -115,7 +115,7 @@
     </dl>
 
     <h3 class="mt-5 text-sm font-semibold"><code>masters.list</code> — ข้อมูลหลักสำหรับใส่ใน prompt ของ AI</h3>
-    <p class="text-sm text-slate-700">คืนบัญชี หมวดหมู่ และเจ้าของที่ใช้งานอยู่ (ID + ชื่อ) และค่าเริ่มต้นของการเชื่อมต่อ ควร cache ไว้และดึงใหม่เมื่อได้ <code>VALIDATION_NOT_FOUND</code></p>
+    <p class="text-sm text-slate-700">คืนบัญชี หมวดหมู่ เจ้าของ และงบทริป/โครงการที่เปิดใช้ (ID + ชื่อ; งบมีช่วงวันที่และเจ้าของ ไม่มียอดเงิน) และค่าเริ่มต้นของการเชื่อมต่อ ควร cache ไว้และดึงใหม่เมื่อได้ <code>VALIDATION_NOT_FOUND</code></p>
     <div data-apig-code="masters-response"></div>
 
     <h3 class="mt-5 text-sm font-semibold">บันทึกรายการ: <code>draft.create</code> → ผู้ใช้ยืนยัน → <code>draft.confirm</code></h3>
@@ -140,7 +140,8 @@
           <tr><td class="py-2 pr-3 font-mono">from_account</td><td class="py-2 pr-3">ตามประเภท</td><td class="py-2">บัญชีต้นทาง (ID หรือชื่อ) — รายจ่าย/โอน/ซื้อด้วยบัตร; ว่าง = บัญชีเริ่มต้นของการเชื่อมต่อ</td></tr>
           <tr><td class="py-2 pr-3 font-mono">to_account</td><td class="py-2 pr-3">ตามประเภท</td><td class="py-2">บัญชีปลายทาง (ID หรือชื่อ) — รายรับ/โอน; รายรับที่ว่าง = บัญชีเริ่มต้น</td></tr>
           <tr><td class="py-2 pr-3 font-mono">category</td><td class="py-2 pr-3">รายรับ/รายจ่าย/ซื้อด้วยบัตร</td><td class="py-2">หมวดหมู่ (ID หรือชื่อ) ประเภทต้องตรงกับรายการ</td></tr>
-          <tr><td class="py-2 pr-3 font-mono">owner</td><td class="py-2 pr-3">ไม่</td><td class="py-2">เจ้าของ (ID หรือชื่อ) ว่าง = เจ้าของเริ่มต้นของการเชื่อมต่อ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">owner</td><td class="py-2 pr-3">ไม่</td><td class="py-2">เจ้าของ (ID หรือชื่อ) ว่าง = เจ้าของของงบทริปที่เลือก (ถ้างบระบุเจ้าของ) หรือเจ้าของเริ่มต้นของการเชื่อมต่อ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">budget</td><td class="py-2 pr-3">ไม่</td><td class="py-2">งบทริป/โครงการ (ID หรือชื่อจาก <code>masters.list</code>) — เฉพาะรายจ่ายและซื้อด้วยบัตร; งบที่ระบุเจ้าของใช้ได้กับรายการของเจ้าของนั้น</td></tr>
           <tr><td class="py-2 pr-3 font-mono">description / note</td><td class="py-2 pr-3">ไม่</td><td class="py-2">รายละเอียด / หมายเหตุ</td></tr>
           <tr><td class="py-2 pr-3 font-mono">source_text</td><td class="py-2 pr-3">ไม่</td><td class="py-2">ข้อความต้นฉบับ (ไม่ถูกเก็บ)</td></tr>
         </tbody>
@@ -292,6 +293,7 @@
       <li>Webhook URL ใน LINE Developers: <code class="break-all">&lt;URL /exec&gt;?line_key=&lt;API key&gt;</code> · เปิด Use webhook · ปิดข้อความตอบกลับอัตโนมัติ</li>
       <li>รองรับ: ข้อความ → ร่าง + ปุ่ม [ยกเลิก][ยืนยัน], "วิธีใช้", การเพิ่มเพื่อน; รับเฉพาะแชต 1:1; รูปภาพยังไม่รองรับ</li>
       <li>คำสั่งดูข้อมูล (ต้องมีสิทธิ์ READ เพิ่ม ไม่เรียก AI): <code>สรุป</code> · <code>ยอดเงิน</code> · <code>ล่าสุด</code> · <code>งบ</code></li>
+      <li>ใช้งบทริป: ใส่ชื่องบในข้อความ เช่น <code>ราเมน 350 งบญี่ปุ่น</code> — AI เลือกงบเฉพาะเมื่อข้อความระบุชื่องบหรือทริป สรุปร่างแสดง "ใช้จากงบ …" ก่อนยืนยัน</li>
     </ol>
     <p class="mt-2 text-xs text-slate-500">Apps Script อ่าน header ไม่ได้ จึงตรวจ X-Line-Signature ไม่ได้ ระบบใช้ line_key + LINE userId ที่อนุญาต + การกดยืนยันพร้อม token แทน · ปุ่ม Verify ใน LINE อาจแจ้งผิดพลาดเพราะ redirect แต่ข้อความจริงทำงาน</p>
   </section>
@@ -338,6 +340,7 @@
           accounts: [{ account_id: '1', account_name: 'KBank', account_type: 'BANK' }],
           categories: [{ category_id: '3', category_name: 'อาหาร', category_type: 'EXPENSE' }],
           owners: [{ owner_id: '1', owner_name: 'พ่อ' }],
+          budgets: [{ budget_id: '7', budget_name: 'เที่ยวญี่ปุ่น', owner_id: '', start_date: '2026-12-10', end_date: '2026-12-15' }],
           defaults: { account_id: '1', owner_id: '1' } } }, null, 2),
         'draft-request': JSON.stringify({ api_key: '<API_KEY>', action: 'draft.create', request_id: 'line-<webhookEventId>', channel_user_id: '<LINE userId>',
           params: { transaction_type: 'EXPENSE', amount: 65, item_name: 'กาแฟ', from_account: 'KBank', category: 'อาหาร', source_text: 'กาแฟ 65 kbank' } }, null, 2),
