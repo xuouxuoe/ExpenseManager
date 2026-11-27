@@ -1,5 +1,5 @@
 /**
- * IntegrationService.gs — Integration API สำหรับผู้เรียกภายนอก เช่น Make (อนุมัติ 2026-11-27)
+ * IntegrationService.gs — Integration API สำหรับผู้เรียกภายนอก เช่น LINE OA / สคริปต์ (อนุมัติ 2026-11-27)
  * แผนและสัญญา API: docs/integration-api.md
  *
  * ApiClients: จัดการผู้เรียก (สร้าง/แก้/ปิด/หมุน key) จากหน้าเว็บที่ล็อกอิน Google แล้ว
@@ -192,8 +192,10 @@ var IntegrationApi = (function () {
   var MAX_BODY_LENGTH = 100000;
   var RATE_LIMIT_PER_MINUTE = 60;
 
+  var REQUEST_ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
+
   /**
-   * action → { scope: 'READ' | 'WRITE' | null, channel: 'optional' | 'required', run(params, call) }
+   * action → { scope: 'READ' | 'WRITE' | null, channel: 'optional' | 'required', requestId: true (ต้องส่ง request_id), run(params, call) }
    * call = { client, actor: { actorId }, requestId, channelUserId }
    */
   var ACTIONS = {
@@ -210,6 +212,27 @@ var IntegrationApi = (function () {
           server_time: Util.nowIso()
         };
       }
+    },
+    'masters.list': {
+      scope: 'READ',
+      channel: 'optional',
+      run: function (params, call) { return ApiDrafts.masters(call.client); }
+    },
+    'draft.create': {
+      scope: 'WRITE',
+      channel: 'required',
+      requestId: true,
+      run: function (params, call) { return ApiDrafts.create(params, call); }
+    },
+    'draft.confirm': {
+      scope: 'WRITE',
+      channel: 'required',
+      run: function (params, call) { return ApiDrafts.confirm(params, call); }
+    },
+    'draft.cancel': {
+      scope: 'WRITE',
+      channel: 'required',
+      run: function (params, call) { return ApiDrafts.cancel(params, call); }
     }
   };
 
@@ -272,6 +295,9 @@ var IntegrationApi = (function () {
       if (!def) throw reject('UNKNOWN_ACTION', 'ไม่รู้จัก action นี้');
       if (def.scope && client.scopes.indexOf(def.scope) < 0) throw reject('FORBIDDEN_SCOPE', 'API key นี้ไม่มีสิทธิ์ ' + def.scope);
       var channelUserId = checkChannel(client, body.channel_user_id, def.channel);
+      if (def.requestId && (typeof body.request_id !== 'string' || !REQUEST_ID_RE.test(body.request_id))) {
+        throw reject('INVALID_REQUEST_ID', 'ต้องส่ง request_id 8–128 ตัว (A-Z a-z 0-9 _ -) และใช้ค่าเดิมเมื่อส่งซ้ำ');
+      }
       rateLimit(client);
       var params = body.params && typeof body.params === 'object' && !Array.isArray(body.params) ? body.params : {};
       var data = def.run(params, {

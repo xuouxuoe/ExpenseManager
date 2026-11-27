@@ -235,29 +235,39 @@ var Transactions = (function () {
 
   // ---------- คำสั่ง ----------
 
+  /**
+   * เพิ่มธุรกรรมภายใน Operation.run ที่มีอยู่แล้ว (replay ได้ด้วย ctx.id)
+   * options.source: แหล่งที่มาที่ Backend กำหนดเอง (เช่น 'AI' จาก Integration API) ไม่รับจาก client
+   */
+  function insertWithin(ctx, input, options) {
+    var opts = options || {};
+    var id = ctx.id(SHEET, 'transaction');
+    var rows = Database.readAll(SHEET).rows;
+    var existing = rows.filter(function (r) { return r.transaction_id === id; })[0];
+    if (existing) return existing; // replay หลังเขียนสำเร็จแล้ว
+    var masters = Projection.loadMasters();
+    var row = validate(stripControl(input), masters, null);
+    if (opts.source) row.source = Validation.requireEnum(opts.source, Config.ENUMS.TRANSACTION_SOURCE, 'source');
+    var dups = findPossibleDuplicates(rows, row, id);
+    if (dups.length && input.allow_duplicate !== true) {
+      throw fail('POSSIBLE_DUPLICATE', 'item_name', 'พบรายการที่อาจซ้ำ ' + dups.length + ' รายการ', {
+        duplicates: dups.slice(0, 3).map(function (d) { return { transaction_id: d.transaction_id, transaction_date: d.transaction_date, item_name: d.item_name, amount: d.amount }; })
+      });
+    }
+    row.transaction_id = id;
+    row.plan_id = '';
+    row.reversal_of = '';
+    row.created_at = ctx.now;
+    row.updated_at = ctx.now;
+    Projection.apply(SHEET, row, masters);
+    Database.appendRowsIfAbsent(SHEET, [row]);
+    return findById(Database.readAll(SHEET).rows, id);
+  }
+
   /** input.allow_duplicate = true เพื่อยืนยันบันทึกแม้พบรายการที่อาจซ้ำ */
   function create(input, request) {
     return Operation.run(requestOf(request, 'CREATE_TRANSACTION', input), function (ctx) {
-      var id = ctx.id(SHEET, 'transaction');
-      var rows = Database.readAll(SHEET).rows;
-      var existing = rows.filter(function (r) { return r.transaction_id === id; })[0];
-      if (existing) return existing; // replay หลังเขียนสำเร็จแล้ว
-      var masters = Projection.loadMasters();
-      var row = validate(stripControl(input), masters, null);
-      var dups = findPossibleDuplicates(rows, row, id);
-      if (dups.length && input.allow_duplicate !== true) {
-        throw fail('POSSIBLE_DUPLICATE', 'item_name', 'พบรายการที่อาจซ้ำ ' + dups.length + ' รายการ', {
-          duplicates: dups.slice(0, 3).map(function (d) { return { transaction_id: d.transaction_id, transaction_date: d.transaction_date, item_name: d.item_name, amount: d.amount }; })
-        });
-      }
-      row.transaction_id = id;
-      row.plan_id = '';
-      row.reversal_of = '';
-      row.created_at = ctx.now;
-      row.updated_at = ctx.now;
-      Projection.apply(SHEET, row, masters);
-      Database.appendRowsIfAbsent(SHEET, [row]);
-      return findById(Database.readAll(SHEET).rows, id);
+      return insertWithin(ctx, input);
     }).result;
   }
 
@@ -503,6 +513,8 @@ var Transactions = (function () {
   return {
     RULES: RULES,
     validate: validate,
+    findPossibleDuplicates: findPossibleDuplicates,
+    insertWithin: insertWithin,
     create: create,
     update: update,
     reverse: reverse,

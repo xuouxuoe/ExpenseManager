@@ -113,7 +113,7 @@
 ## Phase 7 — Optional AI
 
 - แปลงข้อความ/สลิปเป็น Structured JSON ที่มีเฉพาะ ID → Validation → ผู้ใช้ยืนยัน
-- Integration API สำหรับ Make / LINE OA / AI (อนุมัติ 2026-11-27; A1 ผ่านบน TEST ผ่าน gateway ยกเว้นทดสอบกับ Make; มีเมนูคู่มือ API ในเครื่องแล้ว): ดู [integration-api.md](integration-api.md) — ระยะ A1 endpoint + API key, A2 ร่าง/ยืนยันบันทึก, A3 ดูข้อมูล, A4 หน้าเชื่อมต่อภายนอก + คู่มือ API
+- Integration API สำหรับ Make / LINE OA / AI (อนุมัติ 2026-11-27; ไม่ใช้ Make แล้ว — Apps Script รับ LINE webhook และเรียก AI เอง; A1 ผ่านบน TEST; A2 ร่าง/ยืนยันบันทึก implement ในเครื่องแล้ว ยังไม่ได้ทดสอบบน Apps Script): ดู [integration-api.md](integration-api.md) — ระยะ A1 endpoint + API key, A2 ร่าง/ยืนยันบันทึก, A3 ดูข้อมูล, A4 หน้าเชื่อมต่อภายนอก + คู่มือ API
 
 ## Definition of Done ต่อ Phase
 

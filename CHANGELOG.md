@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added — Integration API ระยะ A2: ร่างและยืนยันรายการ (schema ApiDrafts อนุมัติ 2026-11-27)
+
+- action ใหม่: `masters.list` (READ), `draft.create`, `draft.confirm`, `draft.cancel` (WRITE) ใน `ApiDraftService.gs` — ทุกการบันทึกจากภายนอกต้องสร้างร่างแล้วยืนยัน ธุรกรรมที่ยืนยันมี `source: AI`
+- ชีตใหม่ ApiDrafts สร้างอัตโนมัติ เก็บเฉพาะข้อมูลที่ resolve เป็น ID และ hash ของ confirm token; ร่างหมดอายุใน 24 ชั่วโมง
+- รับชื่อบัญชี/หมวดหมู่/เจ้าของแทน ID ได้ (ไม่พบหรือกำกวมแจ้งตัวเลือก), ใช้บัญชี/เจ้าของเริ่มต้นของการเชื่อมต่อ, เตือนรายการที่อาจซ้ำ และคืน `summary_text` ภาษาไทย
+- ยืนยันซ้ำ/ส่งซ้ำไม่เกิดรายการซ้ำ; ยืนยันได้เฉพาะการเชื่อมต่อและ LINE userId ที่สร้างร่าง
+- `Transactions.insertWithin` แยกจาก `Transactions.create` เพื่อให้การยืนยันร่างบันทึกธุรกรรมและอัปเดตร่างในคำขอเดียว (พฤติกรรมเดิมไม่เปลี่ยน)
+- คู่มือ API และหน้าเชื่อมต่อภายนอกอัปเดตตาม actions ใหม่ และไม่อ้างถึง Make แล้ว (แผนเปลี่ยนเป็น Apps Script รับ LINE และเรียก AI เอง)
+- `tests/api-drafts.test.js` 11 กรณี
+
 ### Added — เมนูคู่มือ API (2026-11-27)
 
 - เมนู "คู่มือ API" (#api-guide, `PageApiGuide.html`) สำหรับนักพัฒนาที่เชื่อมผ่าน Integration API: เริ่มต้น, รูปแบบคำขอ/คำตอบ (POST JSON, key ใน body, ตาม redirect ด้วย GET, HTTP 200 เสมอ), ตาราง actions พร้อมสถานะ, ตัวอย่าง curl/PowerShell/Node.js/Make/Postman พร้อมปุ่มคัดลอก, รหัสข้อผิดพลาด, ตาราง ID บัญชี/หมวดหมู่/เจ้าของ และข้อควรระวังด้านความปลอดภัย

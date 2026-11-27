@@ -1,7 +1,7 @@
 <section aria-labelledby="apig-title" class="space-y-4">
   <div>
     <h1 id="apig-title" class="text-xl font-semibold">คู่มือ API</h1>
-    <p class="text-sm text-slate-500">สำหรับนักพัฒนาที่เชื่อมระบบภายนอก เช่น Make, LINE OA, สคริปต์ หรือ AI เข้ากับ Expense Manager</p>
+    <p class="text-sm text-slate-500">สำหรับนักพัฒนาที่เชื่อมระบบภายนอก เช่น LINE OA, สคริปต์ หรือ AI เข้ากับ Expense Manager</p>
   </div>
 
   <nav aria-label="หัวข้อในคู่มือ API" class="flex flex-wrap gap-2 text-sm">
@@ -18,7 +18,7 @@
   <section id="apig-start" aria-labelledby="apig-start-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
     <h2 id="apig-start-title" class="text-base font-semibold">1. เริ่มต้น</h2>
     <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
-      <li>สร้าง API key ที่เมนู <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> (key แสดงครั้งเดียว เก็บไว้ในระบบที่เรียก API)</li>
+      <li>สร้าง API key ที่เมนู <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> (key แสดงครั้งเดียว เก็บไว้ฝั่งเซิร์ฟเวอร์ของระบบที่เรียก API)</li>
       <li>ใช้ URL ของ deployment สำหรับ Integration (gateway) ที่ลงท้ายด้วย <code>/exec</code> — ไม่ใช่ URL ของหน้าเว็บนี้</li>
       <li>ส่ง action <code>ping</code> เพื่อตรวจการเชื่อมต่อ ต้องได้ <code>"ok": true</code></li>
     </ol>
@@ -79,10 +79,10 @@
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr data-apig-action="ping" data-apig-status="available"><td class="py-2 pr-3 font-mono">ping</td><td class="py-2 pr-3">—</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ตรวจ key และการเชื่อมต่อ คืนชื่อการเชื่อมต่อ สิทธิ์ และฐานข้อมูลที่ใช้</td></tr>
-          <tr data-apig-action="masters.list" data-apig-status="planned"><td class="py-2 pr-3 font-mono">masters.list</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">บัญชี เจ้าของ หมวดหมู่ที่ใช้งาน (ID + ชื่อ) สำหรับใส่ใน prompt ของ AI</td></tr>
-          <tr data-apig-action="draft.create" data-apig-status="planned"><td class="py-2 pr-3 font-mono">draft.create</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">สร้างร่างรายการจาก JSON ตรวจข้อมูลและคืนสรุปให้ผู้ใช้ยืนยัน (ยังไม่บันทึก)</td></tr>
-          <tr data-apig-action="draft.confirm" data-apig-status="planned"><td class="py-2 pr-3 font-mono">draft.confirm</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยืนยันร่างแล้วบันทึกจริง ยืนยันซ้ำได้ผลเดิม ไม่เกิดรายการซ้ำ</td></tr>
-          <tr data-apig-action="draft.cancel" data-apig-status="planned"><td class="py-2 pr-3 font-mono">draft.cancel</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยกเลิกร่าง</td></tr>
+          <tr data-apig-action="masters.list" data-apig-status="available"><td class="py-2 pr-3 font-mono">masters.list</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">บัญชี เจ้าของ หมวดหมู่ที่ใช้งาน (ID + ชื่อ) สำหรับใส่ใน prompt ของ AI</td></tr>
+          <tr data-apig-action="draft.create" data-apig-status="available"><td class="py-2 pr-3 font-mono">draft.create</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">สร้างร่างรายการจาก JSON ตรวจข้อมูลและคืนสรุปให้ผู้ใช้ยืนยัน (ยังไม่บันทึก)</td></tr>
+          <tr data-apig-action="draft.confirm" data-apig-status="available"><td class="py-2 pr-3 font-mono">draft.confirm</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ยืนยันร่างแล้วบันทึกจริง ยืนยันซ้ำได้ผลเดิม ไม่เกิดรายการซ้ำ</td></tr>
+          <tr data-apig-action="draft.cancel" data-apig-status="available"><td class="py-2 pr-3 font-mono">draft.cancel</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ยกเลิกร่าง</td></tr>
           <tr data-apig-action="transactions.recent" data-apig-status="planned"><td class="py-2 pr-3 font-mono">transactions.recent</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">รายการล่าสุด (สูงสุด 20 รายการ)</td></tr>
           <tr data-apig-action="summary.month" data-apig-status="planned"><td class="py-2 pr-3 font-mono">summary.month</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">รายรับ รายจ่าย และสุทธิของเดือน</td></tr>
           <tr data-apig-action="balances" data-apig-status="planned"><td class="py-2 pr-3 font-mono">balances</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยอดบัญชี เงินกันไว้ และเงินที่ใช้ได้จริง</td></tr>
@@ -110,6 +110,62 @@
       <dt class="font-mono text-slate-500">db_target</dt><dd><code>TEST</code> หรือ <code>PRODUCTION</code> — ฐานข้อมูลที่คำขอนี้ใช้ ควรตรวจก่อนทดสอบบันทึก</dd>
       <dt class="font-mono text-slate-500">server_time</dt><dd>เวลาเซิร์ฟเวอร์ (ISO 8601, Asia/Bangkok)</dd>
     </dl>
+
+    <h3 class="mt-5 text-sm font-semibold"><code>masters.list</code> — ข้อมูลหลักสำหรับใส่ใน prompt ของ AI</h3>
+    <p class="text-sm text-slate-700">คืนบัญชี หมวดหมู่ และเจ้าของที่ใช้งานอยู่ (ID + ชื่อ) และค่าเริ่มต้นของการเชื่อมต่อ ควร cache ไว้และดึงใหม่เมื่อได้ <code>VALIDATION_NOT_FOUND</code></p>
+    <div data-apig-code="masters-response"></div>
+
+    <h3 class="mt-5 text-sm font-semibold">บันทึกรายการ: <code>draft.create</code> → ผู้ใช้ยืนยัน → <code>draft.confirm</code></h3>
+    <ol class="mt-1 list-decimal space-y-1 pl-5 text-sm text-slate-700">
+      <li><code>draft.create</code> ตรวจข้อมูล แปลงชื่อเป็น ID และเก็บร่าง (ยังไม่บันทึก) คืน <code>draft_id</code>, <code>confirm_token</code> และ <code>summary_text</code> ไว้แสดงให้ผู้ใช้ตรวจ</li>
+      <li>เมื่อผู้ใช้กดยืนยัน ส่ง <code>draft.confirm</code> พร้อม <code>draft_id</code> + <code>confirm_token</code> ระบบจึงบันทึกจริง (แหล่งที่มา <code>AI</code>) — กดซ้ำได้ผลเดิม ไม่เกิดรายการซ้ำ</li>
+      <li>ถ้าผู้ใช้ไม่ต้องการ ส่ง <code>draft.cancel</code>; ร่างที่ไม่ยืนยันหมดอายุใน 24 ชั่วโมง</li>
+      <li>ต้องส่ง <code>request_id</code> กับ <code>draft.create</code> และใช้ค่าเดิมเมื่อส่งซ้ำ (จะได้ร่างและ token เดิม); ถ้าการเชื่อมต่อกำหนด LINE userId ต้องส่ง <code>channel_user_id</code> ทุกคำขอบันทึก และยืนยันได้เฉพาะ userId ที่สร้างร่าง</li>
+    </ol>
+
+    <h4 class="mt-3 text-sm font-semibold">params ของ <code>draft.create</code></h4>
+    <div class="mt-1 overflow-x-auto">
+      <table class="w-full min-w-[34rem] text-left text-sm">
+        <thead class="border-b border-slate-200 text-slate-500">
+          <tr><th scope="col" class="py-2 pr-3 font-medium">ฟิลด์</th><th scope="col" class="py-2 pr-3 font-medium">จำเป็น</th><th scope="col" class="py-2 font-medium">คำอธิบาย</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="py-2 pr-3 font-mono">transaction_type</td><td class="py-2 pr-3">ใช่</td><td class="py-2"><code>INCOME</code> รายรับ, <code>EXPENSE</code> รายจ่าย, <code>TRANSFER</code> โอนระหว่างบัญชี, <code>CREDIT_PURCHASE</code> ซื้อด้วยบัตร</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">amount</td><td class="py-2 pr-3">ใช่</td><td class="py-2">จำนวนเงินบาท มากกว่า 0 ทศนิยมไม่เกิน 2 ตำแหน่ง</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">item_name</td><td class="py-2 pr-3">ใช่</td><td class="py-2">ชื่อรายการ ไม่เกิน 200 ตัวอักษร</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">transaction_date</td><td class="py-2 pr-3">ไม่</td><td class="py-2"><code>YYYY-MM-DD</code> (ค.ศ.) ว่าง = วันนี้ (Asia/Bangkok)</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">from_account</td><td class="py-2 pr-3">ตามประเภท</td><td class="py-2">บัญชีต้นทาง (ID หรือชื่อ) — รายจ่าย/โอน/ซื้อด้วยบัตร; ว่าง = บัญชีเริ่มต้นของการเชื่อมต่อ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">to_account</td><td class="py-2 pr-3">ตามประเภท</td><td class="py-2">บัญชีปลายทาง (ID หรือชื่อ) — รายรับ/โอน; รายรับที่ว่าง = บัญชีเริ่มต้น</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">category</td><td class="py-2 pr-3">รายรับ/รายจ่าย/ซื้อด้วยบัตร</td><td class="py-2">หมวดหมู่ (ID หรือชื่อ) ประเภทต้องตรงกับรายการ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">owner</td><td class="py-2 pr-3">ไม่</td><td class="py-2">เจ้าของ (ID หรือชื่อ) ว่าง = เจ้าของเริ่มต้นของการเชื่อมต่อ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">description / note</td><td class="py-2 pr-3">ไม่</td><td class="py-2">รายละเอียด / หมายเหตุ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">source_text</td><td class="py-2 pr-3">ไม่</td><td class="py-2">ข้อความต้นฉบับ (ไม่ถูกเก็บ)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-1 text-xs text-slate-500">ชื่อเทียบแบบไม่สนตัวพิมพ์และช่องว่าง ถ้าไม่พบหรือตรงหลายรายการจะได้ข้อผิดพลาดพร้อม <code>details.candidates</code> · ห้ามส่งฟิลด์อื่น เช่น <code>*_name</code> หรือ <code>source</code></p>
+    <div class="mt-2 grid gap-3 md:grid-cols-2">
+      <div>
+        <p class="text-xs text-slate-500">คำขอ</p>
+        <div data-apig-code="draft-request"></div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">คำตอบ</p>
+        <div data-apig-code="draft-response"></div>
+      </div>
+    </div>
+
+    <h4 class="mt-3 text-sm font-semibold"><code>draft.confirm</code> / <code>draft.cancel</code></h4>
+    <div class="mt-1 grid gap-3 md:grid-cols-2">
+      <div>
+        <p class="text-xs text-slate-500">คำขอ (เปลี่ยน action เป็น <code>draft.cancel</code> เพื่อยกเลิก)</p>
+        <div data-apig-code="confirm-request"></div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">คำตอบ</p>
+        <div data-apig-code="confirm-response"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ตัวอย่างโค้ด -->
@@ -127,15 +183,6 @@
     <h3 class="mt-3 text-sm font-semibold">JavaScript (Node.js 18+)</h3>
     <div data-apig-code="node"></div>
 
-    <h3 class="mt-3 text-sm font-semibold">Make — โมดูล HTTP "Make a request"</h3>
-    <dl class="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
-      <dt class="text-slate-500">URL</dt><dd class="break-all font-mono" data-apig-endpoint-text></dd>
-      <dt class="text-slate-500">Method</dt><dd>POST</dd>
-      <dt class="text-slate-500">Body type</dt><dd>Raw · Content type: JSON (application/json)</dd>
-      <dt class="text-slate-500">Request content</dt><dd>JSON ตามตัวอย่าง ping (เก็บ key ในตัวแปรหรือ Data store ของ Make)</dd>
-      <dt class="text-slate-500">Parse response</dt><dd>Yes</dd>
-      <dt class="text-slate-500">Follow redirect</dt><dd>Yes · <strong>Follow all redirects: No</strong></dd>
-    </dl>
 
     <h3 class="mt-3 text-sm font-semibold">Postman</h3>
     <p class="text-sm text-slate-700">Method POST → Body: raw / JSON → วาง JSON ตัวอย่าง → Send (Postman ตาม redirect ด้วย GET ให้อัตโนมัติ)</p>
@@ -158,6 +205,14 @@
           <tr data-apig-error="FORBIDDEN_SCOPE"><td class="py-2 pr-3 font-mono">FORBIDDEN_SCOPE</td><td class="py-2 pr-3">key ไม่มีสิทธิ์ READ/WRITE ที่ action ต้องใช้</td><td class="py-2">แก้สิทธิ์ของการเชื่อมต่อ</td></tr>
           <tr data-apig-error="FORBIDDEN_CHANNEL"><td class="py-2 pr-3 font-mono">FORBIDDEN_CHANNEL</td><td class="py-2 pr-3">ไม่ส่งหรือส่ง <code>channel_user_id</code> ที่ไม่ได้รับอนุญาต</td><td class="py-2">เพิ่ม LINE userId ในการเชื่อมต่อ หรือส่งค่าที่ถูกต้อง</td></tr>
           <tr data-apig-error="RATE_LIMITED"><td class="py-2 pr-3 font-mono">RATE_LIMITED</td><td class="py-2 pr-3">เกิน 60 คำขอต่อนาที</td><td class="py-2">รอแล้วส่งใหม่ (ใช้ <code>request_id</code> เดิม)</td></tr>
+          <tr data-apig-error="INVALID_REQUEST_ID"><td class="py-2 pr-3 font-mono">INVALID_REQUEST_ID</td><td class="py-2 pr-3">ไม่ส่งหรือส่ง <code>request_id</code> ผิดรูปแบบกับ action ที่บันทึก</td><td class="py-2">ส่ง 8–128 ตัว (<code>A-Z a-z 0-9 _ -</code>) และใช้ค่าเดิมเมื่อส่งซ้ำ</td></tr>
+          <tr data-apig-error="IDEMPOTENCY_CONFLICT"><td class="py-2 pr-3 font-mono">IDEMPOTENCY_CONFLICT</td><td class="py-2 pr-3"><code>request_id</code> เดิมถูกใช้กับข้อมูลชุดอื่นแล้ว</td><td class="py-2">ใช้ <code>request_id</code> ใหม่สำหรับรายการใหม่</td></tr>
+          <tr data-apig-error="BUSY"><td class="py-2 pr-3 font-mono">BUSY</td><td class="py-2 pr-3">ระบบกำลังบันทึกรายการอื่น</td><td class="py-2">รอสักครู่แล้วส่งซ้ำด้วยข้อมูลเดิม</td></tr>
+          <tr data-apig-error="VALIDATION_*"><td class="py-2 pr-3 font-mono">VALIDATION_*</td><td class="py-2 pr-3">ข้อมูลไม่ถูกต้อง เช่น <code>VALIDATION_NOT_FOUND</code> ไม่พบชื่อ, <code>VALIDATION_AMBIGUOUS</code> ชื่อตรงหลายรายการ, <code>VALIDATION_UNKNOWN_FIELD</code>, <code>VALIDATION_RULE</code> บัญชี/หมวดไม่ตรงประเภท, <code>VALIDATION_FK_INACTIVE</code> ข้อมูลหลักถูกปิด</td><td class="py-2">ดู <code>details.field</code> และ <code>details.candidates</code> แล้วแก้ข้อมูล</td></tr>
+          <tr data-apig-error="DRAFT_NOT_FOUND"><td class="py-2 pr-3 font-mono">DRAFT_NOT_FOUND</td><td class="py-2 pr-3">ไม่พบร่าง หรือเป็นร่างของการเชื่อมต่อ/ผู้ใช้อื่น</td><td class="py-2">ตรวจ <code>draft_id</code> และ <code>channel_user_id</code></td></tr>
+          <tr data-apig-error="INVALID_CONFIRM_TOKEN"><td class="py-2 pr-3 font-mono">INVALID_CONFIRM_TOKEN</td><td class="py-2 pr-3"><code>confirm_token</code> ไม่ตรงกับร่าง</td><td class="py-2">ใช้ token ที่ได้จาก <code>draft.create</code></td></tr>
+          <tr data-apig-error="DRAFT_EXPIRED"><td class="py-2 pr-3 font-mono">DRAFT_EXPIRED</td><td class="py-2 pr-3">ร่างเกิน 24 ชั่วโมง</td><td class="py-2">สร้างร่างใหม่</td></tr>
+          <tr data-apig-error="DRAFT_NOT_PENDING"><td class="py-2 pr-3 font-mono">DRAFT_NOT_PENDING</td><td class="py-2 pr-3">ร่างถูกยืนยัน ยกเลิก หมดอายุ หรือบันทึกไม่ได้แล้ว (<code>details.draft_status</code>)</td><td class="py-2">สร้างร่างใหม่ถ้าต้องการบันทึก</td></tr>
           <tr data-apig-error="INTERNAL_ERROR"><td class="py-2 pr-3 font-mono">INTERNAL_ERROR</td><td class="py-2 pr-3">ข้อผิดพลาดภายใน เช่น gateway ไม่ได้รับสิทธิ์ Spreadsheet</td><td class="py-2">ลองใหม่ ถ้ายังเกิดให้ดู log <code>INTEGRATION_INTERNAL_ERROR</code> ใน Executions ของ gateway</td></tr>
         </tbody>
       </table>
@@ -180,11 +235,12 @@
   <section id="apig-security" aria-labelledby="apig-security-title" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
     <h2 id="apig-security-title" class="text-base font-semibold">7. ความปลอดภัย</h2>
     <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
-      <li>เก็บ API key ฝั่งเซิร์ฟเวอร์ (Make, สคริปต์) เท่านั้น ห้ามใส่ในโค้ดหน้าเว็บ แอปมือถือ ห้องแชต หรือ repository</li>
+      <li>เก็บ API key ฝั่งเซิร์ฟเวอร์เท่านั้น ห้ามใส่ในโค้ดหน้าเว็บ แอปมือถือ ห้องแชต หรือ repository</li>
+      <li>เก็บ <code>confirm_token</code> ไว้ฝั่งระบบที่เรียก (เช่นใน postback ของปุ่ม) ไม่แสดงในข้อความแชต</li>
       <li>ใช้หนึ่งการเชื่อมต่อต่อหนึ่งระบบ เพื่อปิดหรือเปลี่ยน key ได้เฉพาะจุด และกำหนด LINE userId ที่อนุญาตเมื่อใช้กับ LINE</li>
       <li>ให้สิทธิ์เท่าที่จำเป็น (ระบบที่อ่านอย่างเดียวให้ READ)</li>
       <li>สงสัยว่า key รั่ว ให้กด "เปลี่ยน key" ทันที key เดิมจะใช้ไม่ได้</li>
-      <li>ข้อความหรือข้อมูลที่ส่งผ่าน Make และผู้ให้บริการ AI จะผ่านระบบภายนอก ส่งเฉพาะข้อมูลที่จำเป็น</li>
+      <li>ข้อความที่ส่งผ่าน LINE และผู้ให้บริการ AI จะผ่านระบบภายนอก ส่งเฉพาะข้อมูลที่จำเป็น</li>
     </ul>
   </section>
 </section>
@@ -212,7 +268,19 @@
         'response-ok': '{\n  "ok": true,\n  "data": { … }\n}',
         'response-error': '{\n  "ok": false,\n  "code": "UNAUTHORIZED",\n  "message": "API key ไม่ถูกต้องหรือถูกปิดใช้งาน",\n  "details": null\n}',
         'ping-request': '{\n  "api_key": "<API_KEY>",\n  "action": "ping"\n}',
-        'ping-response': '{\n  "ok": true,\n  "data": {\n    "api_version": 1,\n    "client_id": "1",\n    "client_name": "Make LINE ครอบครัว",\n    "scopes": ["READ", "WRITE"],\n    "db_target": "TEST",\n    "server_time": "2026-11-27T10:30:00+07:00"\n  }\n}',
+        'ping-response': '{\n  "ok": true,\n  "data": {\n    "api_version": 1,\n    "client_id": "1",\n    "client_name": "LINE ครอบครัว",\n    "scopes": ["READ", "WRITE"],\n    "db_target": "TEST",\n    "server_time": "2026-11-27T10:30:00+07:00"\n  }\n}',
+        'masters-response': JSON.stringify({ ok: true, data: {
+          accounts: [{ account_id: '1', account_name: 'KBank', account_type: 'BANK' }],
+          categories: [{ category_id: '3', category_name: 'อาหาร', category_type: 'EXPENSE' }],
+          owners: [{ owner_id: '1', owner_name: 'พ่อ' }],
+          defaults: { account_id: '1', owner_id: '1' } } }, null, 2),
+        'draft-request': JSON.stringify({ api_key: '<API_KEY>', action: 'draft.create', request_id: 'line-<webhookEventId>', channel_user_id: '<LINE userId>',
+          params: { transaction_type: 'EXPENSE', amount: 65, item_name: 'กาแฟ', from_account: 'KBank', category: 'อาหาร', source_text: 'กาแฟ 65 kbank' } }, null, 2),
+        'draft-response': JSON.stringify({ ok: true, data: { draft_id: '12', draft_status: 'PENDING', confirm_token: '<32 ตัวอักษร>', expires_at: '2026-11-28T10:30:00+07:00',
+          transaction: { transaction_type: 'EXPENSE', transaction_date: '2026-11-27', amount: 65, from_account_id: '1', from_account_name: 'KBank', category_id: '3', category_name: 'อาหาร', owner_id: '1', owner_name: 'พ่อ', item_name: 'กาแฟ' },
+          possible_duplicates: [], summary_text: 'รายจ่าย 65.00 บาท — กาแฟ\nวันที่ 2026-11-27\nบัญชี KBank\nหมวด อาหาร\nเจ้าของ พ่อ' } }, null, 2),
+        'confirm-request': JSON.stringify({ api_key: '<API_KEY>', action: 'draft.confirm', channel_user_id: '<LINE userId>', params: { draft_id: '12', confirm_token: '<confirm_token>' } }, null, 2),
+        'confirm-response': JSON.stringify({ ok: true, data: { draft_id: '12', draft_status: 'CONFIRMED', transaction_id: '105', summary_text: 'บันทึกแล้ว ✅\nรายจ่าย 65.00 บาท — กาแฟ\n…' } }, null, 2),
         curl: 'curl -sL -H "Content-Type: application/json" \\\n  -d \'' + pingBody + '\' \\\n  "' + url + '"',
         powershell: 'Invoke-RestMethod -Method Post -Uri "' + url + '" `\n  -ContentType "application/json" `\n  -Body \'' + pingBody + '\' | ConvertTo-Json',
         node: 'const res = await fetch("' + url + '", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ api_key: process.env.EM_API_KEY, action: "ping" }),\n  redirect: "follow"\n});\nconst out = await res.json();\nif (!out.ok) throw new Error(out.code + ": " + out.message);\nconsole.log(out.data);'

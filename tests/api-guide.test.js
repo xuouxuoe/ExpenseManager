@@ -25,10 +25,13 @@ test('คู่มือ API: action ที่เปิดใช้จริง�
 });
 
 test('คู่มือ API: มีคำอธิบายรหัสข้อผิดพลาดทุกตัวที่ IntegrationApi ตอบได้', () => {
+  const drafts = fs.readFileSync(path.join(root, 'ApiDraftService.gs'), 'utf8');
   const codes = new Set([...service.matchAll(/reject\('([A-Z_]+)'/g)].map((m) => m[1]));
-  codes.add('INTERNAL_ERROR');
-  const documented = new Set([...guide.matchAll(/data-apig-error="([A-Z_]+)"/g)].map((m) => m[1]));
-  codes.forEach((c) => assert.ok(documented.has(c), `คู่มือไม่มีรหัส ${c}`));
+  // รหัสจาก ApiDraftService (ไม่รวม CONFIG_* ซึ่งเป็นข้อผิดพลาดการตั้งค่าภายใน) และจาก Operation.run
+  [...drafts.matchAll(/AppError\('([A-Z_]+)'/g)].map((m) => m[1]).filter((c) => !/^CONFIG_/.test(c)).forEach((c) => codes.add(c));
+  ['INTERNAL_ERROR', 'BUSY', 'IDEMPOTENCY_CONFLICT'].forEach((c) => codes.add(c));
+  const documented = new Set([...guide.matchAll(/data-apig-error="([A-Z_*]+)"/g)].map((m) => m[1]));
+  codes.forEach((c) => assert.ok(documented.has(c) || (/^VALIDATION_/.test(c) && documented.has('VALIDATION_*')), `คู่มือไม่มีรหัส ${c}`));
 });
 
 test('คู่มือ API: ไม่มีตัวอย่าง API key จริงในหน้า', () => {

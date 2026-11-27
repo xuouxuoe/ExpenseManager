@@ -78,7 +78,8 @@ Transactions: `from_account_id`/`from_account_name` และ `to_account_id`/`t
 | OperationJournal | หนึ่งคำขอเขียนข้อมูล | Idempotency / Recovery |
 | Budgets | หนึ่งงบใช้จ่ายของหนึ่งเดือน | Config (อนุมัติ 2026-11-26) |
 | BudgetCategories | หนึ่งหมวดที่นับเข้างบหนึ่งงบ | Bridge |
-| ApiClients | หนึ่งผู้เรียก Integration API (เช่น Make) | Config / Security (อนุมัติ 2026-11-27) |
+| ApiClients | หนึ่งผู้เรียก Integration API (เช่น LINE OA / สคริปต์) | Config / Security (อนุมัติ 2026-11-27) |
+| ApiDrafts | หนึ่งร่างรายการจาก Integration API รอยืนยัน | Workflow (อนุมัติ 2026-11-27) |
 | Pivot_Saving / Pivot_Payment / Pivot_Transactions | — | รายงาน ไม่ใช่ข้อมูลต้นฉบับ |
 
 ## 3. Canonical headers
@@ -99,9 +100,10 @@ OperationJournal: operation_id, idempotency_key, request_hash, actor_id, operati
 Budgets: budget_id, budget_month, budget_name, owner_id, owner_name, amount, weekly_amount, note, is_active, created_at, updated_at
 BudgetCategories: budget_category_id, budget_id, category_id, category_name, created_at
 ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_user_ids, default_account_id, default_owner_id, is_active, created_at, updated_at
+ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_json, confirm_token_hash, transaction_id, error_code, expires_at, created_at, updated_at
 ```
 
-จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 11, BudgetCategories 5, ApiClients 11
+จำนวนคอลัมน์: Accounts 15, SubAccounts 6, Owners 5, Categories 8, Transactions 25, PaymentPlans 26, PaymentSchedules 40, Reservations 9, PaymentAllocations 5, Settings 4, AuditLogs 8, OperationJournal 10, Budgets 11, BudgetCategories 5, ApiClients 11, ApiDrafts 12
 
 ### บัญชีย่อยสำหรับรายงาน (อนุมัติ 2026-11-26)
 
@@ -355,6 +357,24 @@ ApiClients: client_id, client_name, actor_id, key_hash, scopes, allowed_channel_
 | ApiClients | default_owner_id | ID | INPUT | FK → Owners (active) ว่างได้ |
 | ApiClients | is_active | Boolean | INPUT | ปิดแล้ว key ใช้ไม่ได้ทันที (ไม่ลบแถว) |
 | ApiClients | created_at / updated_at | Timestamp | SYS | |
+
+### 4.12 ApiDrafts (อนุมัติ 2026-11-27)
+
+สร้างอัตโนมัติเมื่อสร้างร่างครั้งแรกผ่าน `draft.create`; ไม่มี projection `*_name` (ชื่อแสดงตอนตอบ API จาก Master ปัจจุบัน)
+
+| Table | Column | Type | Kind | หมายเหตุ |
+|---|---|---|---|---|
+| ApiDrafts | draft_id | ID | KEY | running number |
+| ApiDrafts | client_id | ID | SYS | FK → ApiClients ผู้สร้างร่าง; ยืนยัน/ยกเลิกได้เฉพาะการเชื่อมต่อเดียวกัน |
+| ApiDrafts | actor_id | Text | SYS | actor_id ของการเชื่อมต่อ ณ ตอนสร้าง |
+| ApiDrafts | channel_user_id | Text | SYS | LINE userId ที่สร้างร่าง (ว่างได้); ยืนยันได้เฉพาะ userId เดียวกัน |
+| ApiDrafts | draft_status | Enum | DERIVED | PENDING, CONFIRMED, CANCELLED, EXPIRED, FAILED |
+| ApiDrafts | draft_json | Text (JSON) | SYS | ข้อมูลธุรกรรมที่ตรวจแล้วและมีเฉพาะ ID (transaction_type, transaction_date, from/to_account_id, category_id, owner_id, item_name, description, note, amount); ไม่เก็บข้อความดิบ |
+| ApiDrafts | confirm_token_hash | Text | SYS | SHA-256 ของ confirm token (token คำนวณจาก Script Property `API_DRAFT_SECRET` + draft_id + client_id ไม่เก็บค่าจริง) |
+| ApiDrafts | transaction_id | ID | SYS | FK → Transactions เมื่อ CONFIRMED |
+| ApiDrafts | error_code | Text | SYS | รหัสข้อผิดพลาดเมื่อ FAILED |
+| ApiDrafts | expires_at | Timestamp | SYS | สร้าง + 24 ชั่วโมง; เลยเวลาแล้วยืนยันไม่ได้ (เปลี่ยนเป็น EXPIRED เมื่อมีคำขอถัดไป) |
+| ApiDrafts | created_at / updated_at | Timestamp | SYS | |
 
 ## 5. Projection map
 

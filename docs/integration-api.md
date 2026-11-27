@@ -1,8 +1,109 @@
-# Integration API (Make / LINE OA / AI) — แผน (ร่าง รออนุมัติ)
+# Integration API (LINE OA / AI) — แผน
 
 สถานะ: อนุมัติแผนและ schema ApiClients/ApiDrafts 2026-11-27; A1 ผ่านบน TEST ผ่าน gateway G1 (ping ด้วย key จริงได้ `db_target: "TEST"`, key ปิด/เปลี่ยนแล้วถูกปฏิเสธ, ทดสอบด้วย Postman) — การทดสอบผ่าน Make ผู้ใช้ให้ข้ามไปก่อน; หน้า "คู่มือ API" (A4 บางส่วน) ทำในเครื่องแล้ว; ApiDrafts จะเพิ่มใน A2
 
-## 1. เป้าหมายและการแบ่งหน้าที่
+> **ปรับแผน 2026-11-27 (ผู้ใช้สั่ง): ไม่ใช้ Make — ใช้ Apps Script อย่างเดียว และเรียก AI จาก Apps Script โดยตรง** ข้อ 0 นี้แทนส่วนที่อ้างถึง Make ในข้อ 1, 3, 9, 10, 13; schema (ข้อ 7) และหลักการร่าง → ยืนยัน → บันทึก ยังเหมือนเดิม; **ข้อ 0.4–0.6 รออนุมัติ (§15) ก่อน implement**
+
+## 0. แผนแบบไม่มี Make
+
+### 0.1 การตัดสินใจของผู้ใช้ (2026-11-27)
+
+| เรื่อง | ตัดสินใจ |
+|---|---|
+| ตัวกลาง | ไม่ใช้ Make; LINE ส่ง webhook ตรงเข้า gateway G1 (`doPost`) |
+| ร่าง/ยืนยัน/ยกเลิก | อยู่บน Apps Script (ApiDrafts) ไม่อยู่ในระบบ flow ภายนอก |
+| AI | เริ่มที่ OpenAI (GPT) และรองรับผู้ให้บริการอื่นหรือ endpoint แบบ custom ได้ด้วยการตั้งค่า |
+
+### 0.2 สถาปัตยกรรม
+
+```text
+LINE ──webhook (?line_key=…)──> gateway doPost ──> Library (project หลัก)
+                                   ├─ ตรวจ line_key (ApiClients) + LINE userId ที่อนุญาต
+                                   ├─ AiParser: ข้อความ + ข้อมูลหลัก → ผู้ให้บริการ AI → JSON (ข้อ 6)
+                                   ├─ Drafts.create: ตรวจ/resolve ID → ApiDrafts (PENDING)
+                                   └─ LINE reply: สรุป + ปุ่ม [ยืนยัน][ยกเลิก] (postback มี draft_id + confirm_token)
+LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (idempotent) → reply "บันทึกแล้ว"
+ผู้เรียกอื่น (สคริปต์/Postman) ──JSON + api_key──> doPost ──> actions ข้อ 5 เหมือนเดิม
+```
+
+- `doPost` แยกคำขอ: body มี `events` (รูปแบบ LINE) → LineWebhook; มี `api_key` → IntegrationApi เดิม
+- ตอบ LINE ด้วย reply token ภายใน execution เดียว (เป้าหมาย 4–8 วินาที); ตอบ HTTP 200 เสมอ
+- ใช้ `webhookEventId` ของ LINE เป็น idempotency key — LINE ส่งซ้ำ (redelivery) ไม่สร้างร่าง/รายการซ้ำ
+- คำสั่งดูข้อมูลในแชต (เช่น "ยอดเดือนนี้") ใช้ read actions ของ A3 โดยไม่เรียก AI เมื่อจับคำสั่งได้
+
+### 0.3 ผู้ให้บริการ AI (AiParser)
+
+| AI_PROVIDER | ใช้กับ | หมายเหตุ |
+|---|---|---|
+| `OPENAI` | OpenAI API | ค่าเริ่มต้น; ขอผลเป็น JSON ตาม schema (structured output) |
+| `OPENAI_COMPATIBLE` | endpoint ที่รองรับรูปแบบ OpenAI Chat Completions (custom) | ต้องตั้ง `AI_BASE_URL` (https เท่านั้น) |
+| `ANTHROPIC` | Claude API | adapter แยก |
+| `GEMINI` | Google Gemini API | adapter แยก |
+
+- adapter ทุกตัวคืนผลรูปแบบเดียวกัน (JSON ข้อ 6) แล้วผ่าน `Validation` + resolve ID ของ Backend เสมอ — ผลจาก AI เป็นเพียงข้อเสนอ ไม่เคยบันทึกตรง (AGENTS.md §11)
+- ชื่อโมเดลไม่ hardcode: ตั้งใน `AI_MODEL`
+- ส่งให้ AI เฉพาะ: ข้อความของผู้ใช้, วันที่วันนี้, รายการชื่อ+ID บัญชี/หมวด/เจ้าของที่ active — ไม่ส่งยอดเงินคงเหลือหรือประวัติรายการ
+- timeout/ข้อผิดพลาดจาก AI → ตอบ LINE ว่าแปลงข้อความไม่ได้ ให้พิมพ์ใหม่ ไม่สร้างร่าง; ไม่ log ข้อความผู้ใช้หรือคำตอบ AI
+
+### 0.4 Script Properties ใหม่ (project หลัก; ตั้งโดยเจ้าของใน editor เท่านั้น ไม่มีหน้าเว็บให้แก้)
+
+| key | ค่า |
+|---|---|
+| `AI_PROVIDER` | `OPENAI` / `OPENAI_COMPATIBLE` / `ANTHROPIC` / `GEMINI` |
+| `AI_API_KEY` | API key ของผู้ให้บริการ AI |
+| `AI_MODEL` | ชื่อโมเดล |
+| `AI_BASE_URL` | เฉพาะ `OPENAI_COMPATIBLE` (https) |
+| `LINE_CHANNEL_ACCESS_TOKEN` | token ของ LINE Messaging API สำหรับตอบกลับ |
+
+ไม่ให้ตั้ง `AI_BASE_URL` หรือ key ผ่านหน้าเว็บ เพื่อกันการส่งข้อมูลออกไปยังปลายทางที่ไม่ได้ตั้งใจ
+
+### 0.5 ความปลอดภัยของ webhook (ข้อจำกัด Apps Script)
+
+- `doPost` อ่าน header ไม่ได้ จึง **ตรวจ `X-Line-Signature` ไม่ได้** — ใช้แทนด้วย:
+  1. `line_key` ใน query string ของ webhook URL = API key ของการเชื่อมต่อใน ApiClients (scope WRITE) — ปิด/เปลี่ยนได้จากหน้าเชื่อมต่อภายนอกเหมือนเดิม
+  2. LINE userId ต้องอยู่ใน `allowed_channel_user_ids` ของการเชื่อมต่อนั้น (บังคับ ห้ามว่าง)
+  3. ทุกการบันทึกต้องกดยืนยันจากแชตของ userId เดียวกัน และ confirm_token ตรง — webhook ปลอมสร้างได้แค่ร่างที่หมดอายุเอง
+- ข้อเสีย: key อยู่ใน URL ที่ตั้งใน LINE Developers Console และอาจอยู่ใน log ของ Google; เปลี่ยน key ทันทีเมื่อสงสัยว่ารั่ว
+- ปุ่ม Verify ใน LINE Console อาจแจ้งล้มเหลวเพราะ Apps Script ตอบ 302 แต่ webhook จริงทำงาน (ต้องยืนยันบน TEST)
+
+### 0.6 สิทธิ์และความเป็นส่วนตัว
+
+- เพิ่ม scope `https://www.googleapis.com/auth/script.external_request` ใน manifest ของ project หลักและ gateway แล้ว Authorize ใหม่
+- ข้อความแชต (และสลิปในระยะหลัง) ถูกส่งไป LINE และผู้ให้บริการ AI ที่เลือก — ต้องได้รับอนุญาตจากผู้ใช้ (AGENTS.md §10)
+
+### 0.7 ระยะพัฒนาใหม่ (แทนข้อ 9)
+
+| ระยะ | งาน | Done เมื่อ |
+|---|---|---|
+| A1 | gateway, API key, `ping` | ผ่านแล้ว (ข้อ 9.1) |
+| A2 | ApiDrafts, `masters.list`, `draft.create/confirm/cancel` ผ่าน API key (ทดสอบด้วย Postman) | ครบวงจรบน TEST, ยืนยันซ้ำไม่ซ้ำ, หมดอายุ/token ผิดถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.8)** |
+| A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง |
+| A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ |
+| A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard |
+| A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง |
+
+คู่มือ API ในแอปปรับตามแต่ละระยะ (ตัดส่วน Make ออก เพิ่มการตั้งค่า LINE webhook และ Script Properties ของ AI)
+
+
+### 0.8 สถานะ A2 (2026-11-27)
+
+- [x] Config/AGENTS.md/database-schema.md: ชีต ApiDrafts (สร้างอัตโนมัติ), enum DRAFT_STATUS, Script Property `API_DRAFT_SECRET` (ระบบสร้างเองครั้งแรก)
+- [x] `ApiDraftService.gs`: `masters.list` (READ), `draft.create` / `draft.confirm` / `draft.cancel` (WRITE)
+  - params รับ ID หรือชื่อ (ไม่สนตัวพิมพ์/ช่องว่าง) ไม่พบ/กำกวม → `VALIDATION_NOT_FOUND` / `VALIDATION_AMBIGUOUS` พร้อม `details.candidates`; ฟิลด์อื่น → `VALIDATION_UNKNOWN_FIELD`; หมวดหมู่ค้นเฉพาะประเภทที่ตรงกับรายการ
+  - บัญชีเริ่มต้นใช้กับฝั่งหลักของประเภท (รายจ่าย/โอน/ซื้อด้วยบัตร = ต้นทาง, รายรับ = ปลายทาง); เจ้าของเริ่มต้นเมื่อไม่ระบุ; วันที่ว่าง = วันนี้
+  - ตรวจด้วย `Transactions.validate` เดิมทั้งตอนสร้างร่างและตอนยืนยัน; Master ถูกปิดหลังสร้างร่าง → ร่าง FAILED พร้อม error_code
+  - `draft.create` ต้องมี `request_id` (`INVALID_REQUEST_ID`); retry ได้ร่างและ token เดิม; คืนรายการที่อาจซ้ำ (`possible_duplicates`) และ `summary_text`
+  - confirm_token = hash ของ secret + draft_id + client_id (คำนวณซ้ำได้ จึงไม่ต้องเก็บ token จริงใน journal/ชีต); ชีตเก็บ hash
+  - ยืนยันใช้ idempotency key ผูกกับ draft_id และบันทึกธุรกรรม `source: AI` ผ่าน `Transactions.insertWithin` (แยกออกจาก `Transactions.create` เดิม พฤติกรรมเดิมไม่เปลี่ยน)
+  - ยืนยัน/ยกเลิกได้เฉพาะการเชื่อมต่อและ LINE userId ที่สร้างร่าง (`DRAFT_NOT_FOUND`); token ผิด `INVALID_CONFIRM_TOKEN`; เกิน 24 ชม. `DRAFT_EXPIRED`; สถานะอื่น `DRAFT_NOT_PENDING`
+- [x] `tests/api-drafts.test.js` 11 กรณี รวมจำลองระบบล้มทุกจุดเขียนระหว่างยืนยัน (ก่อนเขียน/คำตอบหาย) แล้วส่งซ้ำ → ธุรกรรมเดียว; `npm test` ผ่าน 198/198
+- [x] คู่มือ API ในแอป: actions ใหม่ "ใช้ได้", params/ตัวอย่างคำขอ-คำตอบ, รหัสข้อผิดพลาดใหม่; ตัดส่วน Make ออกจากหน้าเว็บ
+- [x] `clasp push` ไป HEAD (2026-11-27) และ clone กลับมาเทียบตรงกัน 29 ไฟล์; gateway @4 ยังตอบ `BAD_REQUEST`/`UNAUTHORIZED` ถูกต้อง (2.5–3.0 วินาที)
+- [x] ผู้ใช้ทดสอบ Postman: การเชื่อมต่อที่ตั้ง LINE userId ได้ `FORBIDDEN_CHANNEL` เมื่อไม่ส่ง `channel_user_id` (ถูกต้อง); การเชื่อมต่อที่ไม่มีบัญชีเริ่มต้นได้ `VALIDATION_REQUIRED` ที่อ้าง `from_account_id` → ปรับข้อความให้อ้างฟิลด์ของ API (`from_account`/`to_account`/`category`/`owner`) พร้อมวิธีแก้ และ push แล้ว (2026-11-27, ตรงกัน 29 ไฟล์)
+- [x] ผู้ใช้ทดสอบครบวงจรผ่าน gateway บน TEST ด้วย Postman: `masters.list` → `draft.create` → `draft.confirm` / `draft.cancel` ถูกต้อง (2026-11-27)
+- ยังไม่ได้วัดเวลาตอบจริงของ draft.create/confirm บน Apps Script
+
+## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
 
 ผู้ใช้สั่งบันทึกหรือถามข้อมูลผ่าน LINE OA โดยใช้ **Make** เป็นตัวกลาง: Make รับข้อความจาก LINE → ส่งให้ AI แปลงเป็น JSON → เรียก API ของ Expense Manager → ตอบกลับใน LINE; บันทึกจริงเมื่อผู้ใช้กดยืนยันเท่านั้น (AGENTS.md §11)
 
@@ -24,6 +125,7 @@
 | ตัวกลาง/AI | ใช้ Make เรียก AI และคุยกับ LINE; ระบบให้บริการเป็น API | 2026-11-27 |
 | การยืนยันตัวตนผู้เรียก | secret key (ไม่ใช้ proxy) — ส่งใน JSON body (`api_key`) แทน URL เพื่อไม่ให้ติดใน URL/log | 2026-11-27 |
 | อนุมัติ schema และเริ่ม A1 | ApiClients/ApiDrafts ตามข้อ 7 | 2026-11-27 |
+| ตัวกลาง/AI (แทนแถวแรก) | ไม่ใช้ Make; Apps Script รับ LINE webhook และเรียก AI เอง; AI เริ่มที่ OpenAI และรองรับผู้ให้บริการอื่น/custom (ข้อ 0) | 2026-11-27 |
 
 เหตุผล: `doPost(e)` ของ Apps Script อ่าน HTTP header ไม่ได้ (ใช้ `Authorization` header ไม่ได้) และกำหนด HTTP status code ไม่ได้ — ทุกคำตอบเป็น 200 จึงต้องตรวจ `ok` ใน body เสมอ
 

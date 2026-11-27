@@ -10,7 +10,9 @@ var Config = {
     SPREADSHEET_ID: 'SPREADSHEET_ID',
     TEST_SPREADSHEET_ID: 'TEST_SPREADSHEET_ID',
     ALLOWED_EMAILS: 'ALLOWED_EMAILS',
-    DB_TARGET: 'DB_TARGET'
+    DB_TARGET: 'DB_TARGET',
+    // สร้างอัตโนมัติครั้งแรกที่สร้างร่างผ่าน API: ใช้คำนวณ confirm_token ของร่าง (ไม่ส่งออกนอก server)
+    API_DRAFT_SECRET: 'API_DRAFT_SECRET'
   },
 
   LOCK_TIMEOUT_MS: 30000,
@@ -31,7 +33,8 @@ var Config = {
     OPERATION_JOURNAL: 'OperationJournal',
     BUDGETS: 'Budgets',
     BUDGET_CATEGORIES: 'BudgetCategories',
-    API_CLIENTS: 'ApiClients'
+    API_CLIENTS: 'ApiClients',
+    API_DRAFTS: 'ApiDrafts'
   },
 
   HEADERS: {
@@ -51,7 +54,9 @@ var Config = {
     Budgets: ['budget_id', 'budget_month', 'budget_name', 'owner_id', 'owner_name', 'amount', 'weekly_amount', 'note', 'is_active', 'created_at', 'updated_at'],
     BudgetCategories: ['budget_category_id', 'budget_id', 'category_id', 'category_name', 'created_at'],
     // ผู้เรียก Integration API ภายนอก เช่น Make (อนุมัติ 2026-11-27) เก็บเฉพาะ hash ของ API key
-    ApiClients: ['client_id', 'client_name', 'actor_id', 'key_hash', 'scopes', 'allowed_channel_user_ids', 'default_account_id', 'default_owner_id', 'is_active', 'created_at', 'updated_at']
+    ApiClients: ['client_id', 'client_name', 'actor_id', 'key_hash', 'scopes', 'allowed_channel_user_ids', 'default_account_id', 'default_owner_id', 'is_active', 'created_at', 'updated_at'],
+    // ร่างรายการจาก Integration API รอผู้ใช้ยืนยัน (อนุมัติ 2026-11-27) draft_json เก็บเฉพาะข้อมูลที่ resolve เป็น ID แล้ว
+    ApiDrafts: ['draft_id', 'client_id', 'actor_id', 'channel_user_id', 'draft_status', 'draft_json', 'confirm_token_hash', 'transaction_id', 'error_code', 'expires_at', 'created_at', 'updated_at']
   },
 
   /** Primary key ของแต่ละตาราง */
@@ -70,11 +75,12 @@ var Config = {
     OperationJournal: 'operation_id',
     Budgets: 'budget_id',
     BudgetCategories: 'budget_category_id',
-    ApiClients: 'client_id'
+    ApiClients: 'client_id',
+    ApiDrafts: 'draft_id'
   },
 
   /** ชีตที่ระบบสร้างเองเมื่อเขียนครั้งแรก (ฟีเจอร์ที่เพิ่มภายหลัง) และอ่านเป็นตารางว่างถ้ายังไม่มี */
-  AUTO_CREATE_SHEETS: ['SubAccounts', 'Budgets', 'BudgetCategories', 'ApiClients'],
+  AUTO_CREATE_SHEETS: ['SubAccounts', 'Budgets', 'BudgetCategories', 'ApiClients', 'ApiDrafts'],
 
   ENUMS: {
     ACCOUNT_TYPE: ['CASH', 'BANK', 'E_WALLET', 'CREDIT_CARD', 'CASH_CARD', 'LOAN'],
@@ -89,7 +95,8 @@ var Config = {
     RESERVATION_ACTION: ['RESERVE', 'RELEASE', 'CONSUME'],
     OPERATION_STATUS: ['PENDING', 'COMMITTED', 'FAILED', 'NEEDS_RECOVERY'],
     AUDIT_RESULT: ['SUCCESS', 'FAILED'],
-    API_SCOPE: ['READ', 'WRITE']
+    API_SCOPE: ['READ', 'WRITE'],
+    DRAFT_STATUS: ['PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED']
   },
 
   /** ความยาวสูงสุดของข้อความ (docs/database-schema.md §1.3) */

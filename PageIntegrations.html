@@ -2,13 +2,13 @@
   <div class="flex flex-wrap items-end justify-between gap-3">
     <div>
       <h1 id="int-title" class="text-xl font-semibold">เชื่อมต่อภายนอก</h1>
-      <p class="text-sm text-slate-500">API key สำหรับ Make / LINE OA ให้ส่งคำขอบันทึกหรือดูข้อมูล</p>
+      <p class="text-sm text-slate-500">API key สำหรับ LINE OA หรือระบบภายนอกที่ส่งคำขอบันทึกหรือดูข้อมูล</p>
     </div>
     <button type="button" id="int-add" class="btn btn-primary"><span aria-hidden="true">+</span>เพิ่มการเชื่อมต่อ</button>
   </div>
 
   <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-    <p class="font-semibold">ระยะ A1: รองรับ action <code>ping</code> เพื่อทดสอบการเชื่อมต่อเท่านั้น</p>
+    <p class="font-semibold">รองรับ <code>ping</code>, <code>masters.list</code> และการบันทึกผ่านร่าง (<code>draft.create</code> → <code>draft.confirm</code>)</p>
     <p class="mt-1">ส่ง <code>POST</code> แบบ JSON ไปที่ URL ของ deployment สำหรับ Integration (ลงท้าย <code>/exec</code>) เช่น
       <code class="break-all">{"api_key":"emk_…","action":"ping"}</code> ระบบตอบ HTTP 200 เสมอ ให้ตรวจค่า <code>ok</code> ในคำตอบ</p>
     <p class="mt-1"><a href="#api-guide" target="_self" class="font-semibold underline">ดูคู่มือ API สำหรับนักพัฒนา →</a></p>
@@ -26,7 +26,7 @@
     <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
       <div>
         <label for="int-name" class="field-label">ชื่อการเชื่อมต่อ</label>
-        <input id="int-name" class="field-input" maxlength="100" required autocomplete="off" placeholder="เช่น Make LINE ครอบครัว">
+        <input id="int-name" class="field-input" maxlength="100" required autocomplete="off" placeholder="เช่น LINE ครอบครัว">
       </div>
       <fieldset>
         <legend class="field-label">สิทธิ์</legend>
@@ -63,7 +63,7 @@
 <dialog id="int-key-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="int-key-title">
   <div class="p-5">
     <h2 id="int-key-title" class="text-base font-semibold">API key ใหม่</h2>
-    <p class="mt-2 text-sm text-rose-700">คัดลอกเก็บไว้ใน Make ตอนนี้ ระบบแสดง key นี้ครั้งเดียวและไม่เก็บค่าจริงไว้ ถ้าหายให้กด "เปลี่ยน key"</p>
+    <p class="mt-2 text-sm text-rose-700">คัดลอกเก็บไว้ในระบบที่เรียก API ตอนนี้ ระบบแสดง key นี้ครั้งเดียวและไม่เก็บค่าจริงไว้ ถ้าหายให้กด "เปลี่ยน key"</p>
     <label for="int-key-value" class="field-label mt-3">API key</label>
     <input id="int-key-value" class="field-input font-mono text-sm" readonly>
     <div class="mt-5 flex justify-end gap-2">
@@ -132,7 +132,7 @@
       if (!state.clients.length) {
         panel.appendChild(el('div', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500' },
           el('p', { text: 'ยังไม่มีการเชื่อมต่อ' }),
-          el('p', { class: 'mt-1', text: 'กด "เพิ่มการเชื่อมต่อ" เพื่อสร้าง API key สำหรับ Make' })));
+          el('p', { class: 'mt-1', text: 'กด "เพิ่มการเชื่อมต่อ" เพื่อสร้าง API key' })));
         return;
       }
       var list = el('ul', { class: 'grid gap-3 md:grid-cols-2' });
@@ -237,7 +237,7 @@
     }
 
     function rotate(c, button) {
-      App.confirm('เปลี่ยน API key ของ "' + c.client_name + '"? key เดิมจะใช้ไม่ได้ทันที ต้องนำ key ใหม่ไปใส่ใน Make', 'เปลี่ยน key').then(function (ok) {
+      App.confirm('เปลี่ยน API key ของ "' + c.client_name + '"? key เดิมจะใช้ไม่ได้ทันที ต้องนำ key ใหม่ไปใส่ในระบบที่เรียก API', 'เปลี่ยน key').then(function (ok) {
         if (!ok) return;
         var apiKey = generateApiKey();
         App.setBusy(button, true, 'กำลังเปลี่ยน…');
@@ -256,7 +256,7 @@
 
     function toggleActive(c, button) {
       var next = !c.is_active;
-      var ask = next ? Promise.resolve(true) : App.confirm('ปิดใช้งาน "' + c.client_name + '"? คำขอจาก Make ที่ใช้ key นี้จะถูกปฏิเสธทันที', 'ปิดใช้งาน');
+      var ask = next ? Promise.resolve(true) : App.confirm('ปิดใช้งาน "' + c.client_name + '"? คำขอที่ใช้ key นี้จะถูกปฏิเสธทันที', 'ปิดใช้งาน');
       ask.then(function (ok) {
         if (!ok) return;
         App.setBusy(button, true, 'กำลังบันทึก…');
