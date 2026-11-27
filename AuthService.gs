@@ -42,7 +42,20 @@ var Auth = (function () {
     return { actorId: active };
   }
 
+  /** ผู้ใช้หน้าเว็บคนนี้คือเจ้าของสคริปต์ (ผู้ deploy ที่ Web App รันในนาม) หรือไม่ */
+  function isOwner(actor) {
+    var effective = normalizeEmail(Session.getEffectiveUser().getEmail());
+    return !!actor && !!effective && normalizeEmail(actor.actorId) === effective;
+  }
+
+  function requireOwnerActor(actor) {
+    if (!isOwner(actor)) throw Util.AppError('FORBIDDEN', 'เฉพาะเจ้าของระบบเท่านั้นที่แก้การตั้งค่านี้ได้');
+    return actor;
+  }
+
   return {
+    isOwner: isOwner,
+    requireOwnerActor: requireOwnerActor,
     getActiveEmail: getActiveEmail,
     requireAuthorizedUser: requireAuthorizedUser,
     requireOwner: requireOwner

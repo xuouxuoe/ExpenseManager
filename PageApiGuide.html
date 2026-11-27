@@ -11,6 +11,7 @@
     <a href="#api-guide" target="_self" data-apig-jump="apig-examples" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ตัวอย่างโค้ด</a>
     <a href="#api-guide" target="_self" data-apig-jump="apig-errors" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">รหัสข้อผิดพลาด</a>
     <a href="#api-guide" target="_self" data-apig-jump="apig-masters" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ID ข้อมูลหลัก</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-ai" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ตั้งค่า AI</a>
     <a href="#api-guide" target="_self" data-apig-jump="apig-security" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ความปลอดภัย</a>
   </nav>
 
@@ -83,6 +84,7 @@
           <tr data-apig-action="draft.create" data-apig-status="available"><td class="py-2 pr-3 font-mono">draft.create</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">สร้างร่างรายการจาก JSON ตรวจข้อมูลและคืนสรุปให้ผู้ใช้ยืนยัน (ยังไม่บันทึก)</td></tr>
           <tr data-apig-action="draft.confirm" data-apig-status="available"><td class="py-2 pr-3 font-mono">draft.confirm</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ยืนยันร่างแล้วบันทึกจริง ยืนยันซ้ำได้ผลเดิม ไม่เกิดรายการซ้ำ</td></tr>
           <tr data-apig-action="draft.cancel" data-apig-status="available"><td class="py-2 pr-3 font-mono">draft.cancel</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ยกเลิกร่าง</td></tr>
+          <tr data-apig-action="ai.parse" data-apig-status="available"><td class="py-2 pr-3 font-mono">ai.parse</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">แปลงข้อความภาษาไทยด้วย AI เป็น params ของ <code>draft.create</code> (ไม่บันทึก)</td></tr>
           <tr data-apig-action="transactions.recent" data-apig-status="planned"><td class="py-2 pr-3 font-mono">transactions.recent</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">รายการล่าสุด (สูงสุด 20 รายการ)</td></tr>
           <tr data-apig-action="summary.month" data-apig-status="planned"><td class="py-2 pr-3 font-mono">summary.month</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">รายรับ รายจ่าย และสุทธิของเดือน</td></tr>
           <tr data-apig-action="balances" data-apig-status="planned"><td class="py-2 pr-3 font-mono">balances</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยอดบัญชี เงินกันไว้ และเงินที่ใช้ได้จริง</td></tr>
@@ -166,6 +168,20 @@
         <div data-apig-code="confirm-response"></div>
       </div>
     </div>
+
+    <h3 class="mt-5 text-sm font-semibold"><code>ai.parse</code> — แปลงข้อความด้วย AI</h3>
+    <p class="text-sm text-slate-700">ส่ง <code>params.text</code> (ไม่เกิน 500 ตัวอักษร) ระบบเรียกผู้ให้บริการ AI ที่ตั้งไว้แล้วคืน <code>intent</code>: <code>TRANSACTION</code> พร้อม <code>params</code> ที่ส่งต่อให้ <code>draft.create</code> ได้ทันที หรือ <code>OTHER</code> พร้อม <code>message</code> เมื่อข้อความไม่ใช่รายการ — ผลจาก AI เป็นข้อเสนอ ระบบตรวจซ้ำตอนสร้างร่าง และผู้ใช้ต้องยืนยันก่อนบันทึก</p>
+    <div class="mt-1 grid gap-3 md:grid-cols-2">
+      <div>
+        <p class="text-xs text-slate-500">คำขอ</p>
+        <div data-apig-code="ai-request"></div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">คำตอบ</p>
+        <div data-apig-code="ai-response"></div>
+      </div>
+    </div>
+    <p class="mt-1 text-xs text-slate-500">ค่าใช้จ่ายของ AI คิดตามผู้ให้บริการ · ส่งให้ AI เฉพาะข้อความ วันที่ และชื่อ+ID ของบัญชี/หมวด/เจ้าของ ไม่ส่งยอดเงินหรือประวัติรายการ</p>
   </section>
 
   <!-- ตัวอย่างโค้ด -->
@@ -213,6 +229,9 @@
           <tr data-apig-error="INVALID_CONFIRM_TOKEN"><td class="py-2 pr-3 font-mono">INVALID_CONFIRM_TOKEN</td><td class="py-2 pr-3"><code>confirm_token</code> ไม่ตรงกับร่าง</td><td class="py-2">ใช้ token ที่ได้จาก <code>draft.create</code></td></tr>
           <tr data-apig-error="DRAFT_EXPIRED"><td class="py-2 pr-3 font-mono">DRAFT_EXPIRED</td><td class="py-2 pr-3">ร่างเกิน 24 ชั่วโมง</td><td class="py-2">สร้างร่างใหม่</td></tr>
           <tr data-apig-error="DRAFT_NOT_PENDING"><td class="py-2 pr-3 font-mono">DRAFT_NOT_PENDING</td><td class="py-2 pr-3">ร่างถูกยืนยัน ยกเลิก หมดอายุ หรือบันทึกไม่ได้แล้ว (<code>details.draft_status</code>)</td><td class="py-2">สร้างร่างใหม่ถ้าต้องการบันทึก</td></tr>
+          <tr data-apig-error="AI_NOT_CONFIGURED"><td class="py-2 pr-3 font-mono">AI_NOT_CONFIGURED</td><td class="py-2 pr-3">ยังไม่ได้ตั้ง AI_PROVIDER / AI_API_KEY / AI_MODEL / AI_BASE_URL ให้ถูกต้อง</td><td class="py-2">เจ้าของระบบตั้ง Script Properties (หัวข้อตั้งค่า AI)</td></tr>
+          <tr data-apig-error="AI_ERROR"><td class="py-2 pr-3 font-mono">AI_ERROR</td><td class="py-2 pr-3">เรียกผู้ให้บริการ AI ไม่สำเร็จ (ข้อความมี HTTP status เช่น 401 key ผิด, 429 เกินโควตา)</td><td class="py-2">ตรวจ key/โมเดล/โควตา แล้วลองใหม่</td></tr>
+          <tr data-apig-error="AI_INVALID_OUTPUT"><td class="py-2 pr-3 font-mono">AI_INVALID_OUTPUT</td><td class="py-2 pr-3">AI ตอบกลับไม่ใช่ JSON ตามรูปแบบ</td><td class="py-2">ลองใหม่ หรือเปลี่ยนโมเดลที่รองรับ JSON</td></tr>
           <tr data-apig-error="INTERNAL_ERROR"><td class="py-2 pr-3 font-mono">INTERNAL_ERROR</td><td class="py-2 pr-3">ข้อผิดพลาดภายใน เช่น gateway ไม่ได้รับสิทธิ์ Spreadsheet</td><td class="py-2">ลองใหม่ ถ้ายังเกิดให้ดู log <code>INTEGRATION_INTERNAL_ERROR</code> ใน Executions ของ gateway</td></tr>
         </tbody>
       </table>
@@ -229,6 +248,26 @@
       <button type="button" id="apig-masters-load" class="btn btn-secondary">โหลด ID</button>
     </div>
     <div id="apig-masters-panel" class="mt-3" aria-live="polite"></div>
+  </section>
+
+  <!-- ตั้งค่า AI -->
+  <section id="apig-ai" aria-labelledby="apig-ai-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-ai-title" class="text-base font-semibold">ตั้งค่าผู้ให้บริการ AI (เจ้าของระบบ)</h2>
+    <p class="mt-1 text-sm text-slate-700">ตั้งที่เมนู <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> → ผู้ให้บริการ AI → ตั้งค่า แล้วกด "ทดสอบ" (เฉพาะเจ้าของระบบ; ค่าเก็บใน Script Properties ไม่ใช่ในชีต และ key ไม่ถูกแสดงกลับ) หรือตั้งเองใน Apps Script → การตั้งค่าโปรเจ็กต์ → Script Properties แล้วรัน <code>testAiParse</code></p>
+    <div class="mt-2 overflow-x-auto">
+      <table class="w-full min-w-[32rem] text-left text-sm">
+        <thead class="border-b border-slate-200 text-slate-500">
+          <tr><th scope="col" class="py-2 pr-3 font-medium">Property</th><th scope="col" class="py-2 font-medium">ค่า</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="py-2 pr-3 font-mono">AI_PROVIDER</td><td class="py-2"><code>OPENAI</code> (ค่าเริ่มต้น), <code>OPENAI_COMPATIBLE</code> (endpoint แบบ OpenAI Chat Completions ของผู้ให้บริการอื่นหรือที่ตั้งเอง), <code>ANTHROPIC</code>, <code>GEMINI</code></td></tr>
+          <tr><td class="py-2 pr-3 font-mono">AI_API_KEY</td><td class="py-2">API key ของผู้ให้บริการ</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">AI_MODEL</td><td class="py-2">ชื่อโมเดลตามที่ผู้ให้บริการกำหนด</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">AI_BASE_URL</td><td class="py-2">เฉพาะ <code>OPENAI_COMPATIBLE</code>: https://…/v1 (ระบบต่อท้าย <code>/chat/completions</code>)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-xs text-slate-500">gateway และโปรเจกต์หลักต้องได้รับสิทธิ์ <code>script.external_request</code> (เชื่อมต่อบริการภายนอก) ก่อนใช้ AI</p>
   </section>
 
   <!-- ความปลอดภัย -->
@@ -281,6 +320,9 @@
           possible_duplicates: [], summary_text: 'รายจ่าย 65.00 บาท — กาแฟ\nวันที่ 2026-11-27\nบัญชี KBank\nหมวด อาหาร\nเจ้าของ พ่อ' } }, null, 2),
         'confirm-request': JSON.stringify({ api_key: '<API_KEY>', action: 'draft.confirm', channel_user_id: '<LINE userId>', params: { draft_id: '12', confirm_token: '<confirm_token>' } }, null, 2),
         'confirm-response': JSON.stringify({ ok: true, data: { draft_id: '12', draft_status: 'CONFIRMED', transaction_id: '105', summary_text: 'บันทึกแล้ว ✅\nรายจ่าย 65.00 บาท — กาแฟ\n…' } }, null, 2),
+        'ai-request': JSON.stringify({ api_key: '<API_KEY>', action: 'ai.parse', params: { text: 'กาแฟ 65 บาท จ่ายด้วย kbank' } }, null, 2),
+        'ai-response': JSON.stringify({ ok: true, data: { intent: 'TRANSACTION', provider: 'OPENAI', message: '',
+          params: { transaction_type: 'EXPENSE', amount: 65, from_account: '1', category: '3', item_name: 'กาแฟ', source_text: 'กาแฟ 65 บาท จ่ายด้วย kbank' } } }, null, 2),
         curl: 'curl -sL -H "Content-Type: application/json" \\\n  -d \'' + pingBody + '\' \\\n  "' + url + '"',
         powershell: 'Invoke-RestMethod -Method Post -Uri "' + url + '" `\n  -ContentType "application/json" `\n  -Body \'' + pingBody + '\' | ConvertTo-Json',
         node: 'const res = await fetch("' + url + '", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ api_key: process.env.EM_API_KEY, action: "ping" }),\n  redirect: "follow"\n});\nconst out = await res.json();\nif (!out.ok) throw new Error(out.code + ": " + out.message);\nconsole.log(out.data);'

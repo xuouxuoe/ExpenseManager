@@ -290,6 +290,19 @@ function api_rotateApiClientKey(clientId, apiKey, idempotencyKey) {
   });
 }
 
+function api_getAiSettings() {
+  return handleApi_(function (actor) { return AiSettings.view(actor); });
+}
+
+/** input.api_key ว่าง = ใช้ key เดิม; ไม่มีการคืนค่า key ให้เบราว์เซอร์ */
+function api_saveAiSettings(input, idempotencyKey) {
+  return handleApi_(function (actor) { return AiSettings.save(input, { idempotencyKey: idempotencyKey, actor: actor }); });
+}
+
+function api_testAiSettings() {
+  return handleApi_(function (actor) { return AiSettings.test(actor); });
+}
+
 function api_exportFinanceReport(kind, filters) {
   return handleApi_(function () { return FinanceReports.exportCsv(kind, filters); });
 }
@@ -367,6 +380,17 @@ function migrateTestIds() {
   var report = IdMigration.run({ dryRun: false });
   if (Object.keys(report.changes).length) tryAudit_(actor.actorId, 'MIGRATE_LEGACY_IDS');
   return logReport_('migrateTestIds (TEST)', report);
+}
+
+/**
+ * ทดสอบการตั้งค่า AI จาก editor: แปลงข้อความตัวอย่างด้วยข้อมูลหลักของไฟล์ทดสอบ (ไม่เขียนข้อมูล)
+ * ส่งชื่อ+ID ของบัญชี/หมวด/เจ้าของในไฟล์ทดสอบไปยังผู้ให้บริการ AI ที่ตั้งไว้
+ */
+function testAiParse() {
+  Auth.requireOwner();
+  Database.useTestSpreadsheet();
+  var result = AiParser.parse('กาแฟ 65 บาท', { client_id: '', default_account_id: '', default_owner_id: '' });
+  return logReport_('testAiParse (TEST)', result);
 }
 
 function initializeTestDatabase() {

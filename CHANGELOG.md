@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added — Integration API ระยะ A3: แปลงข้อความด้วย AI (2026-11-27)
+
+- `AiService.gs` เรียก AI จาก Apps Script โดยตรง (ไม่ใช้ Make): OPENAI (ค่าเริ่มต้น), OPENAI_COMPATIBLE (endpoint custom แบบ OpenAI), ANTHROPIC, GEMINI ตั้งค่าด้วย Script Properties `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`
+- action `ai.parse` แปลงข้อความภาษาไทยเป็น params ของ `draft.create` (ไม่บันทึก) และฟังก์ชัน editor `testAiParse()` สำหรับตรวจการตั้งค่า
+- ส่งให้ AI เฉพาะข้อความ วันที่ และชื่อ+ID ของข้อมูลหลักที่ใช้งาน; ไม่ log ข้อความ คำตอบ หรือ key
+- คู่มือ API: ai.parse, หัวข้อตั้งค่า AI, รหัส `AI_NOT_CONFIGURED` / `AI_ERROR` / `AI_INVALID_OUTPUT`
+- `tests/ai-parser.test.js` 7 กรณี; test shim มี UrlFetchApp จำลอง (ไม่ออกเครือข่าย)
+- การ์ด "ผู้ให้บริการ AI" ในหน้าเชื่อมต่อภายนอก: เจ้าของระบบตั้งผู้ให้บริการ/โมเดล/Base URL/API key และกดทดสอบได้จากหน้าเว็บ; ผู้ใช้อื่นเห็นเฉพาะสถานะ; key ไม่ถูกส่งกลับเบราว์เซอร์ (แสดง 4 ตัวท้าย) และเก็บใน Script Properties; `tests/ai-settings.test.js` 4 กรณี
+
 ### Added — แปลงรหัส UUID เดิมในไฟล์ทดสอบเป็นเลขลำดับ (2026-11-27)
 
 - `MigrationService.gs` + ฟังก์ชันผู้ดูแล `migrateTestIdsDryRun()` / `migrateTestIds()` (ไฟล์ TEST เท่านั้น): แปลง PK ที่เป็น UUID เป็น running number และแก้ FK ทุกตาราง, key ใน Settings และ ApiDrafts.draft_json; สำรองชีตที่เปลี่ยนเป็น `bak_<เวลา>_<ชีต>` ก่อนเขียน; ไม่แก้ AuditLogs/OperationJournal

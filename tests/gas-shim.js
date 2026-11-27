@@ -216,7 +216,17 @@ function createContext(options = {}) {
     HtmlService: {
       createHtmlOutput: (html) => ({ html, setTitle(t) { this.title = t; return this; } })
     },
-    Logger: { log: (m) => state.logs.push(String(m)) }
+    Logger: { log: (m) => state.logs.push(String(m)) },
+    // ตั้ง context.__state.fetch = (url, options) => ({ code, body }) ในเทสต์; ค่าเริ่มต้นไม่ให้ออกเครือข่าย
+    UrlFetchApp: {
+      fetch: (url, options) => {
+        state.fetches = (state.fetches || 0) + 1;
+        if (!state.fetch) throw new Error('UrlFetchApp: no fake handler (network disabled in tests)');
+        const res = state.fetch(url, options || {});
+        const body = typeof res.body === 'string' ? res.body : JSON.stringify(res.body);
+        return { getResponseCode: () => res.code, getContentText: () => body };
+      }
+    }
   };
   const context = vm.createContext(sandbox);
   const root = path.join(__dirname, '..');

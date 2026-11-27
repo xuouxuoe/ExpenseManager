@@ -12,7 +12,12 @@ var Config = {
     ALLOWED_EMAILS: 'ALLOWED_EMAILS',
     DB_TARGET: 'DB_TARGET',
     // สร้างอัตโนมัติครั้งแรกที่สร้างร่างผ่าน API: ใช้คำนวณ confirm_token ของร่าง (ไม่ส่งออกนอก server)
-    API_DRAFT_SECRET: 'API_DRAFT_SECRET'
+    API_DRAFT_SECRET: 'API_DRAFT_SECRET',
+    // ผู้ให้บริการ AI สำหรับแปลงข้อความเป็นรายการ (เจ้าของตั้งใน Apps Script editor เท่านั้น)
+    AI_PROVIDER: 'AI_PROVIDER',
+    AI_API_KEY: 'AI_API_KEY',
+    AI_MODEL: 'AI_MODEL',
+    AI_BASE_URL: 'AI_BASE_URL'
   },
 
   LOCK_TIMEOUT_MS: 30000,
@@ -96,7 +101,8 @@ var Config = {
     OPERATION_STATUS: ['PENDING', 'COMMITTED', 'FAILED', 'NEEDS_RECOVERY'],
     AUDIT_RESULT: ['SUCCESS', 'FAILED'],
     API_SCOPE: ['READ', 'WRITE'],
-    DRAFT_STATUS: ['PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED']
+    DRAFT_STATUS: ['PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED'],
+    AI_PROVIDER: ['OPENAI', 'OPENAI_COMPATIBLE', 'ANTHROPIC', 'GEMINI']
   },
 
   /** ความยาวสูงสุดของข้อความ (docs/database-schema.md §1.3) */

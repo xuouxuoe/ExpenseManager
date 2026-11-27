@@ -233,6 +233,12 @@ var IntegrationApi = (function () {
       scope: 'WRITE',
       channel: 'required',
       run: function (params, call) { return ApiDrafts.cancel(params, call); }
+    },
+    // แปลงข้อความด้วย AI → params ของ draft.create (ไม่เขียนข้อมูล; ต้องมีสิทธิ์ WRITE เพราะใช้เพื่อบันทึกและมีค่าใช้จ่าย AI)
+    'ai.parse': {
+      scope: 'WRITE',
+      channel: 'optional',
+      run: function (params, call) { return AiParser.parse(params.text, call.client); }
     }
   };
 

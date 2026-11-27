@@ -8,14 +8,69 @@
   </div>
 
   <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-    <p class="font-semibold">รองรับ <code>ping</code>, <code>masters.list</code> และการบันทึกผ่านร่าง (<code>draft.create</code> → <code>draft.confirm</code>)</p>
+    <p class="font-semibold">รองรับ <code>ping</code>, <code>masters.list</code>, <code>ai.parse</code> และการบันทึกผ่านร่าง (<code>draft.create</code> → <code>draft.confirm</code>)</p>
     <p class="mt-1">ส่ง <code>POST</code> แบบ JSON ไปที่ URL ของ deployment สำหรับ Integration (ลงท้าย <code>/exec</code>) เช่น
       <code class="break-all">{"api_key":"emk_…","action":"ping"}</code> ระบบตอบ HTTP 200 เสมอ ให้ตรวจค่า <code>ok</code> ในคำตอบ</p>
     <p class="mt-1"><a href="#api-guide" target="_self" class="font-semibold underline">ดูคู่มือ API สำหรับนักพัฒนา →</a></p>
   </div>
 
-  <div id="int-panel" class="mt-4" aria-busy="true"></div>
+  <section aria-labelledby="ai-title" class="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h2 id="ai-title" class="text-base font-semibold">ผู้ให้บริการ AI</h2>
+        <p class="text-sm text-slate-500">ใช้แปลงข้อความเป็นร่างรายการ (<code>ai.parse</code>) · เก็บใน Script Properties ไม่ใช่ในชีต</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="ai-test" class="btn btn-secondary" hidden>ทดสอบ</button>
+        <button type="button" id="ai-edit" class="btn btn-secondary" hidden>ตั้งค่า</button>
+      </div>
+    </div>
+    <div id="ai-panel" class="mt-3" aria-live="polite" aria-busy="true"></div>
+  </section>
+
+  <h2 class="mt-6 text-base font-semibold">การเชื่อมต่อ (API key)</h2>
+  <div id="int-panel" class="mt-2" aria-busy="true"></div>
 </section>
+
+<dialog id="ai-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="ai-form-title">
+  <form id="ai-form" novalidate class="flex max-h-[85vh] flex-col">
+    <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <h2 id="ai-form-title" class="text-base font-semibold">ตั้งค่าผู้ให้บริการ AI</h2>
+      <button type="button" id="ai-form-close" class="btn btn-ghost" aria-label="ปิดหน้าต่าง">✕</button>
+    </div>
+    <div class="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+      <div>
+        <label for="ai-provider" class="field-label">ผู้ให้บริการ</label>
+        <select id="ai-provider" class="field-input">
+          <option value="OPENAI">OpenAI (GPT)</option>
+          <option value="OPENAI_COMPATIBLE">Custom (รูปแบบ OpenAI)</option>
+          <option value="ANTHROPIC">Anthropic (Claude)</option>
+          <option value="GEMINI">Google Gemini</option>
+        </select>
+      </div>
+      <div id="ai-base-wrap" hidden>
+        <label for="ai-base" class="field-label">Base URL</label>
+        <input id="ai-base" class="field-input font-mono text-sm" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://example.com/v1">
+        <p class="field-hint">ต้องเป็น https · ระบบเรียก <code>&lt;Base URL&gt;/chat/completions</code></p>
+      </div>
+      <div>
+        <label for="ai-model" class="field-label">โมเดล</label>
+        <input id="ai-model" class="field-input font-mono text-sm" maxlength="100" autocomplete="off" spellcheck="false" required placeholder="ชื่อโมเดลตามที่ผู้ให้บริการกำหนด">
+      </div>
+      <div>
+        <label for="ai-key" class="field-label">API key</label>
+        <input id="ai-key" class="field-input font-mono text-sm" type="password" autocomplete="new-password" spellcheck="false" maxlength="500">
+        <p id="ai-key-hint" class="field-hint">key ไม่ถูกส่งกลับมาแสดงอีก</p>
+      </div>
+      <p class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">ข้อความที่แปลงและชื่อบัญชี/หมวด/เจ้าของจะถูกส่งไปยังผู้ให้บริการที่เลือก (ไม่ส่งยอดเงิน) และมีค่าใช้จ่ายตามผู้ให้บริการ</p>
+    </div>
+    <p id="ai-form-error" role="alert" class="mx-5 mb-2 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700" hidden></p>
+    <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-3">
+      <button type="button" id="ai-form-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="ai-form-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </form>
+</dialog>
 
 <dialog id="int-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="int-form-title">
   <form id="int-form" novalidate class="flex max-h-[85vh] flex-col">
@@ -285,6 +340,154 @@
     // ล้าง key ออกจากหน้าเมื่อปิด
     keyDialog.addEventListener('close', function () { keyInput.value = ''; });
     document.getElementById('int-key-done').addEventListener('click', function () { keyDialog.close(); });
+
+    App.onShow('integrations', load);
+  })();
+</script>
+
+<script>
+  // ตั้งค่าผู้ให้บริการ AI: ดูได้ทุกคน แก้/ทดสอบได้เฉพาะเจ้าของ; ไม่มีการรับ API key กลับจาก server
+  (function () {
+    var el = App.el;
+    var LABELS = { OPENAI: 'OpenAI (GPT)', OPENAI_COMPATIBLE: 'Custom (รูปแบบ OpenAI)', ANTHROPIC: 'Anthropic (Claude)', GEMINI: 'Google Gemini' };
+    var state = { status: 'loading', settings: null, error: '', test: null };
+    var panel = document.getElementById('ai-panel');
+    var editBtn = document.getElementById('ai-edit');
+    var testBtn = document.getElementById('ai-test');
+    var dialog = document.getElementById('ai-dialog');
+    var form = document.getElementById('ai-form');
+    var formError = document.getElementById('ai-form-error');
+    var saveBtn = document.getElementById('ai-form-save');
+    var providerInput = document.getElementById('ai-provider');
+    var baseWrap = document.getElementById('ai-base-wrap');
+    var keyInput = document.getElementById('ai-key');
+    var submit = App.createSubmitter();
+
+    function load() {
+      state.status = 'loading';
+      render();
+      App.call('api_getAiSettings').then(function (data) {
+        state.settings = data;
+        state.status = 'ready';
+        render();
+      }, function (err) {
+        state.status = 'error';
+        state.error = (err && err.message) || 'โหลดการตั้งค่าไม่สำเร็จ';
+        render();
+      });
+    }
+
+    function row(label, value) {
+      return [el('dt', { class: 'text-slate-500', text: label }), el('dd', { class: 'break-all', text: value })];
+    }
+
+    function render() {
+      panel.textContent = '';
+      panel.setAttribute('aria-busy', String(state.status === 'loading'));
+      var s = state.settings;
+      editBtn.hidden = !(s && s.can_edit);
+      testBtn.hidden = !(s && s.can_edit && s.configured);
+      if (state.status === 'loading') {
+        panel.appendChild(el('p', { class: 'flex items-center gap-2 text-sm text-slate-500' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'กำลังโหลด…'));
+        return;
+      }
+      if (state.status === 'error') {
+        panel.appendChild(el('div', { class: 'rounded-xl bg-rose-50 p-3 text-sm text-rose-700', role: 'alert' },
+          el('p', { text: state.error }), el('button', { type: 'button', class: 'btn btn-secondary mt-2', onclick: load }, 'ลองใหม่')));
+        return;
+      }
+      var badge = el('span', { class: 'rounded-full px-2 py-0.5 text-xs font-semibold ' + (s.configured ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'),
+        text: s.configured ? 'พร้อมใช้' : 'ยังไม่ได้ตั้งค่า' });
+      var dl = el('dl', { class: 'mt-2 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm' });
+      [row('ผู้ให้บริการ', LABELS[s.provider] || s.provider), row('โมเดล', s.model || '—'),
+        s.provider === 'OPENAI_COMPATIBLE' ? row('Base URL', s.base_url || '—') : null,
+        row('API key', s.has_key ? 'ตั้งแล้ว (…' + s.key_hint + ')' : '—')].forEach(function (pair) {
+        if (pair) pair.forEach(function (n) { dl.appendChild(n); });
+      });
+      panel.appendChild(badge);
+      panel.appendChild(dl);
+      if (!s.can_edit) panel.appendChild(el('p', { class: 'mt-2 text-xs text-slate-500', text: 'เฉพาะเจ้าของระบบเท่านั้นที่แก้หรือทดสอบการตั้งค่านี้ได้' }));
+      if (state.test) panel.appendChild(state.test);
+    }
+
+    function toggleBase() {
+      baseWrap.hidden = providerInput.value !== 'OPENAI_COMPATIBLE';
+    }
+
+    function openForm() {
+      var s = state.settings;
+      providerInput.value = s.provider;
+      document.getElementById('ai-model').value = s.model;
+      document.getElementById('ai-base').value = s.base_url;
+      keyInput.value = '';
+      keyInput.placeholder = s.has_key ? 'เว้นว่าง = ใช้ key เดิม (…' + s.key_hint + ')' : 'วาง API key';
+      formError.hidden = true;
+      toggleBase();
+      dialog.showModal();
+      providerInput.focus();
+    }
+
+    function closeForm() {
+      keyInput.value = '';
+      dialog.close();
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (saveBtn.disabled) return;
+      var input = {
+        provider: providerInput.value,
+        model: document.getElementById('ai-model').value.trim(),
+        base_url: document.getElementById('ai-base').value.trim(),
+        api_key: keyInput.value.trim()
+      };
+      if (!input.model) { formError.textContent = 'กรุณากรอกชื่อโมเดล'; formError.hidden = false; return; }
+      if (!input.api_key && !state.settings.has_key) { formError.textContent = 'กรุณากรอก API key'; formError.hidden = false; return; }
+      formError.hidden = true;
+      App.setBusy(saveBtn, true);
+      submit(input, function (key) { return App.call('api_saveAiSettings', input, key); }).then(function (data) {
+        App.setBusy(saveBtn, false);
+        state.settings = data;
+        state.test = null;
+        closeForm();
+        render();
+        App.toast('บันทึกการตั้งค่า AI แล้ว', 'success');
+      }, function (err) {
+        App.setBusy(saveBtn, false);
+        formError.textContent = (err && err.message) || 'บันทึกไม่สำเร็จ';
+        formError.hidden = false;
+      });
+    });
+
+    function testResult(data) {
+      var r = data.result;
+      var lines = r.intent === 'TRANSACTION'
+        ? Object.keys(r.params).filter(function (k) { return k !== 'source_text'; }).map(function (k) { return k + ': ' + r.params[k]; })
+        : [r.message || 'AI ตอบว่าไม่ใช่รายการ'];
+      return el('div', { class: 'mt-3 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-900', role: 'status' },
+        el('p', { class: 'font-semibold', text: 'เชื่อมต่อสำเร็จ (' + (data.elapsed_ms / 1000).toFixed(1) + ' วินาที) · ทดสอบ "' + data.sample_text + '"' }),
+        el('pre', { class: 'mt-1 whitespace-pre-wrap break-all text-xs', text: lines.join('\n') }));
+    }
+
+    testBtn.addEventListener('click', function () {
+      if (testBtn.disabled) return;
+      App.setBusy(testBtn, true, 'กำลังทดสอบ…');
+      App.call('api_testAiSettings').then(function (data) {
+        App.setBusy(testBtn, false);
+        state.test = testResult(data);
+        render();
+      }, function (err) {
+        App.setBusy(testBtn, false);
+        state.test = el('p', { class: 'mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700', role: 'alert', text: (err && err.message) || 'ทดสอบไม่สำเร็จ' });
+        render();
+      });
+    });
+
+    providerInput.addEventListener('change', toggleBase);
+    editBtn.addEventListener('click', openForm);
+    document.getElementById('ai-form-close').addEventListener('click', closeForm);
+    document.getElementById('ai-form-cancel').addEventListener('click', closeForm);
+    dialog.addEventListener('close', function () { keyInput.value = ''; });
 
     App.onShow('integrations', load);
   })();

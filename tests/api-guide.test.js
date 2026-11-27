@@ -25,7 +25,7 @@ test('คู่มือ API: action ที่เปิดใช้จริง�
 });
 
 test('คู่มือ API: มีคำอธิบายรหัสข้อผิดพลาดทุกตัวที่ IntegrationApi ตอบได้', () => {
-  const drafts = fs.readFileSync(path.join(root, 'ApiDraftService.gs'), 'utf8');
+  const drafts = fs.readFileSync(path.join(root, 'ApiDraftService.gs'), 'utf8') + fs.readFileSync(path.join(root, 'AiService.gs'), 'utf8');
   const codes = new Set([...service.matchAll(/reject\('([A-Z_]+)'/g)].map((m) => m[1]));
   // รหัสจาก ApiDraftService (ไม่รวม CONFIG_* ซึ่งเป็นข้อผิดพลาดการตั้งค่าภายใน) และจาก Operation.run
   [...drafts.matchAll(/AppError\('([A-Z_]+)'/g)].map((m) => m[1]).filter((c) => !/^CONFIG_/.test(c)).forEach((c) => codes.add(c));

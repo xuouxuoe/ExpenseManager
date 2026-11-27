@@ -45,7 +45,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - ส่งให้ AI เฉพาะ: ข้อความของผู้ใช้, วันที่วันนี้, รายการชื่อ+ID บัญชี/หมวด/เจ้าของที่ active — ไม่ส่งยอดเงินคงเหลือหรือประวัติรายการ
 - timeout/ข้อผิดพลาดจาก AI → ตอบ LINE ว่าแปลงข้อความไม่ได้ ให้พิมพ์ใหม่ ไม่สร้างร่าง; ไม่ log ข้อความผู้ใช้หรือคำตอบ AI
 
-### 0.4 Script Properties ใหม่ (project หลัก; ตั้งโดยเจ้าของใน editor เท่านั้น ไม่มีหน้าเว็บให้แก้)
+### 0.4 Script Properties ใหม่ (project หลัก; ตั้งโดยเจ้าของ — ผ่าน editor หรือหน้าเว็บที่จำกัดเฉพาะเจ้าของ ตามข้อ 0.10)
 
 | key | ค่า |
 |---|---|
@@ -55,7 +55,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 | `AI_BASE_URL` | เฉพาะ `OPENAI_COMPATIBLE` (https) |
 | `LINE_CHANNEL_ACCESS_TOKEN` | token ของ LINE Messaging API สำหรับตอบกลับ |
 
-ไม่ให้ตั้ง `AI_BASE_URL` หรือ key ผ่านหน้าเว็บ เพื่อกันการส่งข้อมูลออกไปยังปลายทางที่ไม่ได้ตั้งใจ
+เดิมกำหนดให้ตั้งใน editor เท่านั้น; ผู้ใช้ขอให้ตั้งผ่านหน้าเว็บได้ (2026-11-27) จึงจำกัดการแก้เฉพาะเจ้าของสคริปต์ ตรวจ `AI_BASE_URL` ต้องเป็น https และไม่ส่ง key กลับเบราว์เซอร์ (ข้อ 0.10)
 
 ### 0.5 ความปลอดภัยของ webhook (ข้อจำกัด Apps Script)
 
@@ -77,7 +77,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 |---|---|---|
 | A1 | gateway, API key, `ping` | ผ่านแล้ว (ข้อ 9.1) |
 | A2 | ApiDrafts, `masters.list`, `draft.create/confirm/cancel` ผ่าน API key (ทดสอบด้วย Postman) | ครบวงจรบน TEST, ยืนยันซ้ำไม่ซ้ำ, หมดอายุ/token ผิดถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.8)** |
-| A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง |
+| A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง — **implement ในเครื่องแล้ว (ข้อ 0.9)** |
 | A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ |
 | A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard |
 | A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง |
@@ -102,6 +102,32 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - [x] ผู้ใช้ทดสอบ Postman: การเชื่อมต่อที่ตั้ง LINE userId ได้ `FORBIDDEN_CHANNEL` เมื่อไม่ส่ง `channel_user_id` (ถูกต้อง); การเชื่อมต่อที่ไม่มีบัญชีเริ่มต้นได้ `VALIDATION_REQUIRED` ที่อ้าง `from_account_id` → ปรับข้อความให้อ้างฟิลด์ของ API (`from_account`/`to_account`/`category`/`owner`) พร้อมวิธีแก้ และ push แล้ว (2026-11-27, ตรงกัน 29 ไฟล์)
 - [x] ผู้ใช้ทดสอบครบวงจรผ่าน gateway บน TEST ด้วย Postman: `masters.list` → `draft.create` → `draft.confirm` / `draft.cancel` ถูกต้อง (2026-11-27)
 - ยังไม่ได้วัดเวลาตอบจริงของ draft.create/confirm บน Apps Script
+
+### 0.9 สถานะ A3 (2026-11-27)
+
+- [x] `AiService.gs` (`AiParser`): config จาก Script Properties (`AI_PROVIDER` ค่าเริ่มต้น OPENAI, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL` เฉพาะ OPENAI_COMPATIBLE ต้องเป็น https)
+  - OPENAI: `POST https://api.openai.com/v1/chat/completions` + `response_format: json_schema` (strict), `max_completion_tokens`
+  - OPENAI_COMPATIBLE: `POST <AI_BASE_URL>/chat/completions` + `response_format: json_object` และใส่ schema ใน system prompt
+  - ANTHROPIC: `POST https://api.anthropic.com/v1/messages` (`anthropic-version: 2023-06-01`) บังคับ schema ด้วย tool + `tool_choice`
+  - GEMINI: `POST …/v1beta/models/<model>:generateContent` (key ใน header `x-goog-api-key` ไม่อยู่ใน URL) + `responseMimeType: application/json`
+  - prompt มีวันที่วันนี้ (Asia/Bangkok), กฎแปลง พ.ศ./วันที่สัมพัทธ์, ประเภทรายการ และรายการ ID+ชื่อ+ประเภทของบัญชี/หมวด/เจ้าของที่ active + ค่าเริ่มต้นของการเชื่อมต่อ; ไม่ส่งยอดเงิน/ประวัติ
+  - ผลลัพธ์ → `{ intent: TRANSACTION|OTHER, params (สำหรับ draft.create, มี source_text), message, provider }`; ข้อผิดพลาด `AI_NOT_CONFIGURED` / `AI_ERROR` (มี HTTP status) / `AI_INVALID_OUTPUT`; log เฉพาะผู้ให้บริการ + status ไม่ log ข้อความ/คำตอบ/key
+- [x] action `ai.parse` (WRITE, ไม่เขียนข้อมูล, ข้อความไม่เกิน 500 ตัวอักษร) และฟังก์ชัน editor `testAiParse()` (ใช้ข้อมูลหลักของไฟล์ TEST)
+- [x] `tests/ai-parser.test.js` 7 กรณี (UrlFetchApp จำลอง; เทสต์ไม่ออกเครือข่าย); `npm test` ผ่าน 209/209; คู่มือ API มี ai.parse, หัวข้อตั้งค่า AI และรหัสข้อผิดพลาดใหม่
+- [x] manifest ของ gateway ในเครื่องเพิ่ม scope `script.external_request` (ยังไม่ push)
+- [x] push project หลัก (2026-11-27, ตรงกัน 31 ไฟล์) และ gateway ด้วย `--force` (ได้รับอนุญาต: บนเว็บ manifest ยังไม่มี scope ใหม่ และ testPing ถูกแก้ให้มี API key จริงฝังอยู่ — push ทับกลับเป็น key ปลอม; แนะนำผู้ใช้เปลี่ยน key ของการเชื่อมต่อนั้น) clone กลับมาตรงกัน; gateway @4 ยังตอบ UNAUTHORIZED กับ key ปลอม
+- [x] ผู้ใช้ (2026-11-27 รายงานว่าทดสอบผ่าน): ผู้ใช้ตั้ง Script Properties ของ AI, Run `testAiParse` เพื่อ Authorize project หลัก และ Run `testPing` ใน gateway เพื่อ Authorize scope ใหม่ แล้วทดสอบ `ai.parse` → `draft.create` ด้วย Postman
+- ผู้ใช้ทดสอบกับผู้ให้บริการจริงผ่านหน้าเว็บ (ปุ่มทดสอบ) แล้วผ่าน; ยังไม่ได้วัดเวลาตอบเฉลี่ย/ค่าใช้จ่ายต่อข้อความอย่างเป็นระบบ
+
+### 0.10 ตั้งค่า AI ผ่านหน้าเว็บ (ผู้ใช้ขอ 2026-11-27)
+
+- การ์ด "ผู้ให้บริการ AI" ในหน้าเชื่อมต่อภายนอก: แสดงผู้ให้บริการ โมเดล Base URL และ "ตั้งแล้ว (…4 ตัวท้าย)"; ปุ่มตั้งค่า/ทดสอบแสดงเฉพาะเจ้าของ
+- `AiSettings` (AiService.gs) + `api_getAiSettings` / `api_saveAiSettings` / `api_testAiSettings`
+  - แก้/ทดสอบได้เฉพาะเจ้าของสคริปต์ (`Auth.isOwner`: ผู้ใช้หน้าเว็บ = effective user ของ Web App) ผู้ใช้อื่นใน ALLOWED_EMAILS ได้ `FORBIDDEN`
+  - ค่าเก็บใน Script Properties (ไม่ใช่ชีต); API key เขียนได้อย่างเดียว ไม่ส่งกลับเบราว์เซอร์ เว้นว่าง = ใช้ key เดิม; journal/audit เก็บเฉพาะ hash
+  - ตรวจ: ผู้ให้บริการใน enum, ชื่อโมเดล `[A-Za-z0-9._:/@+-]` ≤ 100, key 8–500 ตัวไม่มีช่องว่าง, Base URL https เฉพาะ OPENAI_COMPATIBLE (ล้างเมื่อเปลี่ยนเป็นแบบอื่น)
+  - ปุ่มทดสอบแปลง "กาแฟ 65 บาท" ด้วยข้อมูลหลักของฐานที่ใช้ แสดงผลและเวลา ไม่เขียนข้อมูลธุรกิจ
+- `tests/ai-settings.test.js` 4 กรณี; ตรวจบน preview desktop และมือถือ 375px
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
 
