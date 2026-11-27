@@ -79,7 +79,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 | A2 | ApiDrafts, `masters.list`, `draft.create/confirm/cancel` ผ่าน API key (ทดสอบด้วย Postman) | ครบวงจรบน TEST, ยืนยันซ้ำไม่ซ้ำ, หมดอายุ/token ผิดถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.8)** |
 | A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง — **implement ในเครื่องแล้ว (ข้อ 0.9)** |
 | A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.11)** |
-| A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard — **implement ในเครื่องแล้ว (ข้อ 0.12)** |
+| A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard — **ผ่านในแชต LINE บน TEST (ข้อ 0.12)** |
 | A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง |
 
 คู่มือ API ในแอปปรับตามแต่ละระยะ (ตัดส่วน Make ออก เพิ่มการตั้งค่า LINE webhook และ Script Properties ของ AI)
@@ -166,7 +166,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - [x] LINE: คำสั่งตรงตัว (ไม่สนช่องว่าง/ตัวพิมพ์) `สรุป` / `ยอดเงิน` / `ล่าสุด` / `งบ` (และคำพ้อง) ตอบข้อความสรุปโดยไม่เรียก AI และไม่สร้างร่าง; การเชื่อมต่อต้องมีสิทธิ์ READ เพิ่มจาก WRITE ไม่งั้นตอบ `FORBIDDEN_SCOPE`; "วิธีใช้" แสดงคำสั่งใหม่
 - [x] `tests/api-reads.test.js` 7 กรณี (เทียบกับ `api_dashboard`/`api_budgetPage`, สิทธิ์, ไม่เขียนชีต, รูปแบบข้อความ, คำสั่ง LINE); `npm test` ผ่าน 231/231; คู่มือ API แสดง 4 actions เป็น "ใช้ได้" พร้อมตัวอย่าง (ตรวจ preview แล้ว)
 - [x] `clasp push` ไป HEAD (ผู้ใช้อนุญาต 2026-11-27, 23:00) และ clone กลับมาเทียบตรงกัน 33 ไฟล์; ครั้งแรกได้ `Skipping push.` เพราะ `appsscript.json` ต่างแค่ CRLF/LF → แปลงไฟล์ในเครื่องเป็น LF (เนื้อหาเดิม) แทนการใช้ `--force`; gateway ใช้ Library HEAD จึงไม่ต้อง push/deploy ใหม่
-- [ ] ทดสอบบน `/dev` / LINE จริงด้วยฐาน TEST (รอแก้ข้อค้างของ A4 ก่อน)
+- [x] ผู้ใช้ทดสอบคำสั่ง `สรุป` / `ยอดเงิน` / `ล่าสุด` / `งบ` ในแชต LINE จริงด้วยฐาน TEST และรายงานว่าผ่านทั้งหมด (2026-11-28)
 - ข้อจำกัด: ยอดเงินส่วนตัวถูกส่งกลับผ่าน LINE (ตอบเฉพาะ userId ที่อนุญาต); ยังไม่ได้วัดเวลาตอบจริง (`summary.month` อ่าน 7–8 ชีต)
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
