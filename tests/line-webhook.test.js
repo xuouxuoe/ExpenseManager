@@ -225,4 +225,12 @@ test('ผลล่าสุดของ webhook แสดงในหน้า�
   assert.equal(last().outcome, 'forbidden / LINE_NOT_CONFIGURED');
   const stored = s.ctx.__props.LINE_LAST_WEBHOOK;
   assert.equal(stored.includes(s.lineKey) || stored.includes(STRANGER) || stored.includes('ข้าว'), false);
+  // fetch โยน exception (เช่น ไม่มีสิทธิ์ external_request): เก็บสาเหตุแบบปิดข้อมูลลับ
+  s.ctx.__props.LINE_CHANNEL_ACCESS_TOKEN = LINE_TOKEN;
+  s.ctx.__state.fetch = () => { throw new Error('You do not have permission to call UrlFetchApp.fetch for ' + STRANGER + ' Bearer ' + LINE_TOKEN); };
+  s.send([s.textEvent('ข้าว 60', STRANGER)]);
+  const outcome = last().outcome;
+  assert.match(outcome, /^forbidden \/ LINE_REPLY_FAILED \[You do not have permission to call UrlFetchApp\.fetch/);
+  assert.equal(outcome.includes(STRANGER) || outcome.includes(LINE_TOKEN), false);
+  assert.equal(s.ctx.__state.logs.join('\n').includes(LINE_TOKEN), false);
 });

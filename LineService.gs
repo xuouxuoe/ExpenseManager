@@ -118,8 +118,11 @@ var LineWebhook = (function () {
       }
       return true;
     } catch (e) {
-      console.log('LINE_ERROR: reply fetch failed');
-      replyIssue = 'LINE_REPLY_FAILED';
+      // เก็บข้อความ error (เช่น ไม่มีสิทธิ์ UrlFetchApp) เพื่อหาสาเหตุ โดยปิด token และ LINE userId ถ้ามี
+      var detail = String((e && e.message) || e || '').replace(/Bearer\s+\S+/gi, 'Bearer ***')
+        .replace(/U[0-9a-f]{32}/gi, 'U***').replace(/\s+/g, ' ').trim().slice(0, 120);
+      console.log('LINE_ERROR: reply fetch failed: ' + detail);
+      replyIssue = 'LINE_REPLY_FAILED [' + detail + ']';
       return false;
     }
   }
