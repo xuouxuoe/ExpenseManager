@@ -9,6 +9,7 @@
 - การ์ด "LINE Official Account" ในหน้าเชื่อมต่อภายนอก: เจ้าของตั้ง Channel access token (เขียนอย่างเดียว) พร้อมวิธีตั้ง Webhook URL; คู่มือ API มีหัวข้อ LINE
 - `tests/line-webhook.test.js` 10 กรณี
 - ปุ่ม Verify ของ LINE (events ว่าง) ตอบทันทีโดยไม่เปิด Spreadsheet เพื่อไม่ให้ timeout
+- log `LINE_WEBHOOK: <ผล>` ทุกครั้ง (ไม่มีข้อความ/userId/key/token) และ log ในเส้นทาง Web App ใช้ `console.log` เพื่อให้ดูได้ใน Executions
 
 ### Added — Integration API ระยะ A3: แปลงข้อความด้วย AI (2026-11-27)
 

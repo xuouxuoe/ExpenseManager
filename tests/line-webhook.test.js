@@ -193,10 +193,28 @@ test('LineSettings: เจ้าของตั้ง token ได้ ไม่�
   assert.equal(owner.api_saveLineSettings({ channel_access_token: 'short' }, key()).code, 'VALIDATION_LINE_SETTINGS');
   const saved = plain(owner.api_saveLineSettings({ channel_access_token: LINE_TOKEN }, key()));
   assert.equal(saved.ok, true, JSON.stringify(saved));
-  assert.deepEqual(saved.data, { has_token: true, token_hint: LINE_TOKEN.slice(-4), can_edit: true });
+  assert.deepEqual(saved.data, { has_token: true, token_hint: LINE_TOKEN.slice(-4), can_edit: true, last_webhook: null });
   assert.equal(owner.__props.LINE_CHANNEL_ACCESS_TOKEN, LINE_TOKEN);
   assert.equal(JSON.stringify(owner.__ss.sheets.map((x) => x.data)).includes(LINE_TOKEN), false);
   const family = createDbContext({ activeEmail: 'family@example.com', properties: { ALLOWED_EMAILS: 'owner@example.com,family@example.com' } });
   assert.equal(plain(family.api_getLineSettings()).data.can_edit, false);
   assert.equal(family.api_saveLineSettings({ channel_access_token: LINE_TOKEN }, key()).code, 'FORBIDDEN');
+});
+
+test('ผลล่าสุดของ webhook แสดงในหน้าเว็บ: Verify, ถูกปฏิเสธ, ร่าง, และปัญหาการตอบกลับ โดยไม่มีข้อมูลลับ', () => {
+  const s = setup();
+  s.ai.reply = coffee(s);
+  const last = () => plain(s.ctx.api_getLineSettings()).data.last_webhook;
+  s.send([]);
+  assert.equal(last().outcome, 'VERIFY');
+  assert.match(last().at, /^\d{4}-\d{2}-\d{2}T/);
+  s.send([s.textEvent('กาแฟ 65')], newApiKey());
+  assert.equal(last().outcome, 'UNAUTHORIZED');
+  s.send([s.textEvent('กาแฟ 65')]);
+  assert.equal(last().outcome, 'draft');
+  s.ctx.__props.LINE_CHANNEL_ACCESS_TOKEN = '';
+  s.send([s.textEvent('ข้าว 50', STRANGER)]);
+  assert.equal(last().outcome, 'forbidden / LINE_NOT_CONFIGURED');
+  const stored = s.ctx.__props.LINE_LAST_WEBHOOK;
+  assert.equal(stored.includes(s.lineKey) || stored.includes(STRANGER) || stored.includes('ข้าว'), false);
 });

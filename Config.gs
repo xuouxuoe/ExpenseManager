@@ -19,7 +19,9 @@ var Config = {
     AI_MODEL: 'AI_MODEL',
     AI_BASE_URL: 'AI_BASE_URL',
     // LINE Messaging API: ใช้ตอบกลับข้อความ (เจ้าของตั้งผ่าน editor หรือหน้าเว็บ)
-    LINE_CHANNEL_ACCESS_TOKEN: 'LINE_CHANNEL_ACCESS_TOKEN'
+    LINE_CHANNEL_ACCESS_TOKEN: 'LINE_CHANNEL_ACCESS_TOKEN',
+    // ผลล่าสุดของ LINE webhook (เวลา + รหัสผล) สำหรับแสดงในหน้าเว็บ
+    LINE_LAST_WEBHOOK: 'LINE_LAST_WEBHOOK'
   },
 
   LOCK_TIMEOUT_MS: 30000,

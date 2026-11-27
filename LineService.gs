@@ -75,11 +75,15 @@ var LineWebhook = (function () {
 
   // ---------- ส่งข้อความกลับ ----------
 
+  /** ปัญหาการตอบกลับล่าสุดใน execution นี้ (บันทึกรวมกับผลของ webhook) */
+  var replyIssue = '';
+
   function reply(replyToken, messages) {
     if (!replyToken) return false;
     var token = String(PropertiesService.getScriptProperties().getProperty(Config.PROPERTY_KEYS.LINE_CHANNEL_ACCESS_TOKEN) || '').trim();
     if (!token) {
-      Logger.log('LINE_NOT_CONFIGURED: ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN');
+      console.log('LINE_NOT_CONFIGURED: ยังไม่ได้ตั้ง LINE_CHANNEL_ACCESS_TOKEN');
+      replyIssue = 'LINE_NOT_CONFIGURED';
       return false;
     }
     try {
@@ -92,12 +96,14 @@ var LineWebhook = (function () {
       });
       var code = res.getResponseCode();
       if (code < 200 || code >= 300) {
-        Logger.log('LINE_ERROR: reply HTTP ' + code);
+        console.log('LINE_ERROR: reply HTTP ' + code);
+        replyIssue = 'LINE_REPLY_HTTP_' + code;
         return false;
       }
       return true;
     } catch (e) {
-      Logger.log('LINE_ERROR: reply fetch failed');
+      console.log('LINE_ERROR: reply fetch failed');
+      replyIssue = 'LINE_REPLY_FAILED';
       return false;
     }
   }
@@ -179,7 +185,7 @@ var LineWebhook = (function () {
       return 'ignored';
     } catch (err) {
       var e = Util.toClientError(err);
-      if (e.code === 'INTERNAL_ERROR') Logger.log('LINE_INTERNAL_ERROR: ' + (err && err.message));
+      if (e.code === 'INTERNAL_ERROR') console.log('LINE_INTERNAL_ERROR: ' + (err && err.message));
       reply(ev.replyToken, [text(errorText(err))]);
       return 'error:' + e.code;
     }
@@ -189,16 +195,30 @@ var LineWebhook = (function () {
    * log ผลของ webhook แต่ละครั้งเพื่อหาสาเหตุเมื่อบอทไม่ตอบ (ดูได้ที่ Executions ของ gateway)
    * มีเฉพาะรหัสผล/ประเภทเหตุการณ์ ไม่มีข้อความแชต userId key หรือ token
    */
-  function logOutcome(out) {
-    Logger.log('LINE_WEBHOOK: ' + (out.ok ? (out.results.join(',') || 'none') : out.code));
-    return out;
+  function outcomeOf(out) {
+    if (out.ok && !out.results.length) return 'VERIFY';
+    return (out.ok ? out.results.join(',') : out.code) + (replyIssue ? ' / ' + replyIssue : '');
+  }
+
+  /**
+   * ผลล่าสุดเก็บใน Script Properties เพื่อแสดงในหน้าเว็บ (log ของ Web App อาจเปิดดูไม่ได้)
+   * ใช้ Script Properties เพราะพิสูจน์แล้วว่า gateway กับหน้าเว็บอ่านชุดเดียวกัน; เก็บเฉพาะเวลาและรหัสผล
+   */
+  function saveOutcome(outcome) {
+    try {
+      PropertiesService.getScriptProperties().setProperty(Config.PROPERTY_KEYS.LINE_LAST_WEBHOOK, JSON.stringify({ at: Util.nowIso(), outcome: outcome.slice(0, 200) }));
+    } catch (e) {
+      console.log('LINE_WEBHOOK_STATUS_NOT_SAVED');
+    }
   }
 
   /** ประมวลผล webhook; ตอบ 200 เสมอ (LINE ไม่ใช้เนื้อหาคำตอบ) */
   function handle(e) {
+    replyIssue = '';
     var out = process(e);
-    // Verify (events ว่าง) ไม่ต้อง log
-    if (!(out.ok && !out.results.length)) logOutcome(out);
+    var outcome = outcomeOf(out);
+    if (outcome !== 'VERIFY') console.log('LINE_WEBHOOK: ' + outcome);
+    saveOutcome(outcome);
     return out;
   }
 
@@ -225,7 +245,7 @@ var LineWebhook = (function () {
       return { ok: true, results: results };
     } catch (err) {
       var out = Util.toClientError(err);
-      if (out.code === 'INTERNAL_ERROR') Logger.log('LINE_INTERNAL_ERROR: ' + (err && err.message));
+      if (out.code === 'INTERNAL_ERROR') console.log('LINE_INTERNAL_ERROR: ' + (err && err.message));
       return { ok: false, code: out.code };
     }
   }
@@ -243,9 +263,20 @@ var LineSettings = (function () {
     return String(PropertiesService.getScriptProperties().getProperty(Config.PROPERTY_KEYS.LINE_CHANNEL_ACCESS_TOKEN) || '').trim();
   }
 
+  function lastWebhook() {
+    var raw = PropertiesService.getScriptProperties().getProperty(Config.PROPERTY_KEYS.LINE_LAST_WEBHOOK);
+    if (!raw) return null;
+    try {
+      var v = JSON.parse(raw);
+      return { at: String(v.at || ''), outcome: String(v.outcome || '') };
+    } catch (e) {
+      return null;
+    }
+  }
+
   function view(actor) {
     var token = current();
-    return { has_token: !!token, token_hint: token ? token.slice(-4) : '', can_edit: Auth.isOwner(actor) };
+    return { has_token: !!token, token_hint: token ? token.slice(-4) : '', can_edit: Auth.isOwner(actor), last_webhook: lastWebhook() };
   }
 
   /** input: { channel_access_token } */

@@ -40,7 +40,7 @@ function handleApi_(fn) {
     return { ok: true, data: fn(actor) };
   } catch (err) {
     var clientError = Util.toClientError(err);
-    if (clientError.code === 'INTERNAL_ERROR') Logger.log('INTERNAL_ERROR: ' + (err && err.message));
+    if (clientError.code === 'INTERNAL_ERROR') console.log('INTERNAL_ERROR: ' + (err && err.message));
     return clientError;
   }
 }
@@ -114,7 +114,7 @@ function transactionWriteResult_(row, filters) {
   try {
     return { row: row, page: transactionPage_(filters) };
   } catch (err) {
-    Logger.log('TRANSACTION_PAGE_AFTER_WRITE: ' + Util.toClientError(err).code);
+    console.log('TRANSACTION_PAGE_AFTER_WRITE: ' + Util.toClientError(err).code);
     return { row: row, page: null };
   }
 }

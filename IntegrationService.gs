@@ -316,7 +316,7 @@ var IntegrationApi = (function () {
     } catch (err) {
       var out = Util.toClientError(err);
       // ไม่ log body/key; บันทึกเฉพาะข้อผิดพลาดภายในเพื่อตรวจสอบ
-      if (out.code === 'INTERNAL_ERROR') Logger.log('INTEGRATION_INTERNAL_ERROR: ' + (err && err.message));
+      if (out.code === 'INTERNAL_ERROR') console.log('INTEGRATION_INTERNAL_ERROR: ' + (err && err.message));
       return out;
     }
   }

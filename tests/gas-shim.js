@@ -159,8 +159,10 @@ function createContext(options = {}) {
     cache: options.sharedCache || {},
     logs: []
   };
+  // console.log ใน Apps Script ไปที่ Cloud Logging (ดูได้ที่ Executions ของ Web App) — ในเทสต์เก็บรวมกับ Logger
+  const captureLog = (...args) => state.logs.push(args.map(String).join(' '));
   const sandbox = {
-    console,
+    console: { log: captureLog, info: captureLog, warn: captureLog, error: captureLog },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in props ? props[k] : null),

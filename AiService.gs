@@ -175,12 +175,12 @@ var AiParser = (function () {
     try {
       res = UrlFetchApp.fetch(req.url, req.options);
     } catch (e) {
-      Logger.log('AI_ERROR: ' + cfg.provider + ' fetch failed');
+      console.log('AI_ERROR: ' + cfg.provider + ' fetch failed');
       throw fail('AI_ERROR', 'เชื่อมต่อบริการ AI ไม่สำเร็จ กรุณาลองใหม่');
     }
     var code = res.getResponseCode();
     if (code < 200 || code >= 300) {
-      Logger.log('AI_ERROR: ' + cfg.provider + ' HTTP ' + code);
+      console.log('AI_ERROR: ' + cfg.provider + ' HTTP ' + code);
       throw fail('AI_ERROR', 'บริการ AI ตอบกลับผิดพลาด (HTTP ' + code + ')');
     }
     var data;
