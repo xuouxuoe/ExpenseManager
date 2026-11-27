@@ -1,0 +1,310 @@
+<section aria-labelledby="apig-title" class="space-y-4">
+  <div>
+    <h1 id="apig-title" class="text-xl font-semibold">คู่มือ API</h1>
+    <p class="text-sm text-slate-500">สำหรับนักพัฒนาที่เชื่อมระบบภายนอก เช่น Make, LINE OA, สคริปต์ หรือ AI เข้ากับ Expense Manager</p>
+  </div>
+
+  <nav aria-label="หัวข้อในคู่มือ API" class="flex flex-wrap gap-2 text-sm">
+    <a href="#api-guide" target="_self" data-apig-jump="apig-start" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">เริ่มต้น</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-request" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">คำขอและคำตอบ</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-actions" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">Actions</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-examples" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ตัวอย่างโค้ด</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-errors" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">รหัสข้อผิดพลาด</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-masters" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ID ข้อมูลหลัก</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-security" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ความปลอดภัย</a>
+  </nav>
+
+  <!-- เริ่มต้น -->
+  <section id="apig-start" aria-labelledby="apig-start-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-start-title" class="text-base font-semibold">1. เริ่มต้น</h2>
+    <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
+      <li>สร้าง API key ที่เมนู <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> (key แสดงครั้งเดียว เก็บไว้ในระบบที่เรียก API)</li>
+      <li>ใช้ URL ของ deployment สำหรับ Integration (gateway) ที่ลงท้ายด้วย <code>/exec</code> — ไม่ใช่ URL ของหน้าเว็บนี้</li>
+      <li>ส่ง action <code>ping</code> เพื่อตรวจการเชื่อมต่อ ต้องได้ <code>"ok": true</code></li>
+    </ol>
+    <div class="mt-4">
+      <label for="apig-endpoint" class="field-label">URL ของ API (ใช้เติมในตัวอย่างด้านล่าง)</label>
+      <input id="apig-endpoint" class="field-input font-mono text-sm" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+      <p id="apig-endpoint-hint" class="field-hint">เก็บไว้ในเบราว์เซอร์นี้เท่านั้น ไม่ส่งไปที่ระบบ · ห้ามใส่ API key ในช่องนี้</p>
+    </div>
+  </section>
+
+  <!-- คำขอและคำตอบ -->
+  <section id="apig-request" aria-labelledby="apig-request-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-request-title" class="text-base font-semibold">2. รูปแบบคำขอและคำตอบ</h2>
+    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-slate-700">
+      <li>ส่ง <code>POST</code> พร้อม body เป็น JSON (<code>Content-Type: application/json</code>) ขนาดไม่เกิน 100,000 ตัวอักษร</li>
+      <li>ส่ง API key ใน body (<code>api_key</code>) — Apps Script อ่าน HTTP header ไม่ได้ จึงใช้ header <code>Authorization</code> ไม่ได้ และห้ามใส่ key ใน URL</li>
+      <li>Apps Script ตอบกลับด้วย redirect (302) ไปที่ <code>script.googleusercontent.com</code> ก่อน: ผู้เรียกต้องตาม redirect ด้วย <strong>GET</strong> (ค่าปกติของ curl <code>-L</code>, fetch, Postman) ห้ามส่ง POST ซ้ำไปที่ URL ปลายทาง</li>
+      <li>ระบบตอบ <strong>HTTP 200 เสมอ</strong> แม้เกิดข้อผิดพลาด — ให้ตรวจค่า <code>ok</code> ในคำตอบ</li>
+      <li>เวลาตอบประมาณ 2–3 วินาทีต่อคำขอ และจำกัด 60 คำขอต่อนาทีต่อการเชื่อมต่อ</li>
+    </ul>
+
+    <h3 class="mt-4 text-sm font-semibold">ฟิลด์ใน body</h3>
+    <div class="mt-2 overflow-x-auto">
+      <table class="w-full min-w-[32rem] text-left text-sm">
+        <thead class="border-b border-slate-200 text-slate-500">
+          <tr><th scope="col" class="py-2 pr-3 font-medium">ฟิลด์</th><th scope="col" class="py-2 pr-3 font-medium">จำเป็น</th><th scope="col" class="py-2 font-medium">คำอธิบาย</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="py-2 pr-3 font-mono">api_key</td><td class="py-2 pr-3">ใช่</td><td class="py-2">API key รูปแบบ <code>emk_</code> ตามด้วย 43 ตัวอักษร</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">action</td><td class="py-2 pr-3">ใช่</td><td class="py-2">ชื่อ action เช่น <code>ping</code> (ดูหัวข้อ Actions)</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">request_id</td><td class="py-2 pr-3">action ที่บันทึกข้อมูล</td><td class="py-2">รหัสคำขอ 8–128 ตัว (<code>A-Z a-z 0-9 _ -</code>) ใช้กันบันทึกซ้ำ: เมื่อ retry ต้องส่งค่าเดิม</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">channel_user_id</td><td class="py-2 pr-3">เมื่อการเชื่อมต่อกำหนด LINE userId</td><td class="py-2">รหัสผู้ใช้ของช่องทาง เช่น LINE userId ต้องอยู่ในรายการที่อนุญาตของการเชื่อมต่อนั้น</td></tr>
+          <tr><td class="py-2 pr-3 font-mono">params</td><td class="py-2 pr-3">ตาม action</td><td class="py-2">JSON object ข้อมูลของ action นั้น</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 grid gap-3 md:grid-cols-2">
+      <div>
+        <h3 class="text-sm font-semibold">คำตอบเมื่อสำเร็จ</h3>
+        <div data-apig-code="response-ok"></div>
+      </div>
+      <div>
+        <h3 class="text-sm font-semibold">คำตอบเมื่อผิดพลาด</h3>
+        <div data-apig-code="response-error"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Actions -->
+  <section id="apig-actions" aria-labelledby="apig-actions-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-actions-title" class="text-base font-semibold">3. Actions</h2>
+    <p class="mt-1 text-sm text-slate-500">สิทธิ์ (scope) กำหนดตอนสร้างการเชื่อมต่อ: READ = ดูข้อมูล, WRITE = บันทึกผ่านร่าง</p>
+    <div class="mt-2 overflow-x-auto">
+      <table class="w-full min-w-[36rem] text-left text-sm">
+        <thead class="border-b border-slate-200 text-slate-500">
+          <tr><th scope="col" class="py-2 pr-3 font-medium">action</th><th scope="col" class="py-2 pr-3 font-medium">สิทธิ์</th><th scope="col" class="py-2 pr-3 font-medium">สถานะ</th><th scope="col" class="py-2 font-medium">หน้าที่</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr data-apig-action="ping" data-apig-status="available"><td class="py-2 pr-3 font-mono">ping</td><td class="py-2 pr-3">—</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ตรวจ key และการเชื่อมต่อ คืนชื่อการเชื่อมต่อ สิทธิ์ และฐานข้อมูลที่ใช้</td></tr>
+          <tr data-apig-action="masters.list" data-apig-status="planned"><td class="py-2 pr-3 font-mono">masters.list</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">บัญชี เจ้าของ หมวดหมู่ที่ใช้งาน (ID + ชื่อ) สำหรับใส่ใน prompt ของ AI</td></tr>
+          <tr data-apig-action="draft.create" data-apig-status="planned"><td class="py-2 pr-3 font-mono">draft.create</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">สร้างร่างรายการจาก JSON ตรวจข้อมูลและคืนสรุปให้ผู้ใช้ยืนยัน (ยังไม่บันทึก)</td></tr>
+          <tr data-apig-action="draft.confirm" data-apig-status="planned"><td class="py-2 pr-3 font-mono">draft.confirm</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยืนยันร่างแล้วบันทึกจริง ยืนยันซ้ำได้ผลเดิม ไม่เกิดรายการซ้ำ</td></tr>
+          <tr data-apig-action="draft.cancel" data-apig-status="planned"><td class="py-2 pr-3 font-mono">draft.cancel</td><td class="py-2 pr-3">WRITE</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยกเลิกร่าง</td></tr>
+          <tr data-apig-action="transactions.recent" data-apig-status="planned"><td class="py-2 pr-3 font-mono">transactions.recent</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">รายการล่าสุด (สูงสุด 20 รายการ)</td></tr>
+          <tr data-apig-action="summary.month" data-apig-status="planned"><td class="py-2 pr-3 font-mono">summary.month</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">รายรับ รายจ่าย และสุทธิของเดือน</td></tr>
+          <tr data-apig-action="balances" data-apig-status="planned"><td class="py-2 pr-3 font-mono">balances</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">ยอดบัญชี เงินกันไว้ และเงินที่ใช้ได้จริง</td></tr>
+          <tr data-apig-action="budget.remaining" data-apig-status="planned"><td class="py-2 pr-3 font-mono">budget.remaining</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">เร็ว ๆ นี้</span></td><td class="py-2">งบคงเหลือของเดือนและสัปดาห์</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-xs text-slate-500">ทุกการบันทึกต้องผ่านร่างและการยืนยันของผู้ใช้ ไม่มี action บันทึกตรง</p>
+
+    <h3 class="mt-4 text-sm font-semibold"><code>ping</code> — ตัวอย่าง</h3>
+    <div class="mt-1 grid gap-3 md:grid-cols-2">
+      <div>
+        <p class="text-xs text-slate-500">คำขอ (body)</p>
+        <div data-apig-code="ping-request"></div>
+      </div>
+      <div>
+        <p class="text-xs text-slate-500">คำตอบ</p>
+        <div data-apig-code="ping-response"></div>
+      </div>
+    </div>
+    <dl class="mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
+      <dt class="font-mono text-slate-500">api_version</dt><dd>เวอร์ชันของ API</dd>
+      <dt class="font-mono text-slate-500">client_id / client_name</dt><dd>การเชื่อมต่อที่ใช้ key นี้</dd>
+      <dt class="font-mono text-slate-500">scopes</dt><dd>สิทธิ์ของ key</dd>
+      <dt class="font-mono text-slate-500">db_target</dt><dd><code>TEST</code> หรือ <code>PRODUCTION</code> — ฐานข้อมูลที่คำขอนี้ใช้ ควรตรวจก่อนทดสอบบันทึก</dd>
+      <dt class="font-mono text-slate-500">server_time</dt><dd>เวลาเซิร์ฟเวอร์ (ISO 8601, Asia/Bangkok)</dd>
+    </dl>
+  </section>
+
+  <!-- ตัวอย่างโค้ด -->
+  <section id="apig-examples" aria-labelledby="apig-examples-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-examples-title" class="text-base font-semibold">4. ตัวอย่างการเรียก</h2>
+    <p class="mt-1 text-sm text-slate-500">แทน <code>&lt;API_KEY&gt;</code> ด้วย key ของคุณในเครื่องที่เรียกเท่านั้น</p>
+
+    <h3 class="mt-3 text-sm font-semibold">curl</h3>
+    <p class="text-xs text-slate-500">ใช้ <code>-L</code> และห้ามใส่ <code>-X POST</code> (จะทำให้ส่ง POST ซ้ำตอนตาม redirect)</p>
+    <div data-apig-code="curl"></div>
+
+    <h3 class="mt-3 text-sm font-semibold">PowerShell</h3>
+    <div data-apig-code="powershell"></div>
+
+    <h3 class="mt-3 text-sm font-semibold">JavaScript (Node.js 18+)</h3>
+    <div data-apig-code="node"></div>
+
+    <h3 class="mt-3 text-sm font-semibold">Make — โมดูล HTTP "Make a request"</h3>
+    <dl class="mt-1 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm">
+      <dt class="text-slate-500">URL</dt><dd class="break-all font-mono" data-apig-endpoint-text></dd>
+      <dt class="text-slate-500">Method</dt><dd>POST</dd>
+      <dt class="text-slate-500">Body type</dt><dd>Raw · Content type: JSON (application/json)</dd>
+      <dt class="text-slate-500">Request content</dt><dd>JSON ตามตัวอย่าง ping (เก็บ key ในตัวแปรหรือ Data store ของ Make)</dd>
+      <dt class="text-slate-500">Parse response</dt><dd>Yes</dd>
+      <dt class="text-slate-500">Follow redirect</dt><dd>Yes · <strong>Follow all redirects: No</strong></dd>
+    </dl>
+
+    <h3 class="mt-3 text-sm font-semibold">Postman</h3>
+    <p class="text-sm text-slate-700">Method POST → Body: raw / JSON → วาง JSON ตัวอย่าง → Send (Postman ตาม redirect ด้วย GET ให้อัตโนมัติ)</p>
+  </section>
+
+  <!-- รหัสข้อผิดพลาด -->
+  <section id="apig-errors" aria-labelledby="apig-errors-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-errors-title" class="text-base font-semibold">5. รหัสข้อผิดพลาด (<code>code</code>)</h2>
+    <div class="mt-2 overflow-x-auto">
+      <table class="w-full min-w-[32rem] text-left text-sm">
+        <thead class="border-b border-slate-200 text-slate-500">
+          <tr><th scope="col" class="py-2 pr-3 font-medium">code</th><th scope="col" class="py-2 pr-3 font-medium">ความหมาย</th><th scope="col" class="py-2 font-medium">วิธีแก้</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr data-apig-error="BAD_REQUEST"><td class="py-2 pr-3 font-mono">BAD_REQUEST</td><td class="py-2 pr-3">ไม่มี body หรือไม่ใช่ JSON object</td><td class="py-2">ตรวจ Content-Type และรูปแบบ JSON (เครื่องหมาย <code>"</code> ปกติ)</td></tr>
+          <tr data-apig-error="PAYLOAD_TOO_LARGE"><td class="py-2 pr-3 font-mono">PAYLOAD_TOO_LARGE</td><td class="py-2 pr-3">body เกิน 100,000 ตัวอักษร</td><td class="py-2">ลดขนาดข้อมูล</td></tr>
+          <tr data-apig-error="UNAUTHORIZED"><td class="py-2 pr-3 font-mono">UNAUTHORIZED</td><td class="py-2 pr-3">ไม่มี key, key ผิด, ถูกปิดใช้งาน หรือถูกเปลี่ยนแล้ว</td><td class="py-2">ตรวจ key (ช่องว่างที่ติดมา) หรือสร้าง/เปลี่ยน key ใหม่</td></tr>
+          <tr data-apig-error="FORBIDDEN"><td class="py-2 pr-3 font-mono">FORBIDDEN</td><td class="py-2 pr-3">ผู้สร้างการเชื่อมต่อไม่มีสิทธิ์ใช้ระบบแล้ว</td><td class="py-2">ให้ผู้มีสิทธิ์สร้างการเชื่อมต่อใหม่</td></tr>
+          <tr data-apig-error="UNKNOWN_ACTION"><td class="py-2 pr-3 font-mono">UNKNOWN_ACTION</td><td class="py-2 pr-3">ไม่รู้จัก action หรือยังไม่เปิดใช้</td><td class="py-2">ตรวจชื่อ action และสถานะในตาราง Actions</td></tr>
+          <tr data-apig-error="FORBIDDEN_SCOPE"><td class="py-2 pr-3 font-mono">FORBIDDEN_SCOPE</td><td class="py-2 pr-3">key ไม่มีสิทธิ์ READ/WRITE ที่ action ต้องใช้</td><td class="py-2">แก้สิทธิ์ของการเชื่อมต่อ</td></tr>
+          <tr data-apig-error="FORBIDDEN_CHANNEL"><td class="py-2 pr-3 font-mono">FORBIDDEN_CHANNEL</td><td class="py-2 pr-3">ไม่ส่งหรือส่ง <code>channel_user_id</code> ที่ไม่ได้รับอนุญาต</td><td class="py-2">เพิ่ม LINE userId ในการเชื่อมต่อ หรือส่งค่าที่ถูกต้อง</td></tr>
+          <tr data-apig-error="RATE_LIMITED"><td class="py-2 pr-3 font-mono">RATE_LIMITED</td><td class="py-2 pr-3">เกิน 60 คำขอต่อนาที</td><td class="py-2">รอแล้วส่งใหม่ (ใช้ <code>request_id</code> เดิม)</td></tr>
+          <tr data-apig-error="INTERNAL_ERROR"><td class="py-2 pr-3 font-mono">INTERNAL_ERROR</td><td class="py-2 pr-3">ข้อผิดพลาดภายใน เช่น gateway ไม่ได้รับสิทธิ์ Spreadsheet</td><td class="py-2">ลองใหม่ ถ้ายังเกิดให้ดู log <code>INTEGRATION_INTERNAL_ERROR</code> ใน Executions ของ gateway</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ID ข้อมูลหลัก -->
+  <section id="apig-masters" aria-labelledby="apig-masters-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <h2 id="apig-masters-title" class="text-base font-semibold">6. ID ข้อมูลหลัก</h2>
+        <p class="text-sm text-slate-500">บัญชี หมวดหมู่ และเจ้าของที่ใช้งานอยู่ ใช้อ้างอิงใน params (ส่ง ID ไม่ต้องส่งชื่อ)</p>
+      </div>
+      <button type="button" id="apig-masters-load" class="btn btn-secondary">โหลด ID</button>
+    </div>
+    <div id="apig-masters-panel" class="mt-3" aria-live="polite"></div>
+  </section>
+
+  <!-- ความปลอดภัย -->
+  <section id="apig-security" aria-labelledby="apig-security-title" class="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+    <h2 id="apig-security-title" class="text-base font-semibold">7. ความปลอดภัย</h2>
+    <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+      <li>เก็บ API key ฝั่งเซิร์ฟเวอร์ (Make, สคริปต์) เท่านั้น ห้ามใส่ในโค้ดหน้าเว็บ แอปมือถือ ห้องแชต หรือ repository</li>
+      <li>ใช้หนึ่งการเชื่อมต่อต่อหนึ่งระบบ เพื่อปิดหรือเปลี่ยน key ได้เฉพาะจุด และกำหนด LINE userId ที่อนุญาตเมื่อใช้กับ LINE</li>
+      <li>ให้สิทธิ์เท่าที่จำเป็น (ระบบที่อ่านอย่างเดียวให้ READ)</li>
+      <li>สงสัยว่า key รั่ว ให้กด "เปลี่ยน key" ทันที key เดิมจะใช้ไม่ได้</li>
+      <li>ข้อความหรือข้อมูลที่ส่งผ่าน Make และผู้ให้บริการ AI จะผ่านระบบภายนอก ส่งเฉพาะข้อมูลที่จำเป็น</li>
+    </ul>
+  </section>
+</section>
+
+<script>
+  (function () {
+    var el = App.el;
+    var PLACEHOLDER_URL = '<API_URL>';
+    var URL_RE = /^https:\/\/script\.google\.com\/(a\/[^/]+\/)?macros\/s\/[A-Za-z0-9_-]+\/exec$/;
+    var endpointInput = document.getElementById('apig-endpoint');
+    var endpointHint = document.getElementById('apig-endpoint-hint');
+    var hintDefault = endpointHint.textContent;
+    var mastersPanel = document.getElementById('apig-masters-panel');
+    var mastersBtn = document.getElementById('apig-masters-load');
+    var pingBody = '{"api_key":"<API_KEY>","action":"ping"}';
+
+    function endpoint() {
+      var v = endpointInput.value.trim();
+      return URL_RE.test(v) ? v : PLACEHOLDER_URL;
+    }
+
+    function snippets() {
+      var url = endpoint();
+      return {
+        'response-ok': '{\n  "ok": true,\n  "data": { … }\n}',
+        'response-error': '{\n  "ok": false,\n  "code": "UNAUTHORIZED",\n  "message": "API key ไม่ถูกต้องหรือถูกปิดใช้งาน",\n  "details": null\n}',
+        'ping-request': '{\n  "api_key": "<API_KEY>",\n  "action": "ping"\n}',
+        'ping-response': '{\n  "ok": true,\n  "data": {\n    "api_version": 1,\n    "client_id": "1",\n    "client_name": "Make LINE ครอบครัว",\n    "scopes": ["READ", "WRITE"],\n    "db_target": "TEST",\n    "server_time": "2026-11-27T10:30:00+07:00"\n  }\n}',
+        curl: 'curl -sL -H "Content-Type: application/json" \\\n  -d \'' + pingBody + '\' \\\n  "' + url + '"',
+        powershell: 'Invoke-RestMethod -Method Post -Uri "' + url + '" `\n  -ContentType "application/json" `\n  -Body \'' + pingBody + '\' | ConvertTo-Json',
+        node: 'const res = await fetch("' + url + '", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ api_key: process.env.EM_API_KEY, action: "ping" }),\n  redirect: "follow"\n});\nconst out = await res.json();\nif (!out.ok) throw new Error(out.code + ": " + out.message);\nconsole.log(out.data);'
+      };
+    }
+
+    function copyText(text) {
+      var done = function () { App.toast('คัดลอกแล้ว', 'success'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { App.toast('คัดลอกอัตโนมัติไม่ได้ กรุณาเลือกข้อความแล้วกด Ctrl+C', 'info'); });
+      } else {
+        App.toast('กรุณาเลือกข้อความแล้วกด Ctrl+C', 'info');
+      }
+    }
+
+    function renderCode() {
+      var s = snippets();
+      Array.prototype.forEach.call(document.querySelectorAll('[data-apig-code]'), function (box) {
+        var text = s[box.getAttribute('data-apig-code')] || '';
+        box.textContent = '';
+        box.className = 'relative mt-1';
+        box.appendChild(el('pre', { class: 'overflow-x-auto rounded-xl bg-slate-900 p-3 pr-16 text-xs leading-relaxed text-slate-100' }, el('code', { text: text })));
+        box.appendChild(el('button', { type: 'button', class: 'absolute right-2 top-2 rounded-lg bg-slate-700 px-2 py-1 text-xs text-white hover:bg-slate-600', 'aria-label': 'คัดลอกตัวอย่าง', onclick: function () { copyText(text); } }, 'คัดลอก'));
+      });
+      Array.prototype.forEach.call(document.querySelectorAll('[data-apig-endpoint-text]'), function (n) { n.textContent = endpoint(); });
+    }
+
+    function onEndpointChange() {
+      var v = endpointInput.value.trim();
+      if (v && !URL_RE.test(v)) {
+        endpointHint.textContent = 'URL ต้องอยู่ในรูปแบบ https://script.google.com/macros/s/…/exec';
+        endpointHint.classList.add('text-rose-700');
+      } else {
+        endpointHint.textContent = hintDefault;
+        endpointHint.classList.remove('text-rose-700');
+        App.pref('apiGuide.endpoint', URL_RE.test(v) ? v : '');
+      }
+      renderCode();
+    }
+
+    function masterTable(caption, rows, idKey, nameKey, typeKey) {
+      if (!rows.length) return el('p', { class: 'text-sm text-slate-500', text: caption + ': ยังไม่มีข้อมูล' });
+      var body = el('tbody', { class: 'divide-y divide-slate-100' });
+      rows.forEach(function (r) {
+        body.appendChild(el('tr', null,
+          el('td', { class: 'py-1.5 pr-3 font-mono', text: String(r[idKey]) }),
+          el('td', { class: 'py-1.5 pr-3', text: r[nameKey] || '' }),
+          typeKey ? el('td', { class: 'py-1.5 font-mono text-xs text-slate-500', text: r[typeKey] || '' }) : null));
+      });
+      return el('div', { class: 'overflow-x-auto' },
+        el('table', { class: 'w-full text-left text-sm' },
+          el('caption', { class: 'mb-1 text-left text-sm font-semibold', text: caption }),
+          el('thead', { class: 'border-b border-slate-200 text-slate-500' }, el('tr', null,
+            el('th', { scope: 'col', class: 'py-1.5 pr-3 font-medium', text: 'ID' }),
+            el('th', { scope: 'col', class: 'py-1.5 pr-3 font-medium', text: 'ชื่อ' }),
+            typeKey ? el('th', { scope: 'col', class: 'py-1.5 font-medium', text: 'ประเภท' }) : null)),
+          body));
+    }
+
+    function loadMasters() {
+      if (mastersBtn.disabled) return;
+      App.setBusy(mastersBtn, true, 'กำลังโหลด…');
+      mastersPanel.textContent = '';
+      mastersPanel.appendChild(el('p', { class: 'flex items-center gap-2 text-sm text-slate-500' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'กำลังโหลด…'));
+      App.call('api_listMasters', { includeInactive: false }).then(function (m) {
+        App.setBusy(mastersBtn, false);
+        mastersBtn.textContent = 'โหลดใหม่';
+        mastersPanel.textContent = '';
+        mastersPanel.appendChild(el('div', { class: 'grid gap-4 lg:grid-cols-3' },
+          masterTable('บัญชี (account_id)', (m && m.accounts) || [], 'account_id', 'account_name', 'account_type'),
+          masterTable('หมวดหมู่ (category_id)', (m && m.categories) || [], 'category_id', 'category_name', 'category_type'),
+          masterTable('เจ้าของ (owner_id)', (m && m.owners) || [], 'owner_id', 'owner_name', null)));
+      }, function (err) {
+        App.setBusy(mastersBtn, false);
+        mastersPanel.textContent = '';
+        mastersPanel.appendChild(el('p', { class: 'rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700', role: 'alert', text: (err && err.message) || 'โหลดข้อมูลไม่สำเร็จ' }));
+      });
+    }
+
+    Array.prototype.forEach.call(document.querySelectorAll('[data-apig-jump]'), function (a) {
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        var target = document.getElementById(a.getAttribute('data-apig-jump'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+    endpointInput.addEventListener('input', onEndpointChange);
+    mastersBtn.addEventListener('click', loadMasters);
+
+    var saved = App.pref('apiGuide.endpoint');
+    if (saved && URL_RE.test(saved)) endpointInput.value = saved;
+    mastersPanel.appendChild(el('p', { class: 'text-sm text-slate-500', text: 'กด "โหลด ID" เพื่อแสดงรายการ' }));
+    renderCode();
+  })();
+</script>

@@ -1,6 +1,6 @@
 # Integration API (Make / LINE OA / AI) — แผน (ร่าง รออนุมัติ)
 
-สถานะ: อนุมัติแผนและ schema ApiClients/ApiDrafts 2026-11-27; A1 implement ในเครื่องแล้ว (ApiClients, doPost, ping, หน้าเชื่อมต่อภายนอก) ผ่าน `npm test` และ preview — ยังไม่ได้ push/deploy หรือทดสอบกับ Make; ApiDrafts จะเพิ่มใน A2
+สถานะ: อนุมัติแผนและ schema ApiClients/ApiDrafts 2026-11-27; A1 ผ่านบน TEST ผ่าน gateway G1 (ping ด้วย key จริงได้ `db_target: "TEST"`, key ปิด/เปลี่ยนแล้วถูกปฏิเสธ, ทดสอบด้วย Postman) — การทดสอบผ่าน Make ผู้ใช้ให้ข้ามไปก่อน; หน้า "คู่มือ API" (A4 บางส่วน) ทำในเครื่องแล้ว; ApiDrafts จะเพิ่มใน A2
 
 ## 1. เป้าหมายและการแบ่งหน้าที่
 
@@ -160,12 +160,19 @@ ApiDrafts: draft_id, client_id, actor_id, channel_user_id, draft_status, draft_j
   - [x] ผู้ใช้สร้าง gateway และ deploy แล้ว (2026-11-27); ตอนแรก Library ถูกตั้งเป็นเวอร์ชัน 1 (ยังไม่มี doPost) → แก้เป็น HEAD แล้ว deploy เวอร์ชันใหม่
   - [x] GET `/exec` ของ gateway ได้ "ไม่พบฟังก์ชันของสคริปต์: doGet" ไม่มีหน้าแอปหรือข้อมูล; deployment หลักยังมีแค่ @HEAD/@1 และ manifest ยังเป็น MYSELF
   - [x] POST ไม่มี key / key รูปแบบผิด → `UNAUTHORIZED`; JSON ผิด / array → `BAD_REQUEST` (2.4–4.3 วินาทีต่อคำขอ)
-  - [ ] **ค้าง:** POST key รูปแบบถูก (ต้องอ่าน Spreadsheet) → `INTERNAL_ERROR` — คาดว่า gateway ยังไม่ได้สิทธิ์ Spreadsheet: เพิ่ม `"oauthScopes": ["https://www.googleapis.com/auth/spreadsheets"]` ใน appsscript.json ของ gateway → Run เพื่อ Authorize → deploy New version แล้วทดสอบซ้ำ (ถ้ายังไม่หาย ดู log ของ execution doPost ที่สถานะ "เสร็จสมบูรณ์" เพราะ error ถูกดักไว้)
-- [ ] Make: โมดูล HTTP "Make a request" POST JSON ไปที่ URL `/exec` → ได้ `ok: true` และ `db_target: "TEST"` (ตรวจการตาม redirect)
+  - [x] POST key รูปแบบถูกเคยได้ `INTERNAL_ERROR`: log ระบุว่าไม่ได้รับอนุญาตให้เรียก `SpreadsheetApp.openById` (ต้องการ scope spreadsheets) แม้ manifest ของ gateway มี `oauthScopes` แล้ว → แก้โดยถอนสิทธิ์ gateway ที่ myaccount.google.com/connections แล้ว Run `testPing` ใน editor และอนุญาตครบทุก scope (2026-11-27); สิทธิ์ผูกกับ project ไม่ต้อง deploy ใหม่
+  - [x] Claude ทดสอบหลังอนุญาต (2026-11-27) ทั้ง deployment @3 และ @4: JSON ผิด → `BAD_REQUEST`, ไม่มี key และ key ปลอมรูปแบบถูก → `UNAUTHORIZED` (1.8–2.6 วินาที); `testPing` ใน editor ได้ `UNAUTHORIZED`
+  - โค้ด gateway เก็บที่ `D:\Git\Expense Manager Integration API` (git แยก, `.clasp.json` ไม่เข้า Git) มี `doPost` และ `testPing` (ใช้ key ปลอม ไม่เขียนข้อมูล); ควรเหลือ deployment ที่ใช้งานเพียงตัวเดียวแล้ว archive อีกตัว
+  - [x] ผู้ใช้สร้างการเชื่อมต่อในหน้า "เชื่อมต่อภายนอก" บน `/dev` แล้ว POST `ping` ด้วย key จริงไปที่ gateway ได้ `ok: true` และ `db_target: "TEST"` (ผู้ใช้รายงาน 2026-11-27) — ยืนยันว่า Library อ่าน Script Properties ของ project หลัก
+  - [x] key ที่ปิดใช้งาน/เปลี่ยน key แล้วถูกปฏิเสธ (`UNAUTHORIZED`) (ผู้ใช้รายงาน 2026-11-27)
+- [x] Postman: POST `ping` ด้วย key จริงได้ `ok: true` (ผู้ใช้รายงาน 2026-11-27)
+- [ ] Make: โมดูล HTTP "Make a request" POST JSON ไปที่ URL `/exec` → ยังไม่สำเร็จ (ยังไม่ทราบ status/คำตอบ) ผู้ใช้ให้ข้ามไปก่อน 2026-11-27; จุดที่ต้องตรวจ: Follow redirect = Yes แต่ Follow all redirects = No, Body Raw/JSON
 
 ## 10. เมนูคู่มือ API (ในแอป)
 
-จำเป็นเมื่อมีผู้เรียกจากภายนอก — ทำในหน้า "ตั้งค่า → เชื่อมต่อภายนอก":
+สถานะ 2026-11-27: ทำเป็นเมนูแยก "คู่มือ API" (`#api-guide`, `PageApiGuide.html`) ลิงก์จากหน้าเชื่อมต่อภายนอก มีขั้นเริ่มต้น, ช่อง URL ของ API (เก็บใน localStorage เพื่อเติมตัวอย่าง ไม่ส่งไป server), รูปแบบคำขอ/คำตอบ, ตาราง actions พร้อมสถานะ (ใช้ได้/เร็ว ๆ นี้), ตัวอย่าง curl/PowerShell/Node.js/Make/Postman, รหัสข้อผิดพลาด, ตาราง ID ข้อมูลหลัก (โหลดเมื่อกด) และข้อควรระวัง; `tests/api-guide.test.js` ตรวจว่า action ที่เปิดใช้และรหัสข้อผิดพลาดตรงกับ IntegrationService; ยังไม่มี prompt สำหรับ AI (รอ A2); `clasp push` ไป HEAD แล้ว (2026-11-27) และ clone กลับมาเทียบตรงกัน 28 ไฟล์ (ครั้งแรกได้ `Skipping push.` เพราะ appsscript.json ในเครื่องเป็น CRLF แต่บนเซิร์ฟเวอร์เป็น LF เนื้อหาเหมือนกัน → แปลงไฟล์ในเครื่องเป็น LF แทนการใช้ `--force`) ยังไม่ได้ดูหน้าบน `/dev`
+
+ขอบเขตเดิม:
 
 - สร้าง/ปิด/หมุน API key (แสดง key ครั้งเดียว), กำหนด scope, LINE userId ที่อนุญาต, บัญชี/เจ้าของเริ่มต้น
 - Endpoint URL, ตัวอย่างคำขอ/คำตอบของทุก action (คัดลอกได้)

@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added — เมนูคู่มือ API (2026-11-27)
+
+- เมนู "คู่มือ API" (#api-guide, `PageApiGuide.html`) สำหรับนักพัฒนาที่เชื่อมผ่าน Integration API: เริ่มต้น, รูปแบบคำขอ/คำตอบ (POST JSON, key ใน body, ตาม redirect ด้วย GET, HTTP 200 เสมอ), ตาราง actions พร้อมสถานะ, ตัวอย่าง curl/PowerShell/Node.js/Make/Postman พร้อมปุ่มคัดลอก, รหัสข้อผิดพลาด, ตาราง ID บัญชี/หมวดหมู่/เจ้าของ และข้อควรระวังด้านความปลอดภัย
+- ช่อง URL ของ API เติมลงในตัวอย่างและเก็บใน localStorage ของเบราว์เซอร์เท่านั้น; ตัวอย่างใช้ `<API_KEY>` ไม่แสดง key จริง
+- หน้าเชื่อมต่อภายนอกมีลิงก์ไปคู่มือ; `tests/api-guide.test.js` ตรวจว่า action ที่เปิดใช้และรหัสข้อผิดพลาดในคู่มือตรงกับ IntegrationService
+
 ### Added — Integration API ระยะ A1 (schema ApiClients อนุมัติ 2026-11-27)
 
 - `doPost` + `IntegrationApi` (IntegrationService.gs) สำหรับผู้เรียกภายนอก เช่น Make: รับ JSON `{ api_key, action, request_id, channel_user_id, params }` ตอบ HTTP 200 เสมอพร้อม `ok`; ระยะนี้มี action `ping` อย่างเดียว (ไม่เขียนข้อมูล)

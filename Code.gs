@@ -22,7 +22,7 @@ function doGet() {
 }
 
 /** ใช้ใน template เท่านั้น: รวมไฟล์ HTML ที่อนุญาต */
-var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports', 'PageIntegrations'];
+var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports', 'PageIntegrations', 'PageApiGuide'];
 
 function include(name) {
   if (INCLUDABLE_FILES_.indexOf(name) < 0) throw new Error('include: ไม่อนุญาตไฟล์ ' + name);
