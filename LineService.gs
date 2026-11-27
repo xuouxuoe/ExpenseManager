@@ -188,6 +188,15 @@ var LineWebhook = (function () {
     return 'cancelled';
   }
 
+  /** การเชื่อมต่อยังไม่มี LINE userId ที่อนุญาต: ตอบ userId ของผู้ส่ง (แชต 1:1 เท่านั้น) */
+  function setupReply(ev, client) {
+    if (!ev || typeof ev !== 'object' || !ev.source || ev.source.type !== 'user' || !ev.replyToken) return 'ignored';
+    if (seen(client, ev.webhookEventId || (ev.message && ev.message.id) || '')) return 'duplicate';
+    reply(ev.replyToken, [text('เชื่อมต่อ LINE กับ Expense Manager แล้ว แต่ยังไม่ได้อนุญาตบัญชี LINE นี้\n' +
+      'ให้ผู้ดูแลเปิดหน้า "เชื่อมต่อภายนอก" → แก้การเชื่อมต่อ → ใส่ LINE userId นี้ แล้วพิมพ์ใหม่อีกครั้ง:\n' + String(ev.source.userId || ''))]);
+    return 'setup';
+  }
+
   function handleEvent(ev, client) {
     if (!ev || typeof ev !== 'object' || !ev.source || ev.source.type !== 'user') return 'ignored';
     var userId = String(ev.source.userId || '');
@@ -263,7 +272,9 @@ var LineWebhook = (function () {
       if (!client) return { ok: false, code: 'UNAUTHORIZED' };
       IntegrationApi.guard(client, 'WRITE');
       if (!client.channels.length) {
-        throw Util.AppError('FORBIDDEN_CHANNEL', 'การเชื่อมต่อสำหรับ LINE ต้องกำหนด LINE userId ที่อนุญาต');
+        // ยังไม่ได้กำหนด LINE userId: ไม่ประมวลผลรายการ แต่ตอบ userId ของผู้ส่งกลับไป
+        // เพื่อให้ผู้ดูแลนำไปใส่ในหน้าเชื่อมต่อภายนอก (ไม่เช่นนั้นจะไม่มีทางรู้ userId ของตัวเอง)
+        return { ok: false, code: 'FORBIDDEN_CHANNEL', results: events.slice(0, 20).map(function (ev) { return setupReply(ev, client); }) };
       }
       var results = events.slice(0, 20).map(function (ev) { return handleEvent(ev, client); });
       return { ok: true, results: results };

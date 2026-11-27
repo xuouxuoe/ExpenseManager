@@ -159,11 +159,19 @@ test('การยืนยันตัวตนของ webhook: line_key ผ�
   assert.equal(s.send([s.textEvent('กาแฟ 65')], newApiKey()).code, 'UNAUTHORIZED');
   const readOnly = s.createClient({ scopes: ['READ'], allowed_channel_user_ids: USER });
   assert.equal(s.send([s.textEvent('กาแฟ 65')], readOnly).code, 'FORBIDDEN_SCOPE');
-  const noUsers = s.createClient({});
-  assert.equal(s.send([s.textEvent('กาแฟ 65')], noUsers).code, 'FORBIDDEN_CHANNEL');
   assert.equal(plain(s.ctx.LineWebhook.handle({ parameter: { line_key: s.lineKey }, postData: { contents: '{bad' } })).code, 'BAD_REQUEST');
+  assert.equal(s.replies.length, 0, 'key ผิด/ไม่มีสิทธิ์ ไม่ตอบอะไร');
+  // ยังไม่กำหนด userId: ไม่ประมวลผลรายการ แต่ตอบ userId ของผู้ส่งเพื่อให้ผู้ดูแลนำไปใส่
+  const noUsers = s.createClient({});
+  const setupRes = s.send([s.textEvent('กาแฟ 65')], noUsers);
+  assert.equal(setupRes.code, 'FORBIDDEN_CHANNEL');
+  assert.deepEqual(setupRes.results, ['setup']);
+  assert.equal(s.replies.length, 1);
+  assert.match(s.lastReply().messages[0].text, new RegExp('ใส่ LINE userId นี้[\\s\\S]*' + USER));
   assert.equal(s.ai.calls, 0);
-  assert.equal(s.replies.length, 0);
+  assert.equal(s.rows('ApiDrafts').length, 0);
+  assert.deepEqual(s.send([{ type: 'message', webhookEventId: '01HZZZGROUP000000000000009', replyToken: 'rt-g9', source: { type: 'group', groupId: 'C1', userId: USER }, message: { type: 'text', text: 'x' } }], noUsers).results, ['ignored']);
+  assert.equal(s.replies.length, 1, 'กลุ่มไม่ตอบ');
   const logs = s.ctx.__state.logs.join('\n');
   ['LINE_WEBHOOK: UNAUTHORIZED', 'LINE_WEBHOOK: FORBIDDEN_SCOPE', 'LINE_WEBHOOK: FORBIDDEN_CHANNEL', 'LINE_WEBHOOK: BAD_REQUEST'].forEach((l) => assert.ok(logs.includes(l), l));
   assert.equal(logs.includes(s.lineKey), false);

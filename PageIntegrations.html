@@ -44,7 +44,7 @@
         <li>สร้างการเชื่อมต่อด้านล่าง สิทธิ์ <strong>บันทึก (WRITE)</strong> และใส่ <strong>LINE userId</strong> ของผู้ที่ใช้ได้ (ถ้ายังไม่รู้ userId ให้ทักบอทก่อน บอทจะตอบ userId กลับมา)</li>
         <li>ตั้ง Webhook URL เป็น <code class="break-all">&lt;URL /exec ของ gateway&gt;?line_key=&lt;API key ของการเชื่อมต่อนั้น&gt;</code> แล้วเปิด Use webhook และปิดข้อความตอบกลับอัตโนมัติ</li>
         <li>ปุ่ม Verify ใน LINE แจ้ง "302 Found" เพราะ Apps Script ตอบแบบ redirect เสมอ แต่ข้อความจริงยังทำงาน ให้เปิด Use webhook ปิด Webhook redelivery แล้วทดสอบด้วยการพิมพ์ในแชต</li>
-        <li>ถ้าบอทไม่ตอบ ดู log ที่โปรเจกต์ <strong>gateway</strong> → การดำเนินการ (Executions) → doPost: <code>LINE_WEBHOOK: UNAUTHORIZED</code> = key ใน URL ผิด, <code>FORBIDDEN_SCOPE</code> = ไม่มีสิทธิ์ WRITE, <code>FORBIDDEN_CHANNEL</code> = ไม่ได้ใส่ LINE userId, <code>LINE_NOT_CONFIGURED</code> = ยังไม่ได้ตั้ง token</li>
+        <li>ถ้าบอทไม่ตอบ ดู log ที่โปรเจกต์ <strong>gateway</strong> → การดำเนินการ (Executions) → doPost: <code>LINE_WEBHOOK: UNAUTHORIZED</code> = key ใน URL ผิด, <code>FORBIDDEN_SCOPE</code> = ไม่มีสิทธิ์ WRITE, <code>FORBIDDEN_CHANNEL</code> = ไม่ได้ใส่ LINE userId (บอทตอบ userId ให้ในแชต), <code>LINE_NOT_CONFIGURED</code> = ยังไม่ได้ตั้ง token</li>
       </ol>
       <p class="mt-2 text-xs text-amber-800">API key อยู่ใน Webhook URL — เก็บเป็นความลับ ถ้าสงสัยว่ารั่วให้กด "เปลี่ยน key" แล้วแก้ URL ใน LINE</p>
     </details>
@@ -559,7 +559,7 @@
       VERIFY: 'ได้รับคำขอ Verify จาก LINE (ข้อความจริงจะแสดงผลแทนเมื่อมีคนพิมพ์)',
       UNAUTHORIZED: 'key ใน Webhook URL ไม่ถูกต้องหรือการเชื่อมต่อถูกปิด — ตรวจ ?line_key= ให้ตรงกับ key ล่าสุด',
       FORBIDDEN_SCOPE: 'การเชื่อมต่อไม่มีสิทธิ์บันทึก (WRITE)',
-      FORBIDDEN_CHANNEL: 'การเชื่อมต่อยังไม่ได้ใส่ LINE userId',
+      FORBIDDEN_CHANNEL: 'การเชื่อมต่อยังไม่ได้ใส่ LINE userId — บอทตอบ userId ของผู้ส่งกลับไปในแชต ให้นำมาใส่ที่ “แก้ไข” ของการเชื่อมต่อ',
       FORBIDDEN: 'ผู้สร้างการเชื่อมต่อไม่อยู่ใน ALLOWED_EMAILS แล้ว',
       RATE_LIMITED: 'ส่งข้อความถี่เกินไป',
       BAD_REQUEST: 'คำขอไม่ใช่รูปแบบ LINE webhook',
