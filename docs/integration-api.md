@@ -80,7 +80,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 | A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง — **implement ในเครื่องแล้ว (ข้อ 0.9)** |
 | A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.11)** |
 | A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard — **ผ่านในแชต LINE บน TEST (ข้อ 0.12)** |
-| A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง — **implement ในเครื่องแล้ว (ข้อ 0.13)** |
+| A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง — **ผ่านในแชต LINE บน TEST (ข้อ 0.13)** |
 
 คู่มือ API ในแอปปรับตามแต่ละระยะ (ตัดส่วน Make ออก เพิ่มการตั้งค่า LINE webhook และ Script Properties ของ AI)
 
@@ -179,7 +179,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - [x] `tests/line-slip.test.js` 5 กรณี; test shim รองรับ `getBlob()` และ `Utilities.base64Encode`; `npm test` ผ่าน
 - [x] `clasp push` ไป HEAD (ผู้ใช้อนุญาต 2026-11-28, 01:51) และ clone กลับมาเทียบตรงกัน 33 ไฟล์
 - [x] ผู้ใช้ส่งสลิปจริง (2026-11-28): บอทตอบ "กรุณาระบุ category" เพราะ prompt เดิมบอก AI ว่าไม่แน่ใจให้ใส่ null แล้วใช้ค่าเริ่มต้น แต่หมวดไม่มีค่าเริ่มต้น และสลิปโอนเงินไม่บอกหมวด → แก้: prompt บังคับเลือกหมวดที่ใกล้สุด (หรือหมวดทั่วไป) สำหรับ INCOME/EXPENSE/CREDIT_PURCHASE; ถ้า AI ยังไม่เลือก ระบบใช้หมวดทั่วไปที่ชื่อตรง อื่น/ทั่วไป/เบ็ดเตล็ด เมื่อมีหมวดเดียว; ไม่มี → ตอบรายชื่อหมวดและวิธีพิมพ์ (ใช้กับข้อความด้วย)
-- [ ] ทดสอบส่งรูปสลิปจริงอีกครั้งหลังแก้ (ต้อง clasp push ก่อน)
+- [x] ผู้ใช้ทดสอบส่งรูปสลิปจริงในแชต LINE บน TEST หลังแก้ (push 01:56) และรายงานว่าผ่านทั้งหมด (2026-11-28)
 - ข้อจำกัด: ความแม่นยำขึ้นกับโมเดล AI — ผู้ใช้ต้องตรวจยอด วันที่ และบัญชีในสรุปก่อนยืนยัน; เวลาตอบเพิ่มขึ้นจากการดึงรูปและการอ่านภาพ (ยังไม่ได้วัด); ค่า AI ต่อรูปสูงกว่าข้อความ; ยังไม่รองรับสลิปผ่าน JSON API (`ai.parse` รับเฉพาะข้อความ)
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
