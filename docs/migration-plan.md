@@ -223,3 +223,17 @@ TC-MG-01 ถึง TC-MG-10 ใน [test-plan.md](test-plan.md) §7.1
 2. ตัวอย่างรูปแบบค่าของ: วันที่, เดือนเก็บ/เดือนชำระ, งวด (เช่น "1/6"), สถานะ — ใช้ข้อมูลจำลองได้
 3. นโยบาย CREDIT_PURCHASE (§4.5): V1 ถือว่ารายจ่ายเกิดตอนซื้อหรือตอนจ่ายงวด
 4. ยอดยกมาของแต่ละบัญชี ณ วันที่ cut-over (หรือยืนยันให้ใช้ 0 แล้วปรับทีหลัง)
+
+## 11. แปลงรหัส UUID เดิมเป็น running number (ไฟล์ทดสอบ, 2026-11-27)
+
+ไฟล์ TEST มีข้อมูลที่สร้างก่อนเปลี่ยนรหัสหลักเป็น running number (UUID) ทำให้ `Validation.requireId` ปฏิเสธ เช่น ตั้งบัญชีเริ่มต้นของการเชื่อมต่อไม่ได้ (`default_account_id ไม่ใช่รหัสที่ถูกต้อง`) ผู้ใช้เลือกแปลงข้อมูลให้เป็นตัวเลข (ไม่ผ่อนกฎให้รับ UUID) และยืนยันว่าข้อมูลในไฟล์ TEST ไม่สำคัญ
+
+- `MigrationService.gs` (`IdMigration.run`) เรียกจาก Apps Script editor: `migrateTestIdsDryRun()` แล้ว `migrateTestIds()` — ทั้งสองใช้ไฟล์ TEST เสมอ (`Database.useTestSpreadsheet`) และต้องเป็นเจ้าของสคริปต์; ไม่มีฟังก์ชันสำหรับ Production
+- เลขใหม่จองผ่าน `IdSequence` ต่อจากเลขที่มีอยู่ (ไม่ชนรหัสตัวเลขเดิม) ตามลำดับแถว
+- เปลี่ยน PK ที่เป็น UUID และ FK ทุกคอลัมน์ที่อ้างถึง: Owners, Accounts (owner_id), SubAccounts, Categories, PaymentPlans, PaymentSchedules, Transactions (รวม plan_id, reversal_of, sub account), Reservations, PaymentAllocations, Budgets, BudgetCategories, ApiClients (default_account_id/default_owner_id), ApiDrafts (client_id, transaction_id, draft_json), Settings key `account.display_name.<id>` และ `plan.star.<hash>.<id>`
+- ไม่แก้ AuditLogs และ OperationJournal (ประวัติ); FK ที่เป็น UUID แต่ไม่พบปลายทางถูกรายงานใน `dangling` และคงค่าเดิม
+- ก่อนเขียน สำรองทุกชีตที่จะเปลี่ยนเป็น `bak_<yyyyMMddHHmm>_<ชื่อชีต>` ในไฟล์เดียวกัน (ลบเองได้เมื่อตรวจแล้ว); rollback = ลบชีตที่แปลงแล้วเปลี่ยนชื่อชีตสำรองกลับ (ตัวนับใน Script Properties จะยังสูงกว่าเดิมซึ่งไม่เป็นปัญหา)
+- เรียกซ้ำได้: เมื่อไม่มี UUID เหลือจะไม่เขียนอะไร
+- ทดสอบใน `tests/id-migration.test.js` (dry run ไม่เขียน, FK ทุกตารางตรงกัน, ชื่อแสดงของบัญชียังใช้ได้, ตั้งบัญชีเริ่มต้นและบันทึกรายการหลังแปลงได้, เรียกซ้ำไม่เปลี่ยน, FK ค้างถูกรายงาน)
+
+- 2026-11-27: `clasp push` ไป HEAD และ clone กลับมาเทียบตรงกัน 30 ไฟล์ (รวม MigrationService); ผู้ใช้รัน `migrateTestIdsDryRun` (dangling ว่าง) แล้ว `migrateTestIds` กับไฟล์ TEST — หลังแปลงตั้งบัญชีเริ่มต้นของการเชื่อมต่อและบันทึกได้; ชีตสำรอง `bak_*` ยังอยู่ในไฟล์ TEST ให้ผู้ใช้ลบเองเมื่อตรวจแล้ว

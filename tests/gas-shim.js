@@ -109,6 +109,12 @@ class FakeSheet {
     return new FakeRange(this, row, col, numRows || 1, numCols || 1);
   }
   setFrozenRows(n) { this.frozen = n; }
+  setName(name) { this.name = name; return this; }
+  copyTo(ss) {
+    const copy = ss.insertSheet('Copy of ' + this.name);
+    copy.data = this.data.map((r) => (r || []).slice());
+    return copy;
+  }
 }
 
 class FakeSpreadsheet {

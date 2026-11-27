@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added — แปลงรหัส UUID เดิมในไฟล์ทดสอบเป็นเลขลำดับ (2026-11-27)
+
+- `MigrationService.gs` + ฟังก์ชันผู้ดูแล `migrateTestIdsDryRun()` / `migrateTestIds()` (ไฟล์ TEST เท่านั้น): แปลง PK ที่เป็น UUID เป็น running number และแก้ FK ทุกตาราง, key ใน Settings และ ApiDrafts.draft_json; สำรองชีตที่เปลี่ยนเป็น `bak_<เวลา>_<ชีต>` ก่อนเขียน; ไม่แก้ AuditLogs/OperationJournal
+- แก้ปัญหาตั้งบัญชีเริ่มต้นของการเชื่อมต่อไม่ได้ (`default_account_id ไม่ใช่รหัสที่ถูกต้อง`) เมื่อบัญชีใน TEST ยังเป็น UUID
+- `tests/id-migration.test.js` 3 กรณี; test shim รองรับ `Sheet.copyTo` / `setName`
+
 ### Added — Integration API ระยะ A2: ร่างและยืนยันรายการ (schema ApiDrafts อนุมัติ 2026-11-27)
 
 - action ใหม่: `masters.list` (READ), `draft.create`, `draft.confirm`, `draft.cancel` (WRITE) ใน `ApiDraftService.gs` — ทุกการบันทึกจากภายนอกต้องสร้างร่างแล้วยืนยัน ธุรกรรมที่ยืนยันมี `source: AI`
@@ -39,7 +45,7 @@
 - `IdSequence` (Database.gs) เก็บตัวนับใน Script Properties แยกตามไฟล์ Spreadsheet; `ctx.id(sheet, label)` จองเลขภายใน lock และบันทึกเลขที่จองไว้ใน OperationJournal.recovery_data ก่อนเขียนชีตธุรกิจ เพื่อให้ retry ได้เลขเดิม
 - แถว OperationJournal ของคำขอใหม่ถูกเพิ่มก่อนการเขียนครั้งแรก (ไม่ใช่ทันทีหลังได้ lock) จำนวนการเขียนต่อคำขอไม่เพิ่ม
 - แก้ลำดับบัญชีย่อยในรายงานที่เปลี่ยนเพราะ object ของ JS เรียงคีย์ที่เป็นตัวเลขก่อน
-- ข้อจำกัด: เลขไม่ซ้ำแต่อาจเว้นช่วงเมื่อคำขอล้มเหลวหลังจองเลข; ข้อมูล UUID เดิมไม่ถูกแปลง (ยังไม่มีข้อมูลจริง)
+- ข้อจำกัด: เลขไม่ซ้ำแต่อาจเว้นช่วงเมื่อคำขอล้มเหลวหลังจองเลข; ข้อมูล UUID เดิมไม่ถูกแปลงอัตโนมัติ (ไฟล์ทดสอบใช้ `migrateTestIds` ได้ ดู docs/migration-plan.md ข้อ 11)
 
 ### Changed — header (2026-11-27)
 

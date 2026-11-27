@@ -353,6 +353,22 @@ function checkTestDatabase() {
   return logReport_('checkDatabase (TEST)', Database.checkSchema());
 }
 
+/** ตรวจว่าไฟล์ทดสอบมีรหัส UUID เดิมเท่าไร และจะเปลี่ยนแถวใดบ้าง (ไม่เขียนข้อมูล) */
+function migrateTestIdsDryRun() {
+  Auth.requireOwner();
+  Database.useTestSpreadsheet();
+  return logReport_('migrateTestIdsDryRun (TEST)', IdMigration.run({ dryRun: true }));
+}
+
+/** แปลงรหัส UUID เดิมในไฟล์ทดสอบเป็น running number (สำรองชีตที่เปลี่ยนก่อนเขียน) — ไม่มีฟังก์ชันนี้สำหรับ Production */
+function migrateTestIds() {
+  var actor = Auth.requireOwner();
+  Database.useTestSpreadsheet();
+  var report = IdMigration.run({ dryRun: false });
+  if (Object.keys(report.changes).length) tryAudit_(actor.actorId, 'MIGRATE_LEGACY_IDS');
+  return logReport_('migrateTestIds (TEST)', report);
+}
+
 function initializeTestDatabase() {
   var actor = Auth.requireOwner();
   Database.useTestSpreadsheet();
