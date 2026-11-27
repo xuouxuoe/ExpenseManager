@@ -18,6 +18,10 @@
 - ทดสอบในเครื่องด้วยข้อมูลจำลองและผ่าน normal UI สำหรับสร้างบัญชีย่อย บันทึกรายการ สร้างแผน ดาวน์โหลด PNG/CSV แล้ว
 - clasp push และ pull กลับมาเทียบครบ 21 ไฟล์แล้ว (2026-11-26) ยังรอตรวจการบันทึกและ schema กับฐาน TEST บน Apps Script /dev
 
+### งบทริป / โครงการ (EVENT budget, อนุมัติ 2026-11-27)
+
+- E1 implement แล้ว (`npm test` 240/240) และ push ไป HEAD 2026-11-28 ตรงกัน 33 ไฟล์ ยังไม่ได้ทดสอบบน `/dev`; E2 (LINE) และ E3 (กันเงินจริง) ยังไม่เริ่ม ดู [event-budget-plan.md](event-budget-plan.md)
+
 ## Phase 0 — เอกสารและการอนุมัติ
 
 - [x] AGENTS.md ปรับ canonical headers และ Data Management Rules
