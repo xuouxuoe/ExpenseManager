@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added — Integration API ระยะ A4: LINE Official Account (2026-11-27)
+
+- `LineService.gs`: gateway รับ LINE webhook โดยตรงที่ `/exec?line_key=<API key>` → AI แปลงข้อความ → สร้างร่าง → ตอบ Flex พร้อมปุ่ม [ยกเลิก][ยืนยัน]; กดยืนยันจึงบันทึก (source AI) ครั้งเดียว
+- รับเฉพาะแชต 1:1 จาก LINE userId ที่อนุญาต (userId อื่นได้ข้อความแจ้ง userId); การเชื่อมต่อสำหรับ LINE ต้องมีสิทธิ์ WRITE และกำหนด userId; กันเหตุการณ์ซ้ำด้วย webhookEventId
+- การ์ด "LINE Official Account" ในหน้าเชื่อมต่อภายนอก: เจ้าของตั้ง Channel access token (เขียนอย่างเดียว) พร้อมวิธีตั้ง Webhook URL; คู่มือ API มีหัวข้อ LINE
+- `tests/line-webhook.test.js` 10 กรณี
+- ปุ่ม Verify ของ LINE (events ว่าง) ตอบทันทีโดยไม่เปิด Spreadsheet เพื่อไม่ให้ timeout
+
 ### Added — Integration API ระยะ A3: แปลงข้อความด้วย AI (2026-11-27)
 
 - `AiService.gs` เรียก AI จาก Apps Script โดยตรง (ไม่ใช้ Make): OPENAI (ค่าเริ่มต้น), OPENAI_COMPATIBLE (endpoint custom แบบ OpenAI), ANTHROPIC, GEMINI ตั้งค่าด้วย Script Properties `AI_PROVIDER`, `AI_API_KEY`, `AI_MODEL`, `AI_BASE_URL`

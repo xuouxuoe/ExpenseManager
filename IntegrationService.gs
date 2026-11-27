@@ -321,12 +321,22 @@ var IntegrationApi = (function () {
     }
   }
 
+  /** ตรวจผู้ใช้/สิทธิ์/อัตราการเรียก สำหรับช่องทางอื่นที่ยืนยันตัวตนด้วย ApiClients (เช่น LINE webhook) */
+  function guard(client, scope) {
+    checkActor(client);
+    if (scope && client.scopes.indexOf(scope) < 0) throw reject('FORBIDDEN_SCOPE', 'API key นี้ไม่มีสิทธิ์ ' + scope);
+    rateLimit(client);
+  }
+
+  /** คำขอที่มี ?line_key=… ใน URL เป็น LINE webhook; อื่น ๆ เป็น JSON API */
   function handlePost(e) {
-    return ContentService.createTextOutput(JSON.stringify(dispatch(e))).setMimeType(ContentService.MimeType.JSON);
+    var out = LineWebhook.isLineRequest(e) ? LineWebhook.handle(e) : dispatch(e);
+    return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
   }
 
   return {
     dispatch: dispatch,
+    guard: guard,
     handlePost: handlePost,
     actions: function () { return Object.keys(ACTIONS); }
   };

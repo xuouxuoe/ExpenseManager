@@ -78,7 +78,7 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 | A1 | gateway, API key, `ping` | ผ่านแล้ว (ข้อ 9.1) |
 | A2 | ApiDrafts, `masters.list`, `draft.create/confirm/cancel` ผ่าน API key (ทดสอบด้วย Postman) | ครบวงจรบน TEST, ยืนยันซ้ำไม่ซ้ำ, หมดอายุ/token ผิดถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.8)** |
 | A3 | AiParser + adapter OPENAI/OPENAI_COMPATIBLE/ANTHROPIC/GEMINI (ทดสอบด้วย fake UrlFetchApp) และ action `ai.parse` (ทดสอบผ่าน API ก่อนต่อ LINE) | ข้อความตัวอย่างได้ JSON ที่ผ่าน Validation; AI ล้มเหลวไม่สร้างร่าง — **implement ในเครื่องแล้ว (ข้อ 0.9)** |
-| A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ |
+| A4 | LineWebhook: ข้อความ → AI → ร่าง → reply ปุ่ม; postback ยืนยัน/ยกเลิก | ใช้จริงจาก LINE บน TEST, LINE ส่งซ้ำไม่ซ้ำ, userId อื่นถูกปฏิเสธ — **implement ในเครื่องแล้ว (ข้อ 0.11)** |
 | A5 | read actions + คำสั่งในแชต (`summary.month`, `balances`, `transactions.recent`, `budget.remaining`) | ตัวเลขตรงกับ Dashboard |
 | A6 | อ่านสลิปจากรูป (LINE content API → AI ที่อ่านภาพได้) | สลิปตัวอย่างได้ร่างที่ถูกต้อง |
 
@@ -128,6 +128,24 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
   - ตรวจ: ผู้ให้บริการใน enum, ชื่อโมเดล `[A-Za-z0-9._:/@+-]` ≤ 100, key 8–500 ตัวไม่มีช่องว่าง, Base URL https เฉพาะ OPENAI_COMPATIBLE (ล้างเมื่อเปลี่ยนเป็นแบบอื่น)
   - ปุ่มทดสอบแปลง "กาแฟ 65 บาท" ด้วยข้อมูลหลักของฐานที่ใช้ แสดงผลและเวลา ไม่เขียนข้อมูลธุรกิจ
 - `tests/ai-settings.test.js` 4 กรณี; ตรวจบน preview desktop และมือถือ 375px
+
+### 0.11 สถานะ A4 (2026-11-27)
+
+- [x] `LineService.gs` (`LineWebhook`): `doPost` ที่มี `?line_key=` ส่งไป LINE webhook ส่วนอื่นเป็น JSON API เดิม (`IntegrationApi.handlePost`)
+  - line_key = API key ของการเชื่อมต่อ; ต้องมีสิทธิ์ WRITE (`IntegrationApi.guard`: actor ยังอยู่ใน ALLOWED_EMAILS, scope, rate limit) และต้องกำหนด LINE userId (`FORBIDDEN_CHANNEL`)
+  - รับเฉพาะ `source.type = user` จาก userId ที่อนุญาต; userId อื่นได้ข้อความแจ้ง userId ให้ผู้ดูแลเพิ่ม (ไม่เรียก AI)
+  - ข้อความ → `AiParser.parse` → `ApiDrafts.create` (request_id = `line-<webhookEventId>`) → ตอบ Flex bubble สรุป + ปุ่ม postback `em=1&a=c|x&d=<draft_id>&t=<token>` (< 300 ตัว)
+  - postback ยืนยัน → `ApiDrafts.confirm` (บันทึก source AI ครั้งเดียว) / ยกเลิก → `ApiDrafts.cancel`; ข้อผิดพลาดตอบเป็นข้อความภาษาไทย (ชื่อไม่พบแสดงตัวเลือก)
+  - "วิธีใช้"/help และ follow → ข้อความแนะนำ; รูปภาพ → ยังไม่รองรับ; กลุ่ม/ห้อง → ข้าม
+  - กันเหตุการณ์ซ้ำด้วย webhookEventId ใน CacheService 6 ชั่วโมง (เรียก AI ครั้งเดียว)
+  - ตอบกลับด้วย LINE Reply API (`LINE_CHANNEL_ACCESS_TOKEN`); ไม่ได้ตั้ง token → ประมวลผลได้แต่ไม่ตอบ และ log `LINE_NOT_CONFIGURED`; ไม่ log ข้อความ/token/key
+- [x] `LineSettings` + การ์ด "LINE Official Account" ในหน้าเชื่อมต่อภายนอก: ตั้ง token (เฉพาะเจ้าของ, เขียนอย่างเดียว) และวิธีตั้ง Webhook URL; คู่มือ API มีหัวข้อ LINE
+- [x] `tests/line-webhook.test.js` 10 กรณี; `npm test` ผ่าน 223/223; ตรวจ preview แล้ว
+- [x] `clasp push` ไป HEAD (2026-11-27, ตรงกัน 32 ไฟล์); gateway @4: `?line_key=` ปลอม → `UNAUTHORIZED`, JSON API เดิมยังตอบ `BAD_REQUEST` ถูกต้อง
+- [x] ทดสอบกับ LINE (2026-11-27): Verify ได้ `302 Found` (ข้อจำกัด Apps Script ที่คาดไว้; ข้อความจริงยังเข้า doPost) — execution และ log ของ webhook อยู่ที่ **project gateway** ไม่ใช่ project หลัก; ครั้งแรก doPost "เสร็จสมบูรณ์" แต่บอทไม่ตอบและไม่มี log → เพิ่ม log `LINE_WEBHOOK: <ผล>` ทุกครั้ง (เช่น UNAUTHORIZED, FORBIDDEN_SCOPE, FORBIDDEN_CHANNEL, draft, forbidden) โดยไม่มีข้อความแชต/userId/key/token และแก้คำแนะนำในการ์ด LINE
+- [ ] ผู้ใช้ตั้ง LINE token, สร้างการเชื่อมต่อสำหรับ LINE, ตั้ง Webhook URL ใน LINE Developers และทดสอบในแชต
+- [x] แก้ (2026-11-27): ผู้ใช้พบว่าปุ่ม Verify ใน LINE timeout เมื่อ URL มี `?line_key=` (ไม่มี key ผ่าน) เพราะเส้นทาง LINE เปิด Spreadsheet ตรวจ key ก่อน → คำขอที่ `events` ว่างตอบ `ok` ทันทีโดยไม่ตรวจ key/ไม่แตะ Spreadsheet (ไม่มีการประมวลผล) — push แล้ว (ตรงกัน 32 ไฟล์); วัดผ่าน curl รวมการตาม redirect: Verify 2.0–3.0 วินาทีได้ `ok`, เหตุการณ์จริงกับ key ปลอม 3.5 วินาทีได้ `UNAUTHORIZED`
+- ข้อจำกัด: ตรวจ X-Line-Signature ไม่ได้ (ข้อ 0.5); การกันซ้ำพึ่ง CacheService (หายได้ก่อนกำหนด แต่ร่างยังกันซ้ำด้วย request_id); เวลาตอบจริงยังไม่ได้วัด
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
 

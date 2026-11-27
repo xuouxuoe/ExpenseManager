@@ -12,6 +12,7 @@
     <a href="#api-guide" target="_self" data-apig-jump="apig-errors" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">รหัสข้อผิดพลาด</a>
     <a href="#api-guide" target="_self" data-apig-jump="apig-masters" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ID ข้อมูลหลัก</a>
     <a href="#api-guide" target="_self" data-apig-jump="apig-ai" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ตั้งค่า AI</a>
+    <a href="#api-guide" target="_self" data-apig-jump="apig-line" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">LINE</a>
     <a href="#api-guide" target="_self" data-apig-jump="apig-security" class="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-700 hover:border-indigo-300">ความปลอดภัย</a>
   </nav>
 
@@ -268,6 +269,18 @@
       </table>
     </div>
     <p class="mt-2 text-xs text-slate-500">gateway และโปรเจกต์หลักต้องได้รับสิทธิ์ <code>script.external_request</code> (เชื่อมต่อบริการภายนอก) ก่อนใช้ AI</p>
+  </section>
+
+  <!-- LINE -->
+  <section id="apig-line" aria-labelledby="apig-line-title" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="apig-line-title" class="text-base font-semibold">เชื่อม LINE Official Account (ไม่ต้องเขียนโค้ด)</h2>
+    <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700">
+      <li>ตั้ง Channel access token ที่ <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> → LINE Official Account</li>
+      <li>สร้างการเชื่อมต่อสิทธิ์ WRITE และกำหนด LINE userId ที่อนุญาต (บังคับสำหรับ LINE)</li>
+      <li>Webhook URL ใน LINE Developers: <code class="break-all">&lt;URL /exec&gt;?line_key=&lt;API key&gt;</code> · เปิด Use webhook · ปิดข้อความตอบกลับอัตโนมัติ</li>
+      <li>รองรับ: ข้อความ → ร่าง + ปุ่ม [ยกเลิก][ยืนยัน], "วิธีใช้", การเพิ่มเพื่อน; รับเฉพาะแชต 1:1; รูปภาพยังไม่รองรับ</li>
+    </ol>
+    <p class="mt-2 text-xs text-slate-500">Apps Script อ่าน header ไม่ได้ จึงตรวจ X-Line-Signature ไม่ได้ ระบบใช้ line_key + LINE userId ที่อนุญาต + การกดยืนยันพร้อม token แทน · ปุ่ม Verify ใน LINE อาจแจ้งผิดพลาดเพราะ redirect แต่ข้อความจริงทำงาน</p>
   </section>
 
   <!-- ความปลอดภัย -->

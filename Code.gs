@@ -299,6 +299,15 @@ function api_saveAiSettings(input, idempotencyKey) {
   return handleApi_(function (actor) { return AiSettings.save(input, { idempotencyKey: idempotencyKey, actor: actor }); });
 }
 
+function api_getLineSettings() {
+  return handleApi_(function (actor) { return LineSettings.view(actor); });
+}
+
+/** เฉพาะเจ้าของ; token ไม่ถูกส่งกลับให้เบราว์เซอร์ */
+function api_saveLineSettings(input, idempotencyKey) {
+  return handleApi_(function (actor) { return LineSettings.save(input, { idempotencyKey: idempotencyKey, actor: actor }); });
+}
+
 function api_testAiSettings() {
   return handleApi_(function (actor) { return AiSettings.test(actor); });
 }

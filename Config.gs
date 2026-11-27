@@ -17,7 +17,9 @@ var Config = {
     AI_PROVIDER: 'AI_PROVIDER',
     AI_API_KEY: 'AI_API_KEY',
     AI_MODEL: 'AI_MODEL',
-    AI_BASE_URL: 'AI_BASE_URL'
+    AI_BASE_URL: 'AI_BASE_URL',
+    // LINE Messaging API: ใช้ตอบกลับข้อความ (เจ้าของตั้งผ่าน editor หรือหน้าเว็บ)
+    LINE_CHANNEL_ACCESS_TOKEN: 'LINE_CHANNEL_ACCESS_TOKEN'
   },
 
   LOCK_TIMEOUT_MS: 30000,
