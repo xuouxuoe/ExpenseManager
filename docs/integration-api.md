@@ -215,7 +215,8 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
   - token เก็บใน Script Property `CHATGPT_OAUTH_TOKENS` (สถานะรอกรอกรหัสใน `CHATGPT_DEVICE_AUTH`); เข้าสู่ระบบ/ออกจากระบบได้เฉพาะเจ้าของ; ไม่ส่ง token กลับเบราว์เซอร์และไม่ log
   - endpoint/ฟิลด์ที่ตรวจจากซอร์ส openai/codex: issuer, client_id, device code endpoints, redirect_uri, base URL `/backend-api/codex`; **ยังไม่ได้ยืนยัน**: ชื่อฟิลด์ใน body ของ token/refresh, claim path ของ `chatgpt_account_id` (`https://api.openai.com/auth`), header `originator`/`OpenAI-Beta` และว่า backend ยอมรับ `instructions` แบบกำหนดเองหรือไม่ — ต้องทดสอบด้วยบัญชีจริงบน `/dev`
 - [x] tests: `telegram-webhook.test.js` (9), `web-approvals.test.js` (5), `chatgpt-auth.test.js` (6); `npm test` ผ่านทั้งหมด
-- [ ] clasp push และทดสอบบน `/dev` (รอผู้ใช้อนุญาต): Telegram จริง (ข้อความ, สลิป, ปุ่ม, ผู้ใช้ไม่อนุญาต), เมนูรอยืนยัน, ChatGPT login + ทดสอบ AI
+- [x] clasp push ขึ้น Apps Script HEAD (ผู้ใช้อนุญาต 2026-11-28, commit 571d7a9; pull กลับมาเทียบ 37 ไฟล์ตรงกัน)
+- [ ] ทดสอบบน `/dev` (ผู้ใช้): Telegram จริง (ข้อความ, สลิป, ปุ่ม, ผู้ใช้ไม่อนุญาต), เมนูรอยืนยัน, ChatGPT login + ทดสอบ AI
 - ข้อจำกัด: Telegram อาจแจ้ง `302 Moved Temporarily` ใน getWebhookInfo เพราะ Apps Script redirect เสมอ และอาจส่ง update ซ้ำ (ระบบข้ามด้วย update_id); การยืนยันจากหน้าเว็บไม่ส่งข้อความแจ้งกลับไปในแชต; ChatGPT ใช้โควตาบัญชีและอาจถูก OpenAI ปิดได้
 
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
