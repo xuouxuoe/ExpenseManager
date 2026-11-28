@@ -17,7 +17,6 @@ var LineWebhook = (function () {
   var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
   var MAX_BODY_LENGTH = 100000;
   var DEDUPE_SECONDS = 6 * 60 * 60;
-  var HELP_WORDS = ['help', 'ช่วยเหลือ', 'วิธีใช้', '?'];
   var BRAND = '#4F46E5';
 
   function isLineRequest(e) {
@@ -30,24 +29,9 @@ var LineWebhook = (function () {
     return { type: 'text', text: String(t).slice(0, 4900) };
   }
 
+  // คำสั่ง วิธีใช้ และข้อความผิดพลาด: ChatCommands.gs (ใช้ร่วมกับ Telegram)
   function helpText() {
-    return text('พิมพ์รายการที่ต้องการบันทึก เช่น\n• กาแฟ 65\n• ข้าวกลางวัน 120 จ่ายด้วย kbank\n• เงินเดือนเข้า 30000\n• โอนจาก kbank ไป scb 500\n• หรือส่งรูปสลิปโอนเงิน/ใบเสร็จ\n• สร้างแผนชำระ: "ผ่อนทีวี 12000 10 เดือน บัตร KTC"\n\nระบบจะสรุปให้ตรวจก่อน แล้วกด "ยืนยัน" เพื่อบันทึก\n\nใช้งบทริป: ใส่ชื่องบในข้อความ เช่น "ราเมน 350 งบญี่ปุ่น"\n\nคำสั่งดูข้อมูล\n• สรุป — รายรับรายจ่ายเดือนนี้\n• ยอดเงิน — ยอดบัญชีและเงินที่ใช้ได้\n• ล่าสุด — 5 รายการล่าสุด\n• งบ — งบใช้จ่ายคงเหลือ');
-  }
-
-  /**
-   * คำสั่งดูข้อมูล (ระยะ A5): จับคำตรงตัวก่อนเรียก AI (ไม่เสียค่า AI และไม่สร้างร่าง)
-   * ต้องมีสิทธิ์ READ ในการเชื่อมต่อ
-   */
-  var READ_COMMANDS = [
-    { words: ['สรุป', 'สรุปเดือนนี้', 'summary'], result: 'summary', run: function () { return ApiReads.formatSummary(ApiReads.summaryMonth({})); } },
-    { words: ['ยอดเงิน', 'ยอดคงเหลือ', 'คงเหลือ', 'balance', 'balances'], result: 'balances', run: function () { return ApiReads.formatBalances(ApiReads.balances()); } },
-    { words: ['ล่าสุด', 'รายการล่าสุด', 'recent'], result: 'recent', run: function () { return ApiReads.formatRecent(ApiReads.recentTransactions({})); } },
-    { words: ['งบ', 'งบเหลือ', 'งบคงเหลือ', 'budget'], result: 'budget', run: function () { return ApiReads.formatBudgets(ApiReads.budgetRemaining({})); } }
-  ];
-
-  function readCommandOf(body) {
-    var key = body.toLowerCase().replace(/\s+/g, '');
-    return READ_COMMANDS.filter(function (c) { return c.words.indexOf(key) >= 0; })[0] || null;
+    return text(ChatCommands.helpText());
   }
 
   function postbackData(action, draft) {
@@ -76,22 +60,6 @@ var LineWebhook = (function () {
         ] }
       }
     };
-  }
-
-  function errorText(err) {
-    var e = Util.toClientError(err);
-    if (e.code === 'INTERNAL_ERROR') return 'เกิดข้อผิดพลาดในระบบ กรุณาลองใหม่อีกครั้ง';
-    if (e.code === 'AI_NOT_CONFIGURED') return 'ระบบยังไม่ได้ตั้งค่า AI กรุณาแจ้งผู้ดูแล';
-    if (e.code === 'AI_ERROR' || e.code === 'AI_INVALID_OUTPUT') return 'แปลงข้อความ/รูปไม่สำเร็จ กรุณาลองใหม่อีกครั้ง (รูปสลิปต้องใช้โมเดล AI ที่อ่านภาพได้)';
-    var msg = e.message;
-    var candidates = e.details && e.details.candidates;
-    if (candidates && candidates.length) {
-      msg += '\nตัวเลือก: ' + candidates.slice(0, 10).map(function (c) { return c.name; }).join(', ');
-    }
-    if (e.details && e.details.field === 'category') {
-      msg = msg.replace(/category \(([^)]*)\)/, '$1') + '\nพิมพ์รายการพร้อมหมวด เช่น "ร้านอาหาร 1250 หมวดอาหาร"';
-    }
-    return msg;
   }
 
   // ---------- ส่งข้อความกลับ ----------
@@ -160,16 +128,13 @@ var LineWebhook = (function () {
 
   function onText(message, call, replyToken) {
     var body = String(message || '').trim();
-    if (!body || HELP_WORDS.indexOf(body.toLowerCase()) >= 0) {
+    if (ChatCommands.isHelp(body)) {
       reply(replyToken, [helpText()]);
       return 'help';
     }
-    var command = readCommandOf(body);
+    var command = ChatCommands.find(body);
     if (command) {
-      if (call.client.scopes.indexOf('READ') < 0) {
-        throw Util.AppError('FORBIDDEN_SCOPE', 'การเชื่อมต่อนี้ไม่มีสิทธิ์ดูข้อมูล (READ) ให้ผู้ดูแลเพิ่มสิทธิ์ในหน้าเชื่อมต่อภายนอก');
-      }
-      reply(replyToken, [text(command.run())]);
+      reply(replyToken, [text(ChatCommands.run(command, call.client))]);
       return command.result;
     }
     return draftFromParsed(AiParser.parse(body, call.client), call, replyToken);
@@ -262,7 +227,7 @@ var LineWebhook = (function () {
     } catch (err) {
       var e = Util.toClientError(err);
       if (e.code === 'INTERNAL_ERROR') console.log('LINE_INTERNAL_ERROR: ' + (err && err.message));
-      reply(ev.replyToken, [text(errorText(err))]);
+      reply(ev.replyToken, [text(ChatCommands.errorText(err))]);
       return 'error:' + e.code;
     }
   }
