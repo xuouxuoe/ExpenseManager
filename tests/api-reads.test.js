@@ -212,7 +212,7 @@ test('คำสั่ง หนี้: ยอดหนี้บัตรหล�
   assert.equal(adv.ok, true, JSON.stringify(adv));
 
   const d = plain(s.ctx.ApiReads.debts());
-  assert.deepEqual(d.totals, { cards: 11500.5, loans: 100000 });
+  assert.deepEqual(d.totals, { cards: 11500.5, loans: 100000, due_this_month: 0, overdue: 0 });
   assert.deepEqual(d.cards.map((c) => [c.name, c.balance, c.available_credit, c.due_day]), [['KTC', 10000.5, 39999.5, 25], ['บัตร', 1500, null, null]]);
   const text = s.ctx.ApiReads.formatDebts(s.ctx.ApiReads.debts());
   assert.match(text, /^หนี้บัตร 11,500\.50/);
@@ -222,4 +222,28 @@ test('คำสั่ง หนี้: ยอดหนี้บัตรหล�
   const cmd = s.ctx.ChatCommands.find('หนี้');
   assert.equal(cmd.result, 'debts');
   assert.equal(s.ctx.ChatCommands.run(cmd, { scopes: ['READ'] }), text);
+});
+
+test('คำสั่ง หนี้: ยอดต้องจ่ายเดือนนี้ตามแผนชำระ แยกงวดค้างจากเดือนก่อน ไม่นับงวดอนาคต', () => {
+  const s = setup();
+  const actor = { actorId: 'owner@example.com' };
+  const ktc = plain(s.ctx.MasterData.create('account', { account_name: 'KTC', account_type: 'CREDIT_CARD' }, { idempotencyKey: key(), actor }));
+  const today = s.ctx.Util.todayIso();
+  const thisMonth = Number(today.slice(0, 4) + today.slice(5, 7));
+  const prev = thisMonth % 100 === 1 ? thisMonth - 89 : thisMonth - 1;
+  const plan = s.ctx.api_createPaymentPlan({ item_name: 'ทีวี', purchase_date: today, plan_type: 'INSTALLMENT', owner_id: s.ids.dad.owner_id,
+    account_id: ktc.account_id, category_id: s.ids.food.category_id, principal_amount: '900', interest_amount: '0', fee_amount: '0',
+    installment_count: 3, first_saving_month: prev, first_payment_month: prev }, key());
+  assert.equal(plan.ok, true, JSON.stringify(plan));
+
+  const d = plain(s.ctx.ApiReads.debts());
+  const card = d.cards.find((c) => c.account_id === ktc.account_id);
+  assert.equal(d.month, thisMonth);
+  assert.equal(card.due_this_month, 300);
+  assert.equal(card.overdue, 300);
+  assert.equal(d.totals.due_this_month, 300);
+  assert.equal(d.totals.overdue, 300);
+  const text = s.ctx.ApiReads.formatDebts(s.ctx.ApiReads.debts());
+  assert.match(text, /\nต้องจ่าย .+ 300\.00 \+ ค้างจากเดือนก่อน 300\.00\n/);
+  assert.match(text, /• KTC [\d,.]+.*\n {3}ต้องจ่ายเดือนนี้ 300\.00 · ค้าง 300\.00/);
 });

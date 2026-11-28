@@ -80,9 +80,18 @@ var ApiReads = (function () {
     var accounts = Database.readAll('Accounts').rows;
     var bal = Ledger.balances(accounts, Database.readAll('Transactions').rows);
     var names = MasterData.displayNames();
+    // ยอดต้องจ่ายตามแผนชำระ: งวดเดือนนี้ + งวดค้างจากเดือนก่อน (หลักเดียวกับการ์ดงานเดือนนี้บน Dashboard; งวดยกเลิกไม่นับ)
+    var month = currentMonth();
+    var due = {};
+    Database.readAll('PaymentSchedules').rows.forEach(function (r) {
+      var left = Math.round((Number(r.remaining_to_pay) || 0) * 100);
+      if (r.is_cancelled === true || left <= 0 || Number(r.payment_month) > month) return;
+      var d = due[r.account_id] || (due[r.account_id] = { month: 0, overdue: 0 });
+      if (Number(r.payment_month) === month) d.month += left; else d.overdue += left;
+    });
     var cards = [];
     var loans = [];
-    var totals = { cards: 0, loans: 0 };
+    var totals = { cards: 0, loans: 0, due_this_month: 0, overdue: 0 };
     accounts.forEach(function (a) {
       var isCard = CARD_TYPES.indexOf(a.account_type) >= 0;
       if (!isCard && a.account_type !== 'LOAN') return;
@@ -93,13 +102,18 @@ var ApiReads = (function () {
         balance: Validation.fromSatang(balance),
         credit_limit: limit ? Validation.fromSatang(limit) : null,
         available_credit: limit ? Validation.fromSatang(Math.max(0, limit - balance)) : null,
-        due_day: a.due_day === '' || a.due_day === null || a.due_day === undefined ? null : Number(a.due_day) };
+        due_day: a.due_day === '' || a.due_day === null || a.due_day === undefined ? null : Number(a.due_day),
+        due_this_month: Validation.fromSatang((due[a.account_id] || {}).month || 0),
+        overdue: Validation.fromSatang((due[a.account_id] || {}).overdue || 0) };
+      totals.due_this_month += (due[a.account_id] || {}).month || 0;
+      totals.overdue += (due[a.account_id] || {}).overdue || 0;
       if (isCard) { cards.push(row); totals.cards += balance; } else { loans.push(row); totals.loans += balance; }
     });
     var byDebt = function (x, y) { return y.balance - x.balance || x.name.localeCompare(y.name); };
     cards.sort(byDebt);
     loans.sort(byDebt);
-    return { totals: { cards: Validation.fromSatang(totals.cards), loans: Validation.fromSatang(totals.loans) }, cards: cards, loans: loans };
+    return { month: month, totals: { cards: Validation.fromSatang(totals.cards), loans: Validation.fromSatang(totals.loans),
+      due_this_month: Validation.fromSatang(totals.due_this_month), overdue: Validation.fromSatang(totals.overdue) }, cards: cards, loans: loans };
   }
 
   /** รายการล่าสุด เรียงเหมือนหน้ารายการ (วันที่ทำรายการ แล้วเวลาบันทึก ล่าสุดก่อน) */
@@ -203,16 +217,25 @@ var ApiReads = (function () {
   function formatDebts(r) {
     if (!r.cards.length && !r.loans.length) return 'ยังไม่มีบัตรเครดิต บัตรกดเงินสด หรือสินเชื่อ';
     var lines = ['หนี้บัตร ' + money(r.totals.cards)];
+    if (r.totals.due_this_month || r.totals.overdue) {
+      lines.push('ต้องจ่าย ' + monthLabel(r.month) + ' ' + money(r.totals.due_this_month) + (r.totals.overdue ? ' + ค้างจากเดือนก่อน ' + money(r.totals.overdue) : ''));
+    }
     r.cards.forEach(function (c) {
       var extra = [];
       if (c.available_credit !== null) extra.push('วงเงินเหลือ ' + money(c.available_credit));
       if (c.due_day) extra.push('ครบกำหนดวันที่ ' + c.due_day);
       lines.push('• ' + c.name + ' ' + money(c.balance) + (extra.length ? ' (' + extra.join(', ') + ')' : ''));
+      if (c.due_this_month || c.overdue) {
+        lines.push('   ต้องจ่ายเดือนนี้ ' + money(c.due_this_month) + (c.overdue ? ' · ค้าง ' + money(c.overdue) : ''));
+      }
     });
     var loans = r.loans.filter(function (l) { return l.balance; });
     if (loans.length) {
       lines.push('', 'สินเชื่อ ' + money(r.totals.loans));
-      loans.forEach(function (l) { lines.push('• ' + l.name + ' ' + money(l.balance) + (l.due_day ? ' (ครบกำหนดวันที่ ' + l.due_day + ')' : '')); });
+      loans.forEach(function (l) {
+        lines.push('• ' + l.name + ' ' + money(l.balance) + (l.due_day ? ' (ครบกำหนดวันที่ ' + l.due_day + ')' : ''));
+        if (l.due_this_month || l.overdue) lines.push('   ต้องจ่ายเดือนนี้ ' + money(l.due_this_month) + (l.overdue ? ' · ค้าง ' + money(l.overdue) : ''));
+      });
     }
     return lines.join('\n');
   }

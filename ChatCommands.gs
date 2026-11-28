@@ -20,7 +20,7 @@ var ChatCommands = (function () {
       run: function () { return ApiReads.formatRecent(ApiReads.recentTransactions({})); } },
     { words: ['งบ', 'งบเหลือ', 'งบคงเหลือ', 'budget'], result: 'budget', help: 'งบ — งบใช้จ่ายคงเหลือ',
       run: function () { return ApiReads.formatBudgets(ApiReads.budgetRemaining({})); } },
-    { words: ['หนี้', 'หนี้บัตร', 'ยอดหนี้', 'debt', 'debts'], result: 'debts', help: 'หนี้ — ยอดหนี้บัตรและวงเงินคงเหลือ',
+    { words: ['หนี้', 'หนี้บัตร', 'ยอดหนี้', 'debt', 'debts'], result: 'debts', help: 'หนี้ — ยอดหนี้บัตร วงเงินคงเหลือ และยอดต้องจ่ายเดือนนี้',
       run: function () { return ApiReads.formatDebts(ApiReads.debts()); } }
   ];
 
