@@ -6,6 +6,7 @@
 
 - `{"action":"debts"}` (สิทธิ์ READ, ไม่มี params) คืน `{ month, totals: { cards, loans, due_this_month, overdue }, cards[], loans[] }` แต่ละบัญชีมี balance, credit_limit, available_credit, due_day, due_this_month, overdue — ข้อมูลเดียวกับคำสั่งแชต "หนี้"
 - คู่มือ API (ตาราง actions) และ docs/integration-api.md อัปเดต; test ตรวจสิทธิ์ READ / ไม่เขียนชีต / ผลตรงกับคำสั่งแชต
+- clasp push ขึ้น Apps Script HEAD แล้ว (2026-11-28, commit ba6e468; pull กลับมาเทียบ 38 ไฟล์ตรงกัน)
 
 ### Added — ยอดต้องจ่ายเดือนนี้ในคำสั่ง "หนี้" (2026-11-28)
 
