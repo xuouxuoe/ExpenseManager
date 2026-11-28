@@ -49,7 +49,14 @@ var AiParser = (function () {
   /** JSON Schema ของผลลัพธ์ (ทุกฟิลด์ required + additionalProperties false เพื่อใช้กับ structured output แบบ strict) */
   function outputSchema() {
     var props = {
-      intent: { type: 'string', enum: ['TRANSACTION', 'OTHER'], description: 'TRANSACTION when the text records income/expense/transfer/card purchase, otherwise OTHER' },
+      intent: { type: 'string', enum: ['TRANSACTION', 'PLAN', 'OTHER'], description: 'TRANSACTION when the text records income/expense/transfer/card purchase that already happened; PLAN when it creates a payment plan (installments ผ่อน, a future one-time payment, or a recurring bill); otherwise OTHER' },
+      plan_type: nullable('string', { enum: ['INSTALLMENT', 'ONE_TIME', 'RECURRING', null], description: 'PLAN only' }),
+      installment_count: nullable('integer', { description: 'PLAN only: number of installments/months (1 for ONE_TIME)' }),
+      interest_amount: nullable('number', { description: 'PLAN only: total interest in THB if stated' }),
+      fee_amount: nullable('number', { description: 'PLAN only: total fees in THB if stated' }),
+      first_payment_month: nullable('integer', { description: 'PLAN only: YYYYMM of the first payment; null = next month' }),
+      first_saving_month: nullable('integer', { description: 'PLAN only: YYYYMM to start saving; null = this month' }),
+      due_day: nullable('integer', { description: 'PLAN only: due day of month 1-31 if stated' }),
       transaction_type: nullable('string', { enum: ApiDrafts.TYPES.concat([null]) }),
       transaction_date: nullable('string', { description: 'YYYY-MM-DD (Gregorian). null = today' }),
       amount: nullable('number', { description: 'Positive amount in THB' }),
@@ -93,6 +100,9 @@ var AiParser = (function () {
       'If the message is not a transaction (a question, greeting, or missing amount) set intent OTHER and explain briefly in Thai in message.',
       'budget: set a budget_id from Trip budgets ONLY when the message mentions that budget or trip by name (e.g. "งบญี่ปุ่น", "ทริปเชียงใหม่"); never guess from the date alone.',
       'Budgets are for spending only (EXPENSE or CREDIT_PURCHASE). If the chosen budget has an owner_id, use that owner_id as owner.',
+      'PLAN: for installment purchases ("ผ่อน ... 10 เดือน/งวด"), a future bill to pay once ("ค่าประกัน 8500 จ่ายเดือนมีนาคม") or a recurring bill for a fixed number of months, use intent PLAN.',
+      'For PLAN: amount = TOTAL principal (if the user gives a per-installment amount, multiply by installment_count); from_account = the card/account used for the plan; category = closest EXPENSE category (required); transaction_date = purchase date (null = today).',
+      'For PLAN: first_payment_month / first_saving_month as YYYYMM integers only when stated (e.g. "เริ่มจ่ายเดือนหน้า" → null is fine); due_day only when stated. transaction_type, to_account and budget are null for PLAN.',
       'Return only the JSON object.',
       '',
       'Accounts (account_id | name | type):',
@@ -227,6 +237,18 @@ var AiParser = (function () {
   /** ผลจาก AI → { intent, params (สำหรับ draft.create), message } */
   function normalize(out, text) {
     var message = clean(out.message);
+    if (out.intent === 'PLAN') {
+      var plan = { kind: 'PAYMENT_PLAN' };
+      [['plan_type', 'plan_type'], ['item_name', 'item_name'], ['description', 'description'], ['from_account', 'account'], ['category', 'category'],
+        ['owner', 'owner'], ['amount', 'principal_amount'], ['interest_amount', 'interest_amount'], ['fee_amount', 'fee_amount'],
+        ['installment_count', 'installment_count'], ['transaction_date', 'purchase_date'], ['first_saving_month', 'first_saving_month'],
+        ['first_payment_month', 'first_payment_month'], ['due_day', 'due_day'], ['note', 'note']].forEach(function (pair) {
+        var v = clean(out[pair[0]]);
+        if (v !== '') plan[pair[1]] = v;
+      });
+      plan.source_text = text;
+      return { intent: 'PLAN', params: plan, message: message };
+    }
     if (out.intent !== 'TRANSACTION') {
       return { intent: 'OTHER', params: null, message: message || 'ข้อความนี้ไม่ใช่รายการรับจ่าย' };
     }
@@ -247,7 +269,8 @@ var AiParser = (function () {
    */
   function fillGeneralCategory(result, masters) {
     var p = result.params;
-    if (!p || p.category || !p.transaction_type || p.transaction_type === 'TRANSFER') return result;
+    if (!p || p.category) return result;
+    if (p.kind !== 'PAYMENT_PLAN' && (!p.transaction_type || p.transaction_type === 'TRANSFER')) return result;
     var want = p.transaction_type === 'INCOME' ? 'INCOME' : 'EXPENSE';
     var hits = masters.categories.filter(function (c) { return c.category_type === want && GENERAL_CATEGORY_RE.test(c.category_name); });
     if (hits.length === 1) p.category = hits[0].category_id;

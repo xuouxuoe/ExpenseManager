@@ -93,7 +93,7 @@
         </tbody>
       </table>
     </div>
-    <p class="mt-2 text-xs text-slate-500">ทุกการบันทึกต้องผ่านร่างและการยืนยันของผู้ใช้ ไม่มี action บันทึกตรง</p>
+    <p class="mt-2 text-xs text-slate-500">ทุกการบันทึกต้องผ่านร่างและการยืนยันของผู้ใช้ ไม่มี action บันทึกตรง · สร้างแผนชำระด้วย <code>draft.create</code> โดยส่ง <code>params.kind = "PAYMENT_PLAN"</code> พร้อม <code>item_name</code>, <code>principal_amount</code>, <code>installment_count</code>, <code>account</code>, <code>category</code> (ไม่บังคับ: <code>plan_type</code>, <code>owner</code>, <code>interest_amount</code>, <code>fee_amount</code>, <code>purchase_date</code>, <code>first_payment_month</code>, <code>first_saving_month</code>, <code>due_day</code>, <code>description</code>, <code>note</code>)</p>
 
     <h3 class="mt-4 text-sm font-semibold"><code>ping</code> — ตัวอย่าง</h3>
     <div class="mt-1 grid gap-3 md:grid-cols-2">
@@ -293,6 +293,7 @@
       <li>Webhook URL ใน LINE Developers: <code class="break-all">&lt;URL /exec&gt;?line_key=&lt;API key&gt;</code> · เปิด Use webhook · ปิดข้อความตอบกลับอัตโนมัติ</li>
       <li>รองรับ: ข้อความ → ร่าง + ปุ่ม [ยกเลิก][ยืนยัน], "วิธีใช้", การเพิ่มเพื่อน; รับเฉพาะแชต 1:1; <strong>รูปสลิป/ใบเสร็จ</strong> → AI อ่านรูปเป็นร่างให้ยืนยัน (ต้องใช้โมเดล AI ที่อ่านภาพได้; ไม่เก็บรูป)</li>
       <li>คำสั่งดูข้อมูล (ต้องมีสิทธิ์ READ เพิ่ม ไม่เรียก AI): <code>สรุป</code> · <code>ยอดเงิน</code> · <code>ล่าสุด</code> · <code>งบ</code></li>
+      <li>สร้างแผนชำระ: พิมพ์ เช่น <code>ผ่อนทีวี 12000 10 เดือน บัตร KTC</code> หรือ <code>ค่าประกันรถ 8500 จ่ายมีนาคม</code> → สรุปแผนพร้อมจำนวนงวด/ยอดต่องวด/เดือนชำระ → กดยืนยันจึงสร้างแผน (ไม่บันทึกรายการซื้อด้วยบัตร)</li>
       <li>ใช้งบทริป: ใส่ชื่องบในข้อความ เช่น <code>ราเมน 350 งบญี่ปุ่น</code> — AI เลือกงบเฉพาะเมื่อข้อความระบุชื่องบหรือทริป สรุปร่างแสดง "ใช้จากงบ …" ก่อนยืนยัน</li>
     </ol>
     <p class="mt-2 text-xs text-slate-500">Apps Script อ่าน header ไม่ได้ จึงตรวจ X-Line-Signature ไม่ได้ ระบบใช้ line_key + LINE userId ที่อนุญาต + การกดยืนยันพร้อม token แทน · ปุ่ม Verify ใน LINE อาจแจ้งผิดพลาดเพราะ redirect แต่ข้อความจริงทำงาน</p>
