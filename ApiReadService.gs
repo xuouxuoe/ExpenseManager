@@ -70,6 +70,38 @@ var ApiReads = (function () {
     return { totals: totals, accounts: list };
   }
 
+  var CARD_TYPES = ['CREDIT_CARD', 'CASH_CARD'];
+
+  /**
+   * ยอดหนี้บัตร (CREDIT_CARD, CASH_CARD) จากธุรกรรมจริง พร้อมวงเงินคงเหลือและวันครบกำหนด;
+   * สินเชื่อ (LOAN) แยกไว้ต่างหาก — วงเงินไม่ใช่เงินที่ใช้ได้ (AGENTS.md §7.3)
+   */
+  function debts() {
+    var accounts = Database.readAll('Accounts').rows;
+    var bal = Ledger.balances(accounts, Database.readAll('Transactions').rows);
+    var names = MasterData.displayNames();
+    var cards = [];
+    var loans = [];
+    var totals = { cards: 0, loans: 0 };
+    accounts.forEach(function (a) {
+      var isCard = CARD_TYPES.indexOf(a.account_type) >= 0;
+      if (!isCard && a.account_type !== 'LOAN') return;
+      var balance = bal[a.account_id] || 0;
+      if (a.is_active !== true && !balance) return;
+      var limit = Number(a.credit_limit) > 0 ? Math.round(Number(a.credit_limit) * 100) : 0;
+      var row = { account_id: a.account_id, name: names[a.account_id] || a.account_name, type: a.account_type,
+        balance: Validation.fromSatang(balance),
+        credit_limit: limit ? Validation.fromSatang(limit) : null,
+        available_credit: limit ? Validation.fromSatang(Math.max(0, limit - balance)) : null,
+        due_day: a.due_day === '' || a.due_day === null || a.due_day === undefined ? null : Number(a.due_day) };
+      if (isCard) { cards.push(row); totals.cards += balance; } else { loans.push(row); totals.loans += balance; }
+    });
+    var byDebt = function (x, y) { return y.balance - x.balance || x.name.localeCompare(y.name); };
+    cards.sort(byDebt);
+    loans.sort(byDebt);
+    return { totals: { cards: Validation.fromSatang(totals.cards), loans: Validation.fromSatang(totals.loans) }, cards: cards, loans: loans };
+  }
+
   /** รายการล่าสุด เรียงเหมือนหน้ารายการ (วันที่ทำรายการ แล้วเวลาบันทึก ล่าสุดก่อน) */
   function recentTransactions(params) {
     var p = params || {};
@@ -168,6 +200,23 @@ var ApiReads = (function () {
     return lines.join('\n');
   }
 
+  function formatDebts(r) {
+    if (!r.cards.length && !r.loans.length) return 'ยังไม่มีบัตรเครดิต บัตรกดเงินสด หรือสินเชื่อ';
+    var lines = ['หนี้บัตร ' + money(r.totals.cards)];
+    r.cards.forEach(function (c) {
+      var extra = [];
+      if (c.available_credit !== null) extra.push('วงเงินเหลือ ' + money(c.available_credit));
+      if (c.due_day) extra.push('ครบกำหนดวันที่ ' + c.due_day);
+      lines.push('• ' + c.name + ' ' + money(c.balance) + (extra.length ? ' (' + extra.join(', ') + ')' : ''));
+    });
+    var loans = r.loans.filter(function (l) { return l.balance; });
+    if (loans.length) {
+      lines.push('', 'สินเชื่อ ' + money(r.totals.loans));
+      loans.forEach(function (l) { lines.push('• ' + l.name + ' ' + money(l.balance) + (l.due_day ? ' (ครบกำหนดวันที่ ' + l.due_day + ')' : '')); });
+    }
+    return lines.join('\n');
+  }
+
   function formatRecent(r) {
     if (!r.transactions.length) return 'ยังไม่มีรายการ';
     var lines = ['รายการล่าสุด'];
@@ -195,6 +244,8 @@ var ApiReads = (function () {
     balances: balances,
     recentTransactions: recentTransactions,
     budgetRemaining: budgetRemaining,
+    debts: debts,
+    formatDebts: formatDebts,
     formatSummary: formatSummary,
     formatBalances: formatBalances,
     formatRecent: formatRecent,

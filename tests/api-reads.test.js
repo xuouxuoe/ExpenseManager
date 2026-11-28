@@ -195,3 +195,31 @@ test('LINE: คำสั่ง สรุป / ยอดเงิน / ล่า�
   assert.match(last(), /ไม่มีสิทธิ์ดูข้อมูล/);
   assert.doesNotMatch(last(), /9,750/);
 });
+
+test('คำสั่ง หนี้: ยอดหนี้บัตรหลังชำระบางส่วน, วงเงินคงเหลือ, วันครบกำหนด และสินเชื่อแยก', () => {
+  const s = setup();
+  const actor = { actorId: 'owner@example.com' };
+  const mk = (type, input) => plain(s.ctx.MasterData.create(type, input, { idempotencyKey: key(), actor }));
+  const ktc = mk('account', { account_name: 'KTC', account_type: 'CREDIT_CARD', credit_limit: 50000, due_day: 25 });
+  const loan = mk('account', { account_name: 'กู้บ้าน', account_type: 'LOAN' });
+  s.tx('2026-11-04', 'CREDIT_PURCHASE', 1500);
+  s.tx('2026-11-05', 'CREDIT_PURCHASE', 12000.5, { from_account_id: ktc.account_id });
+  const pay = s.ctx.api_createTransaction({ transaction_type: 'CREDIT_PAYMENT', from_account_id: s.ids.bank.account_id, to_account_id: ktc.account_id,
+    transaction_date: '2026-11-20', item_name: 'จ่ายบัตร', amount: 2000, owner_id: s.ids.dad.owner_id, allow_duplicate: true }, key());
+  assert.equal(pay.ok, true, JSON.stringify(pay));
+  const adv = s.ctx.api_createTransaction({ transaction_type: 'CASH_ADVANCE', from_account_id: loan.account_id, to_account_id: s.ids.bank.account_id,
+    transaction_date: '2026-11-21', item_name: 'กู้', amount: 100000, owner_id: s.ids.dad.owner_id, allow_duplicate: true }, key());
+  assert.equal(adv.ok, true, JSON.stringify(adv));
+
+  const d = plain(s.ctx.ApiReads.debts());
+  assert.deepEqual(d.totals, { cards: 11500.5, loans: 100000 });
+  assert.deepEqual(d.cards.map((c) => [c.name, c.balance, c.available_credit, c.due_day]), [['KTC', 10000.5, 39999.5, 25], ['บัตร', 1500, null, null]]);
+  const text = s.ctx.ApiReads.formatDebts(s.ctx.ApiReads.debts());
+  assert.match(text, /^หนี้บัตร 11,500\.50/);
+  assert.match(text, /• KTC 10,000\.50 \(วงเงินเหลือ 39,999\.50, ครบกำหนดวันที่ 25\)/);
+  assert.match(text, /สินเชื่อ 100,000\.00\n• กู้บ้าน 100,000\.00/);
+
+  const cmd = s.ctx.ChatCommands.find('หนี้');
+  assert.equal(cmd.result, 'debts');
+  assert.equal(s.ctx.ChatCommands.run(cmd, { scopes: ['READ'] }), text);
+});

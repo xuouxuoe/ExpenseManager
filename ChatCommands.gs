@@ -19,7 +19,9 @@ var ChatCommands = (function () {
     { words: ['ล่าสุด', 'รายการล่าสุด', 'recent'], result: 'recent', help: 'ล่าสุด — 5 รายการล่าสุด',
       run: function () { return ApiReads.formatRecent(ApiReads.recentTransactions({})); } },
     { words: ['งบ', 'งบเหลือ', 'งบคงเหลือ', 'budget'], result: 'budget', help: 'งบ — งบใช้จ่ายคงเหลือ',
-      run: function () { return ApiReads.formatBudgets(ApiReads.budgetRemaining({})); } }
+      run: function () { return ApiReads.formatBudgets(ApiReads.budgetRemaining({})); } },
+    { words: ['หนี้', 'หนี้บัตร', 'ยอดหนี้', 'debt', 'debts'], result: 'debts', help: 'หนี้ — ยอดหนี้บัตรและวงเงินคงเหลือ',
+      run: function () { return ApiReads.formatDebts(ApiReads.debts()); } }
   ];
 
   /** ตัดช่องว่าง ตัวพิมพ์ใหญ่ / นำหน้า และ @ชื่อบอท ท้ายคำสั่ง (Telegram) */
