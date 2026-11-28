@@ -450,7 +450,10 @@ var ApiDrafts = (function () {
 
   /** draft.confirm: บันทึกจริงครั้งเดียว; ยืนยันซ้ำคืนผลเดิม */
   function confirm(params, call) {
-    var found = findOwned(params, call);
+    return confirmFound(findOwned(params, call), call);
+  }
+
+  function confirmFound(found, call) {
     if (found.row.draft_status === 'CONFIRMED') return toPublic(found.row);
     assertPending(found, call);
     var tx = JSON.parse(found.row.draft_json);
@@ -487,14 +490,19 @@ var ApiDrafts = (function () {
       if (code.indexOf('VALIDATION_') === 0) closeDraft(draftId, 'FAILED', code, call);
       throw err;
     }
-    PaymentPlanner.create(planInput(data), { idempotencyKey: 'api-draft-plan-' + draftId, actor: call.actor });
+    // ใช้ actor ผู้สร้างร่างเสมอ: idempotency ผูกกับ actor จึง replay ได้แม้ยืนยันจากหน้าเว็บกับแชตคนละคน (ไม่สร้างแผนซ้ำ)
+    var planActor = found.row.actor_id ? { actorId: found.row.actor_id } : call.actor;
+    PaymentPlanner.create(planInput(data), { idempotencyKey: 'api-draft-plan-' + draftId, actor: planActor });
     closeDraft(draftId, 'CONFIRMED', '', call);
     return toPublic(findDraft(draftId).row);
   }
 
   /** draft.cancel: ยกเลิกร่างที่ยังไม่ยืนยัน (ยกเลิกซ้ำได้ผลเดิม) */
   function cancel(params, call) {
-    var found = findOwned(params, call);
+    return cancelFound(findOwned(params, call), call);
+  }
+
+  function cancelFound(found, call) {
     if (found.row.draft_status === 'CANCELLED') return toPublic(found.row);
     assertPending(found, call);
     var draftId = found.row.draft_id;
@@ -507,8 +515,88 @@ var ApiDrafts = (function () {
     return toPublic(findDraft(draftId).row);
   }
 
+  // ---------- หน้าเว็บ "รอยืนยัน" ----------
+  // ผู้ใช้ที่ล็อกอิน Google และอยู่ใน ALLOWED_EMAILS ยืนยัน/ยกเลิกร่างได้โดยไม่ต้องใช้ confirm_token
+  // (สิทธิ์เท่ากับการบันทึกรายการบนหน้าเว็บอยู่แล้ว); actor ของการบันทึกคือผู้ใช้เว็บ
+
+  var WEB_RECENT_LIMIT = 20;
+
+  function channelLabel(id) {
+    var v = String(id || '');
+    if (!v) return 'API';
+    if (v.indexOf('tg_') === 0) return 'Telegram';
+    if (/^U[0-9a-f]{32}$/i.test(v)) return 'LINE';
+    return 'API';
+  }
+
+  function webRow(row, clientNames, withDuplicates) {
+    var status = row.draft_status === 'PENDING' && isExpired(row) ? 'EXPIRED' : row.draft_status;
+    var tx = JSON.parse(row.draft_json);
+    var pub = toPublic(Object.assign({}, row, { draft_status: status }),
+      { duplicates: withDuplicates && status === 'PENDING' && !isPlan(tx) ? duplicatesOf(tx) : [] });
+    pub.kind = isPlan(tx) ? 'PLAN' : 'TRANSACTION';
+    pub.client_name = clientNames[row.client_id] || ('#' + row.client_id);
+    pub.channel = channelLabel(row.channel_user_id);
+    pub.error_code = row.error_code || '';
+    pub.created_at = row.created_at;
+    pub.updated_at = row.updated_at;
+    return pub;
+  }
+
+  /** ร่างที่รอยืนยัน (ยังไม่หมดอายุ) + ร่างที่ปิดแล้วล่าสุด */
+  function listForWeb() {
+    var names = {};
+    ApiClients.list().forEach(function (c) { names[c.client_id] = c.client_name; });
+    var rows = Database.readAll(SHEET).rows.slice().sort(function (a, b) { return Number(b.draft_id) - Number(a.draft_id); });
+    var pending = [];
+    var recent = [];
+    rows.forEach(function (row) {
+      var open = row.draft_status === 'PENDING' && !isExpired(row);
+      if (open) pending.push(webRow(row, names, true));
+      else if (recent.length < WEB_RECENT_LIMIT) recent.push(webRow(row, names, false));
+    });
+    return { pending: pending, recent: recent };
+  }
+
+  function webCall(found, request) {
+    return { client: { client_id: found.row.client_id }, actor: request.actor, channelUserId: found.row.channel_user_id || '', requestId: '' };
+  }
+
+  function requireDraft(draftId) {
+    var found = findDraft(draftId);
+    if (!found) throw Util.AppError('DRAFT_NOT_FOUND', 'ไม่พบร่างรายการนี้');
+    return found;
+  }
+
+  /** ยืนยันจากหน้าเว็บ: บันทึกจริงครั้งเดียว (key ผูกกับ draft_id เหมือนการยืนยันจากแชต จึงไม่ซ้ำแม้กดทั้งสองที่) */
+  function approveFromWeb(draftId, request) {
+    var found = requireDraft(draftId);
+    var out = confirmFound(found, webCall(found, request));
+    webAudit(request, 'API_DRAFT_APPROVE_WEB', found.row.draft_id);
+    return out;
+  }
+
+  function cancelFromWeb(draftId, request) {
+    var found = requireDraft(draftId);
+    var out = cancelFound(found, webCall(found, request));
+    webAudit(request, 'API_DRAFT_CANCEL_WEB', found.row.draft_id);
+    return out;
+  }
+
+  /** บันทึกว่าใครกดจากหน้าเว็บ (ไม่ทำให้งานหลักล้มเหลวถ้าบันทึก audit ไม่ได้) */
+  function webAudit(request, action, draftId) {
+    try {
+      Audit.log({ actorId: request.actor.actorId, action: action, entityType: SHEET, entityId: draftId, result: 'SUCCESS' });
+    } catch (e) {
+      console.log('AUDIT_SKIPPED: ' + action);
+    }
+  }
+
   return {
     TYPES: TYPES,
+    listForWeb: listForWeb,
+    approveFromWeb: approveFromWeb,
+    cancelFromWeb: cancelFromWeb,
     masters: mastersFor,
     create: create,
     confirm: confirm,

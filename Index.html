@@ -29,7 +29,9 @@
           <li><a href="#installments" target="_self" class="nav-item" data-nav="installments">แผนชำระ</a></li>
           <li><a href="#budgets" target="_self" class="nav-item" data-nav="budgets">งบใช้จ่าย</a></li>
           <li><a href="#accounts" target="_self" class="nav-item" data-nav="accounts">บัญชีและข้อมูลหลัก</a></li>
+          <li><a href="#approvals" target="_self" class="nav-item" data-nav="approvals">รอยืนยัน</a></li>
           <li><a href="#integrations" target="_self" class="nav-item" data-nav="integrations">เชื่อมต่อภายนอก</a></li>
+          <li><a href="#connect-guide" target="_self" class="nav-item" data-nav="connect-guide">คู่มือเชื่อมต่อ</a></li>
           <li><a href="#api-guide" target="_self" class="nav-item" data-nav="api-guide">คู่มือ API</a></li>
         </ul>
       </nav>
@@ -55,6 +57,12 @@
       </div>
       <div data-page="integrations" hidden>
         <?!= include('PageIntegrations'); ?>
+      </div>
+      <div data-page="approvals" hidden>
+        <?!= include('PageApprovals'); ?>
+      </div>
+      <div data-page="connect-guide" hidden>
+        <?!= include('PageConnectGuide'); ?>
       </div>
       <div data-page="api-guide" hidden>
         <?!= include('PageApiGuide'); ?>

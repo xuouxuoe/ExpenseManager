@@ -1,0 +1,198 @@
+<section aria-labelledby="cg-title" class="space-y-4">
+  <div>
+    <h1 id="cg-title" class="text-xl font-semibold">คู่มือเชื่อมต่อภายนอก (สำหรับมือใหม่)</h1>
+    <p class="text-sm text-slate-500">ทำตามทีละขั้นเพื่อบันทึกรายรับรายจ่ายผ่านแชต Telegram หรือ LINE โดยไม่ต้องเขียนโค้ด — ใช้เวลาประมาณ 15–20 นาที</p>
+  </div>
+
+  <nav aria-label="สารบัญคู่มือเชื่อมต่อ" class="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+    <p class="font-semibold">สารบัญ</p>
+    <ol class="mt-2 grid list-decimal gap-1 pl-5 sm:grid-cols-2">
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-overview" class="text-indigo-700 underline">ภาพรวม: ระบบทำงานอย่างไร</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-prepare" class="text-indigo-700 underline">เตรียมก่อนเริ่ม (gateway และ API key)</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-ai" class="text-indigo-700 underline">ตั้งค่า AI</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-telegram" class="text-indigo-700 underline">เชื่อม Telegram</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-line" class="text-indigo-700 underline">เชื่อม LINE</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-daily" class="text-indigo-700 underline">ใช้งานประจำวันและการยืนยัน</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-trouble" class="text-indigo-700 underline">แก้ปัญหาที่พบบ่อย</a></li>
+      <li><a href="#connect-guide" target="_self" data-cg-jump="cg-safety" class="text-indigo-700 underline">ความปลอดภัย</a></li>
+    </ol>
+  </nav>
+
+  <section id="cg-overview" aria-labelledby="cg-overview-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-overview-title" class="text-base font-semibold">1. ภาพรวม: ระบบทำงานอย่างไร</h2>
+    <ol class="mt-3 space-y-2 text-sm">
+      <li class="rounded-xl bg-slate-50 px-3 py-2"><strong>คุณพิมพ์ในแชต</strong> เช่น "กาแฟ 65" หรือส่งรูปสลิป</li>
+      <li class="rounded-xl bg-slate-50 px-3 py-2"><strong>Telegram/LINE ส่งข้อความต่อ</strong> ไปที่ "gateway" (ลิงก์ Apps Script ที่ลงท้าย <code>/exec</code>) พร้อม API key ที่อยู่ในลิงก์</li>
+      <li class="rounded-xl bg-slate-50 px-3 py-2"><strong>AI แปลงข้อความ</strong> เป็นร่างรายการ (จำนวนเงิน หมวด บัญชี) — ยังไม่บันทึก</li>
+      <li class="rounded-xl bg-slate-50 px-3 py-2"><strong>บอทตอบสรุปพร้อมปุ่ม</strong> "ยืนยัน" / "ยกเลิก" — หรือยืนยันที่หน้าเว็บ เมนู <a href="#approvals" target="_self" class="font-semibold text-indigo-700 underline">รอยืนยัน</a></li>
+      <li class="rounded-xl bg-emerald-50 px-3 py-2"><strong>กดยืนยันแล้วจึงบันทึกจริง</strong> ร่างที่ไม่ยืนยันจะหมดอายุใน 24 ชั่วโมง</li>
+    </ol>
+    <h3 class="mt-4 text-sm font-semibold">คำศัพท์ที่ต้องรู้</h3>
+    <dl class="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+      <div><dt class="font-semibold">Gateway</dt><dd class="text-slate-600">Web App ของ Apps Script ที่เปิดให้ Telegram/LINE ส่งข้อความเข้ามาได้โดยไม่ต้องล็อกอิน (แยกจากหน้าเว็บนี้)</dd></div>
+      <div><dt class="font-semibold">การเชื่อมต่อ / API key</dt><dd class="text-slate-600">"กุญแจ" ที่ระบุว่าใครเรียกเข้ามา สร้างได้ที่หน้า <a href="#integrations" target="_self" class="text-indigo-700 underline">เชื่อมต่อภายนอก</a> แสดงครั้งเดียว</dd></div>
+      <div><dt class="font-semibold">Bot token / Channel access token</dt><dd class="text-slate-600">รหัสที่ให้ระบบตอบกลับในแชตได้ ได้จาก @BotFather (Telegram) หรือ LINE Developers</dd></div>
+      <div><dt class="font-semibold">ผู้ใช้ที่อนุญาต</dt><dd class="text-slate-600">รหัสบัญชีแชตที่บันทึกได้ เช่น <code>tg_123456789</code> (Telegram) หรือ <code>U…</code> (LINE) — คนอื่นที่ทักบอทจะถูกปฏิเสธ</dd></div>
+    </dl>
+  </section>
+
+  <section id="cg-prepare" aria-labelledby="cg-prepare-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-prepare-title" class="text-base font-semibold">2. เตรียมก่อนเริ่ม</h2>
+    <h3 class="mt-3 text-sm font-semibold">2.1 หา URL ของ gateway</h3>
+    <ol class="mt-1 list-decimal space-y-1 pl-5 text-sm">
+      <li>เปิดโปรเจกต์ Apps Script ที่เป็น <strong>gateway</strong> (ผู้ดูแลระบบตั้งไว้แล้ว) → ปุ่ม <strong>Deploy → Manage deployments</strong></li>
+      <li>คัดลอก <strong>Web app URL</strong> ที่ลงท้ายด้วย <code>/exec</code> (ไม่ใช่ <code>/dev</code>)</li>
+      <li>ถ้าสร้าง deployment ใหม่ URL จะเปลี่ยน — ต้องตั้ง webhook ใหม่ทุกครั้ง</li>
+    </ol>
+    <h3 class="mt-4 text-sm font-semibold">2.2 สร้างการเชื่อมต่อ (API key)</h3>
+    <ol class="mt-1 list-decimal space-y-1 pl-5 text-sm">
+      <li>ไปหน้า <a href="#integrations" target="_self" class="font-semibold text-indigo-700 underline">เชื่อมต่อภายนอก</a> → <strong>+ เพิ่มการเชื่อมต่อ</strong></li>
+      <li>ตั้งชื่อ เช่น "Telegram ของฉัน" เลือกสิทธิ์ <strong>ดูข้อมูล (READ)</strong> และ <strong>บันทึกผ่านร่าง (WRITE)</strong></li>
+      <li>เลือก <strong>บัญชีเริ่มต้น</strong> และ <strong>เจ้าของเริ่มต้น</strong> (ใช้เมื่อข้อความไม่ได้บอกว่าจ่ายจากบัญชีไหน)</li>
+      <li>ช่อง "ผู้ใช้แชตที่อนุญาต" <strong>เว้นว่างไว้ก่อน</strong> (จะได้รหัสจากบอทในขั้นถัดไป)</li>
+      <li>กดบันทึก แล้ว <strong>คัดลอก API key</strong> (<code>emk_…</code>) เก็บไว้ — ระบบแสดงครั้งเดียว ถ้าหายให้กด "เปลี่ยน key"</li>
+    </ol>
+  </section>
+
+  <section id="cg-ai" aria-labelledby="cg-ai-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-ai-title" class="text-base font-semibold">3. ตั้งค่า AI (เจ้าของระบบ ทำครั้งเดียว)</h2>
+    <p class="mt-1 text-sm text-slate-600">ไปหน้า <a href="#integrations" target="_self" class="text-indigo-700 underline">เชื่อมต่อภายนอก</a> → การ์ด "ผู้ให้บริการ AI" → <strong>ตั้งค่า</strong> เลือกแบบใดแบบหนึ่ง</p>
+    <div class="mt-3 grid gap-3 md:grid-cols-2">
+      <div class="rounded-xl border border-slate-200 p-3 text-sm">
+        <h3 class="font-semibold">แบบ A: API key (แนะนำ เสถียรที่สุด)</h3>
+        <ol class="mt-1 list-decimal space-y-1 pl-5">
+          <li>สมัคร/ล็อกอิน <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" class="text-indigo-700 underline">platform.openai.com</a> (หรือ Anthropic / Gemini) แล้วเติมเครดิต</li>
+          <li>สร้าง API key แล้วคัดลอก</li>
+          <li>ในระบบ เลือกผู้ให้บริการ ใส่ชื่อโมเดล (เช่น <code>gpt-4o-mini</code>) และวาง key → บันทึก</li>
+          <li>กด <strong>ทดสอบ</strong> ต้องขึ้น "เชื่อมต่อสำเร็จ"</li>
+        </ol>
+        <p class="mt-2 text-xs text-slate-500">เสียค่าใช้จ่ายตามจำนวนข้อความ (ข้อความสั้นมาก ปกติไม่กี่สตางค์ต่อรายการ)</p>
+      </div>
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
+        <h3 class="font-semibold">แบบ B: เข้าสู่ระบบด้วยบัญชี ChatGPT (แบบ Codex)</h3>
+        <ol class="mt-1 list-decimal space-y-1 pl-5">
+          <li>ต้องมี ChatGPT Plus / Pro / Team</li>
+          <li>ใน ChatGPT → <strong>Settings → Security</strong> เปิดการอนุญาต <strong>device code</strong> สำหรับ Codex (ถ้ามีตัวเลือกนี้)</li>
+          <li>ในระบบ เลือกผู้ให้บริการ <strong>ChatGPT (เข้าสู่ระบบแบบ Codex)</strong> ใส่โมเดล เช่น <code>gpt-5</code> → บันทึก</li>
+          <li>กด <strong>เข้าสู่ระบบ ChatGPT</strong> → ระบบแสดงรหัส 8 ตัว → กด "เปิดหน้าเข้าสู่ระบบ OpenAI" → ล็อกอินและกรอกรหัส</li>
+          <li>รอหน้าเว็บขึ้น "เข้าสู่ระบบ ChatGPT แล้ว" แล้วกด <strong>ทดสอบ</strong></li>
+        </ol>
+        <p class="mt-2 text-xs">⚠️ ใช้ช่องทางภายในเดียวกับ Codex CLI ไม่ใช่ API สาธารณะ — อาจขัดเงื่อนไขของ OpenAI และหยุดทำงานได้ทุกเมื่อ ใช้โควตาของบัญชี ChatGPT ถ้าทดสอบไม่ผ่านให้ใช้แบบ A</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="cg-telegram" aria-labelledby="cg-telegram-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-telegram-title" class="text-base font-semibold">4. เชื่อม Telegram (ง่ายที่สุด)</h2>
+    <ol class="mt-3 space-y-3 text-sm">
+      <li class="rounded-xl bg-slate-50 p-3">
+        <p class="font-semibold">ขั้นที่ 1 — สร้างบอท</p>
+        <p class="mt-1">ในแอป Telegram ค้นหา <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" class="text-indigo-700 underline">@BotFather</a> (มีเครื่องหมายยืนยันสีฟ้า) → พิมพ์ <code>/newbot</code> → ตั้งชื่อบอท → ตั้ง username ที่ลงท้ายด้วย <code>bot</code> เช่น <code>myhome_expense_bot</code></p>
+        <p class="mt-1">BotFather จะส่ง <strong>token</strong> หน้าตาแบบ <code>123456789:AAH…</code> มาให้ — คัดลอกไว้ (อย่าส่งให้คนอื่น)</p>
+      </li>
+      <li class="rounded-xl bg-slate-50 p-3">
+        <p class="font-semibold">ขั้นที่ 2 — ใส่ token ในระบบ</p>
+        <p class="mt-1">หน้า <a href="#integrations" target="_self" class="text-indigo-700 underline">เชื่อมต่อภายนอก</a> → การ์ด "Telegram Bot" → <strong>ตั้ง bot token</strong> → วาง token → บันทึก (ระบบตรวจกับ Telegram ให้ และแสดงชื่อ @บอท)</p>
+      </li>
+      <li class="rounded-xl bg-slate-50 p-3">
+        <p class="font-semibold">ขั้นที่ 3 — ตั้ง webhook</p>
+        <p class="mt-1">กด <strong>ตั้ง webhook</strong> → วาง URL <code>/exec</code> ของ gateway (ข้อ 2.1) และ API key ของการเชื่อมต่อ (ข้อ 2.2) → ตั้ง webhook</p>
+      </li>
+      <li class="rounded-xl bg-slate-50 p-3">
+        <p class="font-semibold">ขั้นที่ 4 — อนุญาตบัญชี Telegram ของคุณ</p>
+        <p class="mt-1">เปิดแชตกับบอท (ลิงก์ "เปิดแชตกับบอท" ในการ์ด) → กด <strong>Start</strong> หรือพิมพ์อะไรก็ได้ → บอทตอบรหัส <code>tg_…</code> กลับมา</p>
+        <p class="mt-1">กลับไปหน้าเชื่อมต่อภายนอก → การเชื่อมต่อที่สร้างไว้ → <strong>แก้ไข</strong> → วางรหัส <code>tg_…</code> ในช่อง "ผู้ใช้แชตที่อนุญาต" (หลายคนคั่นด้วยจุลภาค) → บันทึก</p>
+      </li>
+      <li class="rounded-xl bg-emerald-50 p-3">
+        <p class="font-semibold">ขั้นที่ 5 — ทดสอบ</p>
+        <p class="mt-1">พิมพ์ <code>วิธีใช้</code> บอทต้องตอบตัวอย่าง → พิมพ์ <code>กาแฟ 65</code> → ตรวจสรุป → กด <strong>✅ ยืนยัน</strong> → ดูรายการที่หน้า <a href="#transactions" target="_self" class="text-indigo-700 underline">รายการ</a></p>
+      </li>
+    </ol>
+    <p class="mt-3 text-xs text-slate-500">ใช้ได้เฉพาะแชตส่วนตัวกับบอท (ไม่รองรับกลุ่ม) · ถ้าบอทไม่ตอบ ดู "ผลล่าสุดจาก Telegram" ในการ์ด และหัวข้อ 7</p>
+  </section>
+
+  <section id="cg-line" aria-labelledby="cg-line-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-line-title" class="text-base font-semibold">5. เชื่อม LINE Official Account</h2>
+    <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm">
+      <li>สร้าง LINE Official Account และเปิด Messaging API ที่ <a href="https://developers.line.biz/console/" target="_blank" rel="noopener noreferrer" class="text-indigo-700 underline">LINE Developers Console</a></li>
+      <li>แท็บ Messaging API → ออก <strong>Channel access token (long-lived)</strong> → ในระบบกด "ตั้ง token" ในการ์ด LINE แล้ววาง</li>
+      <li>ตั้ง <strong>Webhook URL</strong> เป็น <code class="break-all">&lt;URL /exec ของ gateway&gt;?line_key=&lt;API key&gt;</code> → เปิด <strong>Use webhook</strong> → ปิดข้อความตอบกลับอัตโนมัติใน LINE Official Account Manager</li>
+      <li>ทักบอทในแชต LINE → บอทตอบ LINE userId (<code>U…</code>) → ใส่ในช่อง "ผู้ใช้แชตที่อนุญาต" ของการเชื่อมต่อ</li>
+      <li>ปุ่ม Verify ของ LINE จะขึ้น "302 Found" เป็นเรื่องปกติของ Apps Script ให้ทดสอบด้วยการพิมพ์ในแชตแทน</li>
+    </ol>
+  </section>
+
+  <section id="cg-daily" aria-labelledby="cg-daily-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-daily-title" class="text-base font-semibold">6. ใช้งานประจำวันและการยืนยัน</h2>
+    <div class="mt-2 grid gap-3 text-sm md:grid-cols-2">
+      <div>
+        <h3 class="font-semibold">ตัวอย่างข้อความ</h3>
+        <ul class="mt-1 list-disc space-y-1 pl-5">
+          <li><code>ข้าวกลางวัน 120</code></li>
+          <li><code>เติมน้ำมัน 1500 บัตร KTC</code></li>
+          <li><code>เงินเดือนเข้า 30000</code></li>
+          <li><code>โอนจาก kbank ไป scb 500</code></li>
+          <li><code>ผ่อนทีวี 12000 10 เดือน บัตร KTC</code> (สร้างแผนชำระ)</li>
+          <li>ส่งรูปสลิปโอนเงิน/ใบเสร็จ</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="font-semibold">คำสั่งดูข้อมูล (ไม่ใช้ AI)</h3>
+        <ul class="mt-1 list-disc space-y-1 pl-5">
+          <li><code>สรุป</code> — รายรับรายจ่ายเดือนนี้</li>
+          <li><code>ยอดเงิน</code> — ยอดบัญชีและเงินที่ใช้ได้</li>
+          <li><code>ล่าสุด</code> — 5 รายการล่าสุด</li>
+          <li><code>งบ</code> — งบใช้จ่ายคงเหลือ</li>
+        </ul>
+      </div>
+    </div>
+    <p class="mt-3 rounded-xl bg-indigo-50 px-3 py-2 text-sm text-indigo-900">ลืมกดยืนยันในแชต? เปิดเมนู <a href="#approvals" target="_self" class="font-semibold underline">รอยืนยัน</a> บนหน้าเว็บ จะเห็นร่างทั้งหมดที่ยังไม่บันทึก พร้อมคำเตือนรายการที่อาจซ้ำ กดยืนยันหรือยกเลิกได้ทันที (กดซ้ำทั้งในแชตและหน้าเว็บก็บันทึกเพียงครั้งเดียว)</p>
+  </section>
+
+  <section id="cg-trouble" aria-labelledby="cg-trouble-title" class="scroll-mt-32 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <h2 id="cg-trouble-title" class="text-base font-semibold">7. แก้ปัญหาที่พบบ่อย</h2>
+    <div class="mt-2 overflow-x-auto">
+      <table class="min-w-full text-left text-sm">
+        <thead class="text-xs text-slate-500"><tr><th scope="col" class="py-1 pr-3">อาการ / ผลล่าสุด</th><th scope="col" class="py-1">วิธีแก้</th></tr></thead>
+        <tbody class="divide-y divide-slate-100 align-top">
+          <tr><td class="py-2 pr-3">บอทเงียบ ไม่มี "ผลล่าสุด" เลย</td><td class="py-2">webhook ยังไม่ได้ตั้งหรือ URL ผิด — กด "ตั้ง webhook" ใหม่ ตรวจว่า URL ลงท้าย <code>/exec</code> ของ gateway</td></tr>
+          <tr><td class="py-2 pr-3"><code>UNAUTHORIZED</code></td><td class="py-2">API key ผิด ถูกเปลี่ยน หรือการเชื่อมต่อถูกปิด — ตั้ง webhook ใหม่ด้วย key ล่าสุด</td></tr>
+          <tr><td class="py-2 pr-3"><code>FORBIDDEN_CHANNEL</code> / <code>forbidden</code></td><td class="py-2">ยังไม่ได้ใส่รหัส <code>tg_…</code> หรือ <code>U…</code> ที่บอทตอบมา ในช่องผู้ใช้แชตที่อนุญาต</td></tr>
+          <tr><td class="py-2 pr-3"><code>FORBIDDEN_SCOPE</code></td><td class="py-2">การเชื่อมต่อไม่มีสิทธิ์ WRITE (บันทึก) หรือ READ (คำสั่งดูข้อมูล)</td></tr>
+          <tr><td class="py-2 pr-3"><code>TELEGRAM_HTTP_401</code> / <code>LINE_REPLY_HTTP_401</code></td><td class="py-2">token ของบอทผิดหรือถูกเปลี่ยน — ตั้ง token ใหม่</td></tr>
+          <tr><td class="py-2 pr-3">ข้อความมี <code>script.external_request</code></td><td class="py-2">gateway ไม่มีสิทธิ์ออกอินเทอร์เน็ต — ผู้ดูแลต้อง Run ฟังก์ชันใน editor เพื่ออนุญาต แล้ว deploy gateway ใหม่ (และตั้ง webhook ใหม่)</td></tr>
+          <tr><td class="py-2 pr-3">"ระบบยังไม่ได้ตั้งค่า AI"</td><td class="py-2">ทำหัวข้อ 3 แล้วกด "ทดสอบ" ให้ผ่าน</td></tr>
+          <tr><td class="py-2 pr-3">Telegram แจ้ง <code>302 Moved Temporarily</code></td><td class="py-2">เป็นข้อจำกัดของ Apps Script ข้อความยังถูกประมวลผล และระบบข้ามข้อความที่ส่งซ้ำ</td></tr>
+          <tr><td class="py-2 pr-3">ChatGPT: "การเข้าสู่ระบบหมดอายุ"</td><td class="py-2">กด "เข้าสู่ระบบใหม่" ในการ์ด AI (เช่น เมื่อออกจากระบบ ChatGPT ทุกอุปกรณ์หรือเปลี่ยนรหัสผ่าน)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="cg-safety" aria-labelledby="cg-safety-title" class="scroll-mt-32 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+    <h2 id="cg-safety-title" class="text-base font-semibold">8. ความปลอดภัย</h2>
+    <ul class="mt-2 list-disc space-y-1 pl-5">
+      <li>API key อยู่ในลิงก์ webhook — อย่าแชร์ลิงก์นั้น ถ้าสงสัยว่ารั่วให้กด "เปลี่ยน key" แล้วตั้ง webhook ใหม่</li>
+      <li>ใส่ผู้ใช้แชตที่อนุญาตเสมอ คนอื่นที่ทักบอทจะบันทึกไม่ได้</li>
+      <li>ทุกการบันทึกจากแชตต้องกดยืนยัน AI ไม่บันทึกเอง</li>
+      <li>ข้อความแชตและรายชื่อบัญชี/หมวดถูกส่งให้ผู้ให้บริการ AI ที่เลือก (ไม่ส่งยอดเงินคงเหลือ) และ Telegram/LINE เห็นข้อความที่คุณพิมพ์</li>
+      <li>token ทั้งหมด (bot, LINE, AI, ChatGPT) เก็บใน Script Properties ไม่แสดงกลับบนหน้าเว็บ — ผู้ที่มีสิทธิ์แก้โปรเจกต์ Apps Script เห็นค่าได้</li>
+    </ul>
+  </section>
+</section>
+
+<script>
+  (function () {
+    // ลิงก์สารบัญ: เลื่อนไปหัวข้อโดยไม่เปลี่ยน #hash (hash ใช้เลือกหน้า)
+    Array.prototype.forEach.call(document.querySelectorAll('[data-cg-jump]'), function (a) {
+      a.addEventListener('click', function (e) {
+        var target = document.getElementById(a.getAttribute('data-cg-jump'));
+        if (!target) return;
+        e.preventDefault();
+        target.scrollIntoView({ block: 'start' });
+        target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+      });
+    });
+  })();
+</script>

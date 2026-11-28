@@ -3,6 +3,7 @@
  *
  * - ผู้ให้บริการเลือกด้วย Script Property AI_PROVIDER: OPENAI (ค่าเริ่มต้น), OPENAI_COMPATIBLE (custom endpoint
  *   ที่ใช้รูปแบบ Chat Completions; ต้องตั้ง AI_BASE_URL), ANTHROPIC, GEMINI; ชื่อโมเดลใน AI_MODEL; key ใน AI_API_KEY
+ *   และ CHATGPT_OAUTH (เข้าสู่ระบบด้วยบัญชี ChatGPT แบบ Codex — ไม่ใช้ key ดู ChatGptAuth.gs)
  * - ผลจาก AI เป็นเพียงข้อเสนอ: คืนเป็น params ของ draft.create ซึ่ง Backend ตรวจ/resolve อีกครั้ง (AGENTS.md §11)
  * - ส่งให้ AI เฉพาะข้อความผู้ใช้ วันที่วันนี้ และชื่อ+ID ของบัญชี/หมวด/เจ้าของ/งบทริปที่ใช้งานอยู่ — ไม่ส่งยอดเงินหรือประวัติ
  * - ไม่ log ข้อความผู้ใช้ คำตอบของ AI หรือ key; log เฉพาะผู้ให้บริการและ HTTP status เมื่อผิดพลาด
@@ -29,6 +30,11 @@ var AiParser = (function () {
     if (Config.ENUMS.AI_PROVIDER.indexOf(provider) < 0) throw fail('AI_NOT_CONFIGURED', 'AI_PROVIDER ต้องเป็น ' + Config.ENUMS.AI_PROVIDER.join(', '));
     var key = get('AI_API_KEY');
     var model = get('AI_MODEL');
+    if (provider === 'CHATGPT_OAUTH') {
+      if (!model) throw fail('AI_NOT_CONFIGURED', 'ยังไม่ได้ตั้ง AI_MODEL');
+      if (!ChatGptAuth.isConnected()) throw fail('AI_NOT_CONFIGURED', 'ยังไม่ได้เข้าสู่ระบบ ChatGPT (หน้าเชื่อมต่อภายนอก → ผู้ให้บริการ AI)');
+      return { provider: provider, key: '', model: model, base: '' };
+    }
     if (!key || !model) throw fail('AI_NOT_CONFIGURED', 'ยังไม่ได้ตั้งค่า AI_API_KEY และ AI_MODEL ใน Script Properties');
     var base = '';
     if (provider === 'OPENAI_COMPATIBLE') {
@@ -205,6 +211,12 @@ var AiParser = (function () {
   }
 
   function callProvider(cfg, system, text, image) {
+    if (cfg.provider === 'CHATGPT_OAUTH') {
+      var instructions = system + '\n\nRespond with ONE JSON object only (no markdown) matching this JSON schema:\n' + JSON.stringify(outputSchema());
+      var parsed = parseJsonText(ChatGptAuth.complete(cfg.model, instructions, image ? text : 'Message:\n' + text, image));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw fail('AI_INVALID_OUTPUT', 'AI ตอบกลับไม่ถูกรูปแบบ');
+      return parsed;
+    }
     var req = buildRequest(cfg, system, text, outputSchema(), image);
     var res;
     try {
@@ -371,6 +383,7 @@ var AiSettings = (function () {
       has_key: !!key,
       key_hint: key ? key.slice(-4) : '',
       configured: configured,
+      chatgpt: ChatGptAuth.status(),
       can_edit: Auth.isOwner(actor),
       providers: Config.ENUMS.AI_PROVIDER.slice()
     };
@@ -391,7 +404,7 @@ var AiSettings = (function () {
     }
     var key = String(src.api_key || '').trim();
     if (key && !KEY_RE.test(key)) throw invalid('api_key', 'API key ไม่ถูกต้อง (8–500 ตัว ไม่มีช่องว่าง)');
-    if (!key && !String(props().getProperty(key_('AI_API_KEY')) || '').trim()) throw invalid('api_key', 'กรุณากรอก API key');
+    if (!key && provider !== 'CHATGPT_OAUTH' && !String(props().getProperty(key_('AI_API_KEY')) || '').trim()) throw invalid('api_key', 'กรุณากรอก API key');
     var payload = { provider: provider, model: model, base_url: base, key_hash: key ? Util.sha256Hex(key) : 'KEEP' };
     Operation.run({ operationType: 'UPDATE_AI_SETTINGS', idempotencyKey: request.idempotencyKey, payload: payload, actor: request.actor }, function () {
       var p = props();

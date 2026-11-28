@@ -351,7 +351,9 @@ var IntegrationApi = (function () {
 
   /** คำขอที่มี ?line_key=… ใน URL เป็น LINE webhook; อื่น ๆ เป็น JSON API */
   function handlePost(e) {
-    var out = LineWebhook.isLineRequest(e) ? LineWebhook.handle(e) : dispatch(e);
+    var out = LineWebhook.isLineRequest(e) ? LineWebhook.handle(e)
+      : TelegramWebhook.isTelegramRequest(e) ? TelegramWebhook.handle(e)
+      : dispatch(e);
     return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
   }
 

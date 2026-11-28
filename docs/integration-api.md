@@ -197,6 +197,27 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 - [x] หน้าแผนชำระแสดงเวลาที่บันทึกแผน (ผู้ใช้ขอ 2026-11-28; clasp push แล้ว commit ff265c8, เทียบ 33 ไฟล์ตรงกัน)
 - ข้อจำกัด: แก้ยอดรายงวด/ค่าธรรมเนียมงวดแรก/บัญชีย่อยผ่านแชตไม่ได้ (แก้ที่หน้าเว็บหลังสร้าง); AI อาจตีความจำนวนงวดหรือเดือนผิด ต้องตรวจสรุปก่อนยืนยัน
 
+### 0.15 Telegram, เมนูรอยืนยัน, คู่มือมือใหม่, AI แบบบัญชี ChatGPT (ผู้ใช้ขอ 2026-11-28)
+
+ผู้ใช้เลือก (2026-11-28): Telegram ทำงานเหมือน LINE ครบ; ผู้ใช้ทุกคนใน ALLOWED_EMAILS ยืนยันร่างจากหน้าเว็บได้; AI แบบ "เข้าสู่ระบบ ChatGPT แบบ Codex" ทำใน Apps Script โดยรับทราบความเสี่ยง (ไม่ใช่ API สาธารณะ อาจขัดเงื่อนไข OpenAI และใช้ไม่ได้ทุกเมื่อ)
+
+- [x] **Telegram** (`TelegramService.gs`): webhook `<gateway /exec>?tg_key=<API key>` → `IntegrationApi.handlePost` route ตาม `tg_key` (gateway เดิมไม่ต้องแก้)
+  - รับเฉพาะแชตส่วนตัว; ผู้ใช้ที่อนุญาตเก็บใน `ApiClients.allowed_channel_user_ids` เป็น `tg_<user id>` (ไม่เปลี่ยน schema; ผ่าน regex เดิม); การเชื่อมต่อที่ยังไม่มี `tg_` → ตอบรหัสของผู้ส่งกลับ
+  - ข้อความ/รูปสลิป (photo หรือ document รูป ≤ 5 MB ผ่าน getFile) → AI → ร่าง → `sendMessage` พร้อมปุ่ม inline; `callback_data` = `em|c|<draft_id>|<token>` (≤ 64 ไบต์); กดแล้ว `answerCallbackQuery` + เอาปุ่มออก
+  - คำสั่ง สรุป/ยอดเงิน/ล่าสุด/งบ (รวม `/summary` ฯลฯ และ `@botname`) ไม่เรียก AI; `/start` = วิธีใช้
+  - กันซ้ำด้วย `update_id` ใน CacheService 6 ชม. และ request_id `tg-update-<update_id>`; ผลล่าสุดใน Script Property `TELEGRAM_LAST_WEBHOOK` (ไม่มีข้อความ/ID/token)
+  - doPost อ่าน header ไม่ได้ จึงไม่ใช้ `secret_token` ของ Telegram — ความปลอดภัยพึ่ง key ใน URL + allowlist + การยืนยันด้วย token เหมือน LINE
+  - หน้าเว็บ (เจ้าของ): ตั้ง bot token (ตรวจ `getMe` ก่อนเก็บ `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`), ตั้ง webhook (ตรวจรูปแบบ URL script.google.com และ key ที่มีสิทธิ์ WRITE แล้ว `setWebhook` โดย `drop_pending_updates`; ไม่เก็บ URL/key), ดู `getWebhookInfo` โดยไม่ส่ง URL เต็มกลับ
+- [x] **เมนู "รอยืนยัน"** (`PageApprovals.html`, `api_listApiDrafts` / `api_approveApiDraft` / `api_cancelApiDraft`): แสดงร่าง PENDING ที่ยังไม่หมดอายุ + ร่างที่ปิดล่าสุด 20 รายการ พร้อมช่องทาง (LINE/Telegram/API) ชื่อการเชื่อมต่อ และคำเตือนรายการซ้ำ; ไม่ส่ง confirm_token
+  - ยืนยัน/ยกเลิกด้วยสิทธิ์ผู้ใช้เว็บ (ALLOWED_EMAILS) โดยไม่ต้องใช้ token; ใช้ operation เดิม (`api-draft-confirm-<id>`) ซึ่งตรวจสถานะภายใน lock จึงไม่บันทึกซ้ำแม้กดทั้งในแชตและหน้าเว็บ; แผนชำระใช้ actor ผู้สร้างร่างกับ `api-draft-plan-<id>` เพื่อ replay ได้ไม่สร้างแผนซ้ำ; บันทึก AuditLogs `API_DRAFT_APPROVE_WEB` / `API_DRAFT_CANCEL_WEB` ด้วยอีเมลผู้กด
+- [x] **คู่มือเชื่อมต่อ (มือใหม่)** (`PageConnectGuide.html`, เมนู "คู่มือเชื่อมต่อ"): ภาพรวม คำศัพท์ เตรียม gateway/API key, ตั้ง AI (API key หรือบัญชี ChatGPT), Telegram 5 ขั้น, LINE, การใช้งานประจำวัน, ตารางแก้ปัญหา, ความปลอดภัย
+- [x] **AI_PROVIDER = CHATGPT_OAUTH** (`ChatGptAuth.gs`): device code flow ของ Codex CLI (`auth.openai.com/api/accounts/deviceauth/usercode` → ผู้ใช้กรอกรหัสที่ `/codex/device` → poll `/deviceauth/token` (403/404 = รอ) → แลก `/oauth/token` ด้วย code_verifier, redirect_uri `/deviceauth/callback`); เรียก `chatgpt.com/backend-api/codex/responses` แบบ stream (SSE) `store:false`; refresh ภายใต้ script lock เมื่อเหลือ < 5 นาที
+  - token เก็บใน Script Property `CHATGPT_OAUTH_TOKENS` (สถานะรอกรอกรหัสใน `CHATGPT_DEVICE_AUTH`); เข้าสู่ระบบ/ออกจากระบบได้เฉพาะเจ้าของ; ไม่ส่ง token กลับเบราว์เซอร์และไม่ log
+  - endpoint/ฟิลด์ที่ตรวจจากซอร์ส openai/codex: issuer, client_id, device code endpoints, redirect_uri, base URL `/backend-api/codex`; **ยังไม่ได้ยืนยัน**: ชื่อฟิลด์ใน body ของ token/refresh, claim path ของ `chatgpt_account_id` (`https://api.openai.com/auth`), header `originator`/`OpenAI-Beta` และว่า backend ยอมรับ `instructions` แบบกำหนดเองหรือไม่ — ต้องทดสอบด้วยบัญชีจริงบน `/dev`
+- [x] tests: `telegram-webhook.test.js` (9), `web-approvals.test.js` (5), `chatgpt-auth.test.js` (6); `npm test` ผ่านทั้งหมด
+- [ ] clasp push และทดสอบบน `/dev` (รอผู้ใช้อนุญาต): Telegram จริง (ข้อความ, สลิป, ปุ่ม, ผู้ใช้ไม่อนุญาต), เมนูรอยืนยัน, ChatGPT login + ทดสอบ AI
+- ข้อจำกัด: Telegram อาจแจ้ง `302 Moved Temporarily` ใน getWebhookInfo เพราะ Apps Script redirect เสมอ และอาจส่ง update ซ้ำ (ระบบข้ามด้วย update_id); การยืนยันจากหน้าเว็บไม่ส่งข้อความแจ้งกลับไปในแชต; ChatGPT ใช้โควตาบัญชีและอาจถูก OpenAI ปิดได้
+
 ## 1. เป้าหมายและการแบ่งหน้าที่ (เดิม — ส่วน Make ถูกแทนด้วยข้อ 0)
 
 ผู้ใช้สั่งบันทึกหรือถามข้อมูลผ่าน LINE OA โดยใช้ **Make** เป็นตัวกลาง: Make รับข้อความจาก LINE → ส่งให้ AI แปลงเป็น JSON → เรียก API ของ Expense Manager → ตอบกลับใน LINE; บันทึกจริงเมื่อผู้ใช้กดยืนยันเท่านั้น (AGENTS.md §11)

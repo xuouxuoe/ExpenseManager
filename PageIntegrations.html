@@ -50,6 +50,21 @@
     </details>
   </section>
 
+  <section aria-labelledby="tg-title" class="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div class="flex flex-wrap items-start justify-between gap-2">
+      <div>
+        <h2 id="tg-title" class="text-base font-semibold">Telegram Bot</h2>
+        <p class="text-sm text-slate-500">พิมพ์รายการหรือส่งสลิปในแชต Telegram → AI สรุป → กดยืนยันจึงบันทึก</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" id="tg-hook" class="btn btn-secondary" hidden>ตั้ง webhook</button>
+        <button type="button" id="tg-edit" class="btn btn-secondary" hidden>ตั้ง bot token</button>
+      </div>
+    </div>
+    <div id="tg-panel" class="mt-3" aria-live="polite" aria-busy="true"></div>
+    <p class="mt-3 text-sm"><a href="#connect-guide" target="_self" class="font-semibold text-indigo-700 underline">วิธีเชื่อม Telegram ทีละขั้น (คู่มือมือใหม่) →</a></p>
+  </section>
+
   <h2 class="mt-6 text-base font-semibold">การเชื่อมต่อ (API key)</h2>
   <div id="int-panel" class="mt-2" aria-busy="true"></div>
 </section>
@@ -68,7 +83,12 @@
           <option value="OPENAI_COMPATIBLE">Custom (รูปแบบ OpenAI)</option>
           <option value="ANTHROPIC">Anthropic (Claude)</option>
           <option value="GEMINI">Google Gemini</option>
+          <option value="CHATGPT_OAUTH">ChatGPT (เข้าสู่ระบบแบบ Codex)</option>
         </select>
+      </div>
+      <div id="ai-chatgpt-note" class="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900" hidden>
+        <p class="font-semibold">ใช้บัญชี ChatGPT (Plus/Pro/Team) แทน API key</p>
+        <p class="mt-1">ใช้ช่องทางเดียวกับ Codex CLI ซึ่งไม่ใช่ API สาธารณะของ OpenAI — อาจขัดเงื่อนไขการใช้งานและใช้ไม่ได้เมื่อ OpenAI เปลี่ยนระบบ ถ้าใช้ไม่ได้ให้กลับไปใช้ API key · หลังบันทึก กด "เข้าสู่ระบบ ChatGPT" ในการ์ด AI · โมเดลเช่น <code>gpt-5</code></p>
       </div>
       <div id="ai-base-wrap" hidden>
         <label for="ai-base" class="field-label">Base URL</label>
@@ -79,7 +99,7 @@
         <label for="ai-model" class="field-label">โมเดล</label>
         <input id="ai-model" class="field-input font-mono text-sm" maxlength="100" autocomplete="off" spellcheck="false" required placeholder="ชื่อโมเดลตามที่ผู้ให้บริการกำหนด">
       </div>
-      <div>
+      <div id="ai-key-wrap">
         <label for="ai-key" class="field-label">API key</label>
         <input id="ai-key" class="field-input font-mono text-sm" type="password" autocomplete="new-password" spellcheck="false" maxlength="500">
         <p id="ai-key-hint" class="field-hint">key ไม่ถูกส่งกลับมาแสดงอีก</p>
@@ -113,9 +133,9 @@
         </div>
       </fieldset>
       <div>
-        <label for="int-channels" class="field-label">LINE userId ที่อนุญาต</label>
+        <label for="int-channels" class="field-label">ผู้ใช้แชตที่อนุญาต (LINE userId / Telegram tg_…)</label>
         <textarea id="int-channels" class="field-input" rows="3" autocomplete="off" placeholder="U1234… (คั่นด้วยบรรทัดใหม่หรือจุลภาค)"></textarea>
-        <p class="field-hint">ว่าง = ไม่ตรวจ userId (ไม่แนะนำเมื่อใช้กับ LINE) สูงสุด 20 รายการ</p>
+        <p class="field-hint">ว่าง = ไม่ตรวจ (ไม่แนะนำเมื่อใช้กับ LINE/Telegram) · บอทตอบรหัสให้เมื่อทักครั้งแรก · สูงสุด 20 รายการ</p>
       </div>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
@@ -223,7 +243,7 @@
       var owner = nameOf(state.masters.owners, 'owner_id', 'owner_name', c.default_owner_id);
       var details = el('dl', { class: 'mt-3 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm' },
         el('dt', { class: 'text-slate-500', text: 'สิทธิ์' }), el('dd', { text: scopeLabel }),
-        el('dt', { class: 'text-slate-500', text: 'LINE userId' }), el('dd', { class: 'break-all', text: c.allowed_channel_user_ids.length ? c.allowed_channel_user_ids.length + ' รายการ' : 'ไม่ตรวจ' }),
+        el('dt', { class: 'text-slate-500', text: 'ผู้ใช้แชต' }), el('dd', { class: 'break-all', text: c.allowed_channel_user_ids.length ? c.allowed_channel_user_ids.length + ' รายการ' : 'ไม่ตรวจ' }),
         el('dt', { class: 'text-slate-500', text: 'ค่าเริ่มต้น' }), el('dd', { text: [account || '— บัญชี', owner || '— เจ้าของ'].join(' / ') }),
         el('dt', { class: 'text-slate-500', text: 'สร้างโดย' }), el('dd', { class: 'break-all', text: c.actor_id }));
       var actions = el('div', { class: 'mt-3 flex flex-wrap gap-2' },
@@ -371,8 +391,9 @@
   // ตั้งค่าผู้ให้บริการ AI: ดูได้ทุกคน แก้/ทดสอบได้เฉพาะเจ้าของ; ไม่มีการรับ API key กลับจาก server
   (function () {
     var el = App.el;
-    var LABELS = { OPENAI: 'OpenAI (GPT)', OPENAI_COMPATIBLE: 'Custom (รูปแบบ OpenAI)', ANTHROPIC: 'Anthropic (Claude)', GEMINI: 'Google Gemini' };
-    var state = { status: 'loading', settings: null, error: '', test: null };
+    var LABELS = { OPENAI: 'OpenAI (GPT)', OPENAI_COMPATIBLE: 'Custom (รูปแบบ OpenAI)', ANTHROPIC: 'Anthropic (Claude)', GEMINI: 'Google Gemini', CHATGPT_OAUTH: 'ChatGPT (เข้าสู่ระบบแบบ Codex)' };
+    var state = { status: 'loading', settings: null, error: '', test: null, login: null };
+    var pollTimer = null;
     var panel = document.getElementById('ai-panel');
     var editBtn = document.getElementById('ai-edit');
     var testBtn = document.getElementById('ai-test');
@@ -423,17 +444,100 @@
       var dl = el('dl', { class: 'mt-2 grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm' });
       [row('ผู้ให้บริการ', LABELS[s.provider] || s.provider), row('โมเดล', s.model || '—'),
         s.provider === 'OPENAI_COMPATIBLE' ? row('Base URL', s.base_url || '—') : null,
-        row('API key', s.has_key ? 'ตั้งแล้ว (…' + s.key_hint + ')' : '—')].forEach(function (pair) {
+        s.provider === 'CHATGPT_OAUTH'
+          ? row('บัญชี ChatGPT', s.chatgpt && s.chatgpt.connected ? (s.chatgpt.email || 'เข้าสู่ระบบแล้ว') + (s.chatgpt.plan ? ' · ' + s.chatgpt.plan : '') : 'ยังไม่ได้เข้าสู่ระบบ')
+          : row('API key', s.has_key ? 'ตั้งแล้ว (…' + s.key_hint + ')' : '—')].forEach(function (pair) {
         if (pair) pair.forEach(function (n) { dl.appendChild(n); });
       });
       panel.appendChild(badge);
       panel.appendChild(dl);
       if (!s.can_edit) panel.appendChild(el('p', { class: 'mt-2 text-xs text-slate-500', text: 'เฉพาะเจ้าของระบบเท่านั้นที่แก้หรือทดสอบการตั้งค่านี้ได้' }));
+      if (s.can_edit && s.provider === 'CHATGPT_OAUTH') panel.appendChild(chatgptBox(s.chatgpt || {}));
       if (state.test) panel.appendChild(state.test);
+    }
+
+    // ---------- เข้าสู่ระบบ ChatGPT (device code) ----------
+
+    function stopPoll() {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+
+    function chatgptBox(cg) {
+      var box = el('div', { class: 'mt-3 rounded-xl border border-slate-200 p-3 text-sm' });
+      var login = state.login;
+      if (login) {
+        var link = el('a', { href: login.verification_url, target: '_blank', rel: 'noopener noreferrer', class: 'btn btn-primary', text: 'เปิดหน้าเข้าสู่ระบบ OpenAI' });
+        var cancel = el('button', { type: 'button', class: 'btn btn-secondary', text: 'ยกเลิก' });
+        cancel.addEventListener('click', function () { stopPoll(); state.login = null; render(); });
+        box.appendChild(el('p', { class: 'font-semibold', text: '1. เปิดหน้าเข้าสู่ระบบ แล้วล็อกอินบัญชี ChatGPT' }));
+        box.appendChild(el('p', { class: 'mt-1 font-semibold', text: '2. กรอกรหัสนี้ (หมดอายุใน 15 นาที)' }));
+        box.appendChild(el('p', { class: 'mt-2 select-all rounded-lg bg-slate-100 px-3 py-2 text-center font-mono text-2xl tracking-widest', text: login.user_code }));
+        box.appendChild(el('p', { class: 'mt-2 flex items-center gap-2 text-xs text-slate-500', role: 'status' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'กำลังรอให้กรอกรหัส…'));
+        box.appendChild(el('div', { class: 'mt-3 flex flex-wrap justify-end gap-2' }, cancel, link));
+        return box;
+      }
+      var start = el('button', { type: 'button', class: 'btn btn-primary', text: cg.connected ? 'เข้าสู่ระบบใหม่' : 'เข้าสู่ระบบ ChatGPT' });
+      start.addEventListener('click', function () { startLogin(start); });
+      var actions = el('div', { class: 'mt-2 flex flex-wrap justify-end gap-2' });
+      if (cg.connected) {
+        var out = el('button', { type: 'button', class: 'btn btn-secondary', text: 'ออกจากระบบ' });
+        out.addEventListener('click', function () {
+          App.confirmAction('ออกจากระบบ ChatGPT? การแปลงข้อความด้วย AI จะหยุดจนกว่าจะเข้าสู่ระบบใหม่', 'ออกจากระบบ').then(function (ok) {
+            if (!ok) return;
+            App.setBusy(out, true);
+            App.call('api_chatgptLogout').then(function () { App.toast('ออกจากระบบ ChatGPT แล้ว', 'success'); load(); },
+              function (err) { App.setBusy(out, false); App.toast((err && err.message) || 'ไม่สำเร็จ', 'error'); });
+          });
+        });
+        actions.appendChild(out);
+      }
+      actions.appendChild(start);
+      box.appendChild(el('p', { class: 'text-slate-600', text: cg.connected
+        ? 'เชื่อมบัญชี ChatGPT แล้ว — token เก็บใน Script Properties ไม่ส่งกลับเบราว์เซอร์'
+        : 'ยังไม่ได้เข้าสู่ระบบ: กดปุ่มด้านล่างเพื่อรับรหัส แล้วกรอกที่หน้า OpenAI (ไม่ต้องกรอกรหัสผ่านในระบบนี้)' }));
+      box.appendChild(actions);
+      return box;
+    }
+
+    function startLogin(button) {
+      App.setBusy(button, true, 'กำลังขอรหัส…');
+      App.call('api_chatgptStartLogin').then(function (data) {
+        state.login = data;
+        render();
+        schedulePoll(data.interval);
+      }, function (err) {
+        App.setBusy(button, false);
+        App.toast((err && err.message) || 'ขอรหัสไม่สำเร็จ', 'error');
+      });
+    }
+
+    function schedulePoll(seconds) {
+      stopPoll();
+      pollTimer = setTimeout(poll, Math.max(3, seconds || 5) * 1000);
+    }
+
+    function poll() {
+      if (!state.login) return;
+      App.call('api_chatgptPollLogin').then(function (res) {
+        if (!state.login) return;
+        if (res.state === 'PENDING') { schedulePoll(res.interval || state.login.interval); return; }
+        state.login = null;
+        if (res.state === 'CONNECTED') App.toast('เข้าสู่ระบบ ChatGPT แล้ว กด "ทดสอบ" เพื่อตรวจการเชื่อมต่อ', 'success');
+        else App.toast('รหัสหมดอายุ กรุณาเริ่มใหม่', 'error');
+        load();
+      }, function (err) {
+        state.login = null;
+        render();
+        App.toast((err && err.message) || 'เข้าสู่ระบบไม่สำเร็จ', 'error');
+      });
     }
 
     function toggleBase() {
       baseWrap.hidden = providerInput.value !== 'OPENAI_COMPATIBLE';
+      var oauth = providerInput.value === 'CHATGPT_OAUTH';
+      document.getElementById('ai-key-wrap').hidden = oauth;
+      document.getElementById('ai-chatgpt-note').hidden = !oauth;
     }
 
     function openForm() {
@@ -464,7 +568,8 @@
         api_key: keyInput.value.trim()
       };
       if (!input.model) { formError.textContent = 'กรุณากรอกชื่อโมเดล'; formError.hidden = false; return; }
-      if (!input.api_key && !state.settings.has_key) { formError.textContent = 'กรุณากรอก API key'; formError.hidden = false; return; }
+      if (input.provider === 'CHATGPT_OAUTH') input.api_key = '';
+      else if (!input.api_key && !state.settings.has_key) { formError.textContent = 'กรุณากรอก API key'; formError.hidden = false; return; }
       formError.hidden = true;
       App.setBusy(saveBtn, true);
       submit(input, function (key) { return App.call('api_saveAiSettings', input, key); }).then(function (data) {
@@ -616,6 +721,178 @@
     document.getElementById('line-form-cancel').addEventListener('click', close);
     dialog.addEventListener('close', function () { input.value = ''; });
 
+    App.onShow('integrations', load);
+  })();
+</script>
+
+<dialog id="tg-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="tg-form-title">
+  <form id="tg-form" novalidate class="p-5">
+    <h2 id="tg-form-title" class="text-base font-semibold">Telegram bot token</h2>
+    <label for="tg-token" class="field-label mt-3">Bot token จาก @BotFather</label>
+    <input id="tg-token" class="field-input font-mono text-sm" type="password" autocomplete="new-password" spellcheck="false" maxlength="100" required placeholder="123456789:AA…">
+    <p class="field-hint">ระบบตรวจ token กับ Telegram ก่อนบันทึก และไม่ส่ง token กลับมาแสดงอีก</p>
+    <p id="tg-form-error" role="alert" class="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700" hidden></p>
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" id="tg-form-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="tg-form-save" class="btn btn-primary">บันทึก</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="tg-hook-dialog" class="w-[min(32rem,calc(100vw-1.5rem))] rounded-2xl p-0 shadow-xl" aria-labelledby="tg-hook-title">
+  <form id="tg-hook-form" novalidate class="p-5">
+    <h2 id="tg-hook-title" class="text-base font-semibold">ตั้ง Telegram webhook</h2>
+    <label for="tg-hook-base" class="field-label mt-3">URL /exec ของ gateway</label>
+    <input id="tg-hook-base" class="field-input font-mono text-sm" type="url" inputmode="url" autocomplete="off" spellcheck="false" required placeholder="https://script.google.com/macros/s/…/exec">
+    <label for="tg-hook-key" class="field-label mt-3">API key ของการเชื่อมต่อ (สิทธิ์ WRITE)</label>
+    <input id="tg-hook-key" class="field-input font-mono text-sm" type="password" autocomplete="off" spellcheck="false" required placeholder="emk_…">
+    <p class="field-hint">ระบบประกอบเป็น <code>&lt;URL&gt;?tg_key=&lt;API key&gt;</code> แล้วส่งให้ Telegram (setWebhook) โดยไม่เก็บ key ไว้ ข้อความที่ค้างในคิวเดิมจะถูกล้าง</p>
+    <p id="tg-hook-error" role="alert" class="mt-2 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700" hidden></p>
+    <div class="mt-5 flex justify-end gap-2">
+      <button type="button" id="tg-hook-cancel" class="btn btn-secondary">ยกเลิก</button>
+      <button type="submit" id="tg-hook-save" class="btn btn-primary">ตั้ง webhook</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  // Telegram: ดูสถานะได้ทุกคน ตั้ง token/webhook ได้เฉพาะเจ้าของ; ไม่มีการรับ token กลับจาก server
+  (function () {
+    var el = App.el;
+    var panel = document.getElementById('tg-panel');
+    var editBtn = document.getElementById('tg-edit');
+    var hookBtn = document.getElementById('tg-hook');
+    var dialog = document.getElementById('tg-dialog');
+    var form = document.getElementById('tg-form');
+    var input = document.getElementById('tg-token');
+    var formError = document.getElementById('tg-form-error');
+    var saveBtn = document.getElementById('tg-form-save');
+    var hookDialog = document.getElementById('tg-hook-dialog');
+    var hookForm = document.getElementById('tg-hook-form');
+    var hookError = document.getElementById('tg-hook-error');
+    var hookSave = document.getElementById('tg-hook-save');
+    var submit = App.createSubmitter();
+    var settings = null;
+    var info = null;
+
+    var OUTCOMES = {
+      UNAUTHORIZED: 'key ใน Webhook URL ไม่ถูกต้องหรือการเชื่อมต่อถูกปิด — กด "ตั้ง webhook" ใหม่ด้วย key ล่าสุด',
+      FORBIDDEN_SCOPE: 'การเชื่อมต่อไม่มีสิทธิ์ WRITE',
+      FORBIDDEN_CHANNEL: 'การเชื่อมต่อยังไม่ได้ใส่ผู้ใช้ Telegram — บอทตอบรหัส tg_… กลับไปในแชต ให้นำมาใส่ที่ "แก้ไข" ของการเชื่อมต่อ',
+      BAD_REQUEST: 'คำขอไม่ใช่รูปแบบ Telegram update',
+      forbidden: 'ผู้ส่งไม่อยู่ในรายการที่อนุญาต (บอทตอบรหัส tg_… กลับไป)',
+      setup: 'ส่งรหัส tg_… ของผู้ส่งกลับไปแล้ว รอผู้ดูแลเพิ่มในการเชื่อมต่อ',
+      draft: 'สร้างร่างและส่งปุ่มยืนยันแล้ว', confirmed: 'ยืนยันและบันทึกแล้ว', cancelled: 'ยกเลิกร่างแล้ว',
+      help: 'ตอบวิธีใช้แล้ว', duplicate: 'Telegram ส่งข้อความเดิมซ้ำ จึงข้าม', ignored: 'ข้าม (ไม่ใช่แชตส่วนตัวหรือไม่ใช่ข้อความ)',
+      TELEGRAM_NOT_CONFIGURED: 'ยังไม่ได้ตั้ง bot token จึงตอบกลับไม่ได้',
+      TELEGRAM_HTTP_401: 'bot token ไม่ถูกต้องหรือถูกเปลี่ยน — ตั้ง token ใหม่',
+      TELEGRAM_FAILED: 'เรียก Telegram ไม่สำเร็จ ดูสาเหตุในวงเล็บ [ ] (เช่น ไม่มีสิทธิ์ UrlFetchApp)'
+    };
+
+    function explain(outcome) {
+      return String(outcome || '').split(/[ ,\/]+/).map(function (code) {
+        var base = code.replace(/^error:/, '').replace(/\[.*$/, '');
+        return OUTCOMES[base] || '';
+      }).filter(Boolean).join(' · ');
+    }
+
+    function render(error) {
+      panel.textContent = '';
+      panel.setAttribute('aria-busy', 'false');
+      if (error) { panel.appendChild(el('p', { class: 'text-sm text-rose-700', role: 'alert', text: error })); return; }
+      editBtn.hidden = !settings.can_edit;
+      hookBtn.hidden = !(settings.can_edit && settings.has_token);
+      var dl = el('dl', { class: 'grid grid-cols-[auto,1fr] gap-x-3 gap-y-1 text-sm' });
+      var rows = [
+        ['Bot token', settings.has_token ? 'ตั้งแล้ว (…' + settings.token_hint + ')' : 'ยังไม่ได้ตั้ง'],
+        ['บอท', settings.bot_username ? '@' + settings.bot_username : '—']
+      ];
+      if (info && info.configured) {
+        rows.push(['Webhook', info.has_url ? info.url_host : 'ยังไม่ได้ตั้ง']);
+        if (info.pending_update_count) rows.push(['ค้างในคิว', String(info.pending_update_count) + ' ข้อความ']);
+        if (info.last_error_message) rows.push(['ข้อผิดพลาดล่าสุด', info.last_error_message + (info.last_error_date ? ' (' + new Date(info.last_error_date).toLocaleString('th-TH') + ')' : '')]);
+      }
+      rows.forEach(function (r) { dl.appendChild(el('dt', { class: 'text-slate-500', text: r[0] })); dl.appendChild(el('dd', { class: 'break-all', text: r[1] })); });
+      panel.appendChild(dl);
+      if (settings.bot_username) {
+        panel.appendChild(el('p', { class: 'mt-2 text-sm' }, el('a', { href: 'https://t.me/' + settings.bot_username, target: '_blank', rel: 'noopener noreferrer', class: 'font-semibold text-indigo-700 underline', text: 'เปิดแชตกับบอท →' })));
+      }
+      var last = settings.last_webhook;
+      if (last) {
+        var when = last.at ? new Date(last.at).toLocaleString('th-TH') : '';
+        panel.appendChild(el('div', { class: 'mt-2 rounded-xl bg-slate-50 px-3 py-2 text-xs' },
+          el('p', { class: 'text-slate-500', text: 'ผลล่าสุดจาก Telegram' + (when ? ' · ' + when : '') }),
+          el('p', { class: 'font-mono', text: last.outcome }),
+          explain(last.outcome) ? el('p', { class: 'text-slate-700', text: explain(last.outcome) }) : null));
+      } else {
+        panel.appendChild(el('p', { class: 'mt-2 text-xs text-slate-500', text: 'ยังไม่เคยได้รับข้อความจาก Telegram' }));
+      }
+      if (info && info.has_url && /302|Moved/i.test(info.last_error_message || '')) {
+        panel.appendChild(el('p', { class: 'mt-2 text-xs text-amber-800', text: 'Telegram แจ้ง 302 เพราะ Apps Script ตอบแบบ redirect เสมอ ข้อความยังถูกประมวลผล และระบบข้ามข้อความที่ Telegram ส่งซ้ำ' }));
+      }
+    }
+
+    function load() {
+      panel.setAttribute('aria-busy', 'true');
+      App.call('api_getTelegramSettings').then(function (s) {
+        settings = s;
+        info = null;
+        render();
+        if (s.can_edit && s.has_token) {
+          App.call('api_telegramWebhookInfo').then(function (i) { info = i; render(); }, function () { /* แสดงสถานะหลักต่อได้ */ });
+        }
+      }, function (err) { render((err && err.message) || 'โหลดไม่สำเร็จ'); });
+    }
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (saveBtn.disabled) return;
+      var token = input.value.trim();
+      if (!token) { formError.textContent = 'กรุณากรอก bot token'; formError.hidden = false; return; }
+      formError.hidden = true;
+      App.setBusy(saveBtn, true);
+      submit({ t: token }, function (key) { return App.call('api_saveTelegramSettings', { bot_token: token }, key); }).then(function (s) {
+        App.setBusy(saveBtn, false);
+        input.value = '';
+        dialog.close();
+        App.toast('บันทึก Telegram bot token แล้ว', 'success');
+        settings = s;
+        load();
+      }, function (err) {
+        App.setBusy(saveBtn, false);
+        formError.textContent = (err && err.message) || 'บันทึกไม่สำเร็จ';
+        formError.hidden = false;
+      });
+    });
+
+    hookForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (hookSave.disabled) return;
+      var base = document.getElementById('tg-hook-base').value.trim().replace(/[?#].*$/, '');
+      var key = document.getElementById('tg-hook-key').value.trim();
+      if (!base || !key) { hookError.textContent = 'กรุณากรอก URL และ API key'; hookError.hidden = false; return; }
+      hookError.hidden = true;
+      App.setBusy(hookSave, true);
+      App.call('api_setTelegramWebhook', { webhook_url: base + '?tg_key=' + encodeURIComponent(key) }).then(function (i) {
+        App.setBusy(hookSave, false);
+        document.getElementById('tg-hook-key').value = '';
+        hookDialog.close();
+        info = i;
+        render();
+        App.toast('ตั้ง webhook แล้ว ลองพิมพ์ในแชต Telegram', 'success');
+      }, function (err) {
+        App.setBusy(hookSave, false);
+        hookError.textContent = (err && err.message) || 'ตั้ง webhook ไม่สำเร็จ';
+        hookError.hidden = false;
+      });
+    });
+
+    editBtn.addEventListener('click', function () { input.value = ''; formError.hidden = true; dialog.showModal(); input.focus(); });
+    hookBtn.addEventListener('click', function () { hookError.hidden = true; hookDialog.showModal(); document.getElementById('tg-hook-base').focus(); });
+    document.getElementById('tg-form-cancel').addEventListener('click', function () { input.value = ''; dialog.close(); });
+    document.getElementById('tg-hook-cancel').addEventListener('click', function () { document.getElementById('tg-hook-key').value = ''; hookDialog.close(); });
+    dialog.addEventListener('close', function () { input.value = ''; });
+    hookDialog.addEventListener('close', function () { document.getElementById('tg-hook-key').value = ''; });
     App.onShow('integrations', load);
   })();
 </script>

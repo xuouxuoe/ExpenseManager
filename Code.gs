@@ -22,7 +22,7 @@ function doGet() {
 }
 
 /** ใช้ใน template เท่านั้น: รวมไฟล์ HTML ที่อนุญาต */
-var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports', 'PageIntegrations', 'PageApiGuide'];
+var INCLUDABLE_FILES_ = ['Styles', 'Scripts', 'PageAccounts', 'PageBudgets', 'PageTransactions', 'PageInstallments', 'PageMonthly', 'PageReports', 'PageIntegrations', 'PageApiGuide', 'PageApprovals', 'PageConnectGuide'];
 
 function include(name) {
   if (INCLUDABLE_FILES_.indexOf(name) < 0) throw new Error('include: ไม่อนุญาตไฟล์ ' + name);
@@ -313,6 +313,25 @@ function api_rotateApiClientKey(clientId, apiKey, idempotencyKey) {
   });
 }
 
+/** หน้า "รอยืนยัน": ร่างจาก LINE / Telegram / API ที่รอผู้ใช้ยืนยัน */
+function api_listApiDrafts() {
+  return handleApi_(function () { return ApiDrafts.listForWeb(); });
+}
+
+function api_approveApiDraft(draftId) {
+  return handleApi_(function (actor) {
+    var draft = ApiDrafts.approveFromWeb(draftId, { actor: actor });
+    return { draft: draft, drafts: ApiDrafts.listForWeb() };
+  });
+}
+
+function api_cancelApiDraft(draftId) {
+  return handleApi_(function (actor) {
+    var draft = ApiDrafts.cancelFromWeb(draftId, { actor: actor });
+    return { draft: draft, drafts: ApiDrafts.listForWeb() };
+  });
+}
+
 function api_getAiSettings() {
   return handleApi_(function (actor) { return AiSettings.view(actor); });
 }
@@ -329,6 +348,37 @@ function api_getLineSettings() {
 /** เฉพาะเจ้าของ; token ไม่ถูกส่งกลับให้เบราว์เซอร์ */
 function api_saveLineSettings(input, idempotencyKey) {
   return handleApi_(function (actor) { return LineSettings.save(input, { idempotencyKey: idempotencyKey, actor: actor }); });
+}
+
+function api_getTelegramSettings() {
+  return handleApi_(function (actor) { return TelegramSettings.view(actor); });
+}
+
+/** เฉพาะเจ้าของ; bot token ไม่ถูกส่งกลับให้เบราว์เซอร์ */
+function api_saveTelegramSettings(input, idempotencyKey) {
+  return handleApi_(function (actor) { return TelegramSettings.save(input, { idempotencyKey: idempotencyKey, actor: actor }); });
+}
+
+/** เฉพาะเจ้าของ; input.webhook_url มี API key — ใช้เรียก setWebhook แล้วทิ้ง ไม่เก็บ */
+function api_setTelegramWebhook(input) {
+  return handleApi_(function (actor) { return TelegramSettings.setWebhook(input, actor); });
+}
+
+function api_telegramWebhookInfo() {
+  return handleApi_(function (actor) { return TelegramSettings.webhookInfo(actor); });
+}
+
+/** AI แบบเข้าสู่ระบบด้วยบัญชี ChatGPT (device code แบบ Codex) — เฉพาะเจ้าของ; ไม่มี token กลับไปที่เบราว์เซอร์ */
+function api_chatgptStartLogin() {
+  return handleApi_(function (actor) { return ChatGptAuth.startLogin(actor); });
+}
+
+function api_chatgptPollLogin() {
+  return handleApi_(function (actor) { return ChatGptAuth.pollLogin(actor); });
+}
+
+function api_chatgptLogout() {
+  return handleApi_(function (actor) { return ChatGptAuth.logout(actor); });
 }
 
 function api_testAiSettings() {

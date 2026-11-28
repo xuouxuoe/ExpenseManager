@@ -166,7 +166,8 @@ function createContext(options = {}) {
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (k) => (k in props ? props[k] : null),
-        setProperty: (k, v) => { props[k] = v; }
+        setProperty: (k, v) => { props[k] = v; },
+        deleteProperty: (k) => { delete props[k]; }
       })
     },
     SpreadsheetApp: {
@@ -199,6 +200,8 @@ function createContext(options = {}) {
       DigestAlgorithm: { SHA_256: 'SHA_256' },
       Charset: { UTF_8: 'UTF_8' },
       getUuid: () => crypto.randomUUID(),
+      base64Decode: (text) => Array.from(Buffer.from(String(text), 'base64'), (b) => (b > 127 ? b - 256 : b)),
+      newBlob: (bytes) => ({ getDataAsString: () => Buffer.from(Array.from(bytes, (b) => b & 255)).toString('utf8') }),
       base64Encode: (bytes) => Buffer.from(Array.from(bytes, (b) => b & 255)).toString('base64'),
       computeDigest: (_alg, text) => Array.from(crypto.createHash('sha256').update(text, 'utf8').digest()).map((b) => (b > 127 ? b - 256 : b)),
       formatDate: (date, tz, pattern) => {

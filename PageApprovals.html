@@ -1,0 +1,139 @@
+<section aria-labelledby="apv-title" class="space-y-4">
+  <div class="flex flex-wrap items-end justify-between gap-3">
+    <div>
+      <h1 id="apv-title" class="text-xl font-semibold">รอยืนยัน</h1>
+      <p class="text-sm text-slate-500">ร่างรายการจาก LINE, Telegram หรือ API ที่ยังไม่บันทึก — ตรวจแล้วกดยืนยันหรือยกเลิกได้ที่นี่ (เทียบเท่ากดปุ่มในแชต)</p>
+    </div>
+    <button type="button" id="apv-refresh" class="btn btn-secondary">รีเฟรช</button>
+  </div>
+
+  <section aria-labelledby="apv-pending-title">
+    <h2 id="apv-pending-title" class="text-base font-semibold">รอยืนยัน <span id="apv-count" class="text-slate-500"></span></h2>
+    <div id="apv-pending" class="mt-2 space-y-3" aria-live="polite" aria-busy="true"></div>
+  </section>
+
+  <details class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <summary class="cursor-pointer text-sm font-semibold text-indigo-700">ร่างที่ปิดแล้วล่าสุด</summary>
+    <div id="apv-recent" class="mt-3 space-y-2"></div>
+  </details>
+</section>
+
+<script>
+  (function () {
+    var el = App.el;
+    var state = { status: 'idle', pending: [], recent: [], error: '' };
+    var pendingBox = document.getElementById('apv-pending');
+    var recentBox = document.getElementById('apv-recent');
+    var countEl = document.getElementById('apv-count');
+    var STATUS = {
+      PENDING: ['รอยืนยัน', 'bg-amber-100 text-amber-800'],
+      CONFIRMED: ['บันทึกแล้ว', 'bg-emerald-100 text-emerald-800'],
+      CANCELLED: ['ยกเลิก', 'bg-slate-200 text-slate-700'],
+      EXPIRED: ['หมดอายุ', 'bg-slate-200 text-slate-700'],
+      FAILED: ['บันทึกไม่ได้', 'bg-rose-100 text-rose-800']
+    };
+    var CHANNEL = { LINE: 'bg-green-100 text-green-800', Telegram: 'bg-sky-100 text-sky-800', API: 'bg-indigo-100 text-indigo-800' };
+
+    function pill(text, cls) {
+      return el('span', { class: 'inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ' + cls, text: text });
+    }
+
+    function when(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      return isNaN(d) ? '' : d.toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' });
+    }
+
+    function header(d) {
+      var s = STATUS[d.draft_status] || [d.draft_status, 'bg-slate-200 text-slate-700'];
+      return el('div', { class: 'flex flex-wrap items-center gap-2 text-xs text-slate-500' },
+        pill(d.channel, CHANNEL[d.channel] || CHANNEL.API),
+        pill(d.kind === 'PLAN' ? 'แผนชำระ' : 'รายการ', 'bg-slate-100 text-slate-700'),
+        d.draft_status === 'PENDING' ? null : pill(s[0], s[1]),
+        el('span', { text: d.client_name + ' · ร่าง #' + d.draft_id + ' · ' + when(d.created_at) }));
+    }
+
+    function act(d, approve, buttons) {
+      var message = approve
+        ? 'บันทึกร่าง #' + d.draft_id + ' เป็นรายการจริง?' + (d.possible_duplicates && d.possible_duplicates.length ? ' (พบรายการที่อาจซ้ำ ' + d.possible_duplicates.length + ' รายการ)' : '')
+        : 'ยกเลิกร่าง #' + d.draft_id + '? จะไม่มีการบันทึก';
+      App.confirmAction(message, approve ? 'ยืนยันบันทึก' : 'ยกเลิกร่าง').then(function (ok) {
+        if (!ok) return;
+        buttons.forEach(function (b) { b.disabled = true; });
+        App.setBusy(approve ? buttons[1] : buttons[0], true, approve ? 'กำลังบันทึก…' : 'กำลังยกเลิก…');
+        App.call(approve ? 'api_approveApiDraft' : 'api_cancelApiDraft', d.draft_id).then(function (res) {
+          App.toast(approve ? 'บันทึกร่าง #' + d.draft_id + ' แล้ว' : 'ยกเลิกร่าง #' + d.draft_id + ' แล้ว', 'success');
+          apply(res.drafts);
+        }, function (err) {
+          App.toast((err && err.message) || 'ทำรายการไม่สำเร็จ', 'error');
+          load();
+        });
+      });
+    }
+
+    function pendingCard(d) {
+      var cancelBtn = el('button', { type: 'button', class: 'btn btn-secondary', text: 'ยกเลิก' });
+      var approveBtn = el('button', { type: 'button', class: 'btn btn-primary', text: 'ยืนยันบันทึก' });
+      var buttons = [cancelBtn, approveBtn];
+      cancelBtn.addEventListener('click', function () { act(d, false, buttons); });
+      approveBtn.addEventListener('click', function () { act(d, true, buttons); });
+      var dups = d.possible_duplicates || [];
+      return el('article', { class: 'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm', 'aria-label': 'ร่าง #' + d.draft_id },
+        header(d),
+        el('p', { class: 'mt-2 whitespace-pre-wrap text-sm text-slate-800', text: d.summary_text }),
+        dups.length ? el('p', { class: 'mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900',
+          text: 'อาจซ้ำกับ: ' + dups.map(function (x) { return '#' + x.transaction_id + ' ' + (x.transaction_date || '') + ' ' + (x.item_name || '') + ' ' + App.formatMoney(x.amount); }).join(' · ') }) : null,
+        el('p', { class: 'mt-2 text-xs text-slate-500', text: 'หมดอายุ ' + when(d.expires_at) }),
+        el('div', { class: 'mt-3 flex justify-end gap-2' }, cancelBtn, approveBtn));
+    }
+
+    function recentRow(d) {
+      return el('div', { class: 'border-t border-slate-100 pt-2 first:border-0 first:pt-0' },
+        header(d),
+        el('p', { class: 'mt-1 whitespace-pre-wrap text-xs text-slate-700', text: d.summary_text.split('\n')[0] + (d.transaction_id ? ' · รายการ #' + d.transaction_id : '') }));
+    }
+
+    function render() {
+      pendingBox.textContent = '';
+      pendingBox.setAttribute('aria-busy', String(state.status === 'loading'));
+      if (state.status === 'loading') {
+        pendingBox.appendChild(el('p', { class: 'flex items-center gap-2 text-sm text-slate-500' }, el('span', { class: 'spinner', 'aria-hidden': 'true' }), 'กำลังโหลด…'));
+        return;
+      }
+      if (state.status === 'error') {
+        pendingBox.appendChild(el('div', { class: 'rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700', role: 'alert' },
+          el('p', { text: state.error }),
+          el('button', { type: 'button', class: 'btn btn-secondary mt-2', text: 'ลองใหม่', onclick: load })));
+        return;
+      }
+      countEl.textContent = state.pending.length ? '(' + state.pending.length + ')' : '';
+      if (!state.pending.length) {
+        pendingBox.appendChild(el('p', { class: 'rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500', text: 'ไม่มีร่างที่รอยืนยัน' }));
+      }
+      state.pending.forEach(function (d) { pendingBox.appendChild(pendingCard(d)); });
+      recentBox.textContent = '';
+      if (!state.recent.length) recentBox.appendChild(el('p', { class: 'text-sm text-slate-500', text: 'ยังไม่มี' }));
+      state.recent.forEach(function (d) { recentBox.appendChild(recentRow(d)); });
+    }
+
+    function apply(drafts) {
+      state.pending = (drafts && drafts.pending) || [];
+      state.recent = (drafts && drafts.recent) || [];
+      state.status = 'ready';
+      render();
+    }
+
+    function load() {
+      state.status = 'loading';
+      render();
+      App.call('api_listApiDrafts').then(apply, function (err) {
+        state.status = 'error';
+        state.error = (err && err.message) || 'โหลดข้อมูลไม่สำเร็จ';
+        render();
+      });
+    }
+
+    document.getElementById('apv-refresh').addEventListener('click', load);
+    App.onShow('approvals', load);
+  })();
+</script>

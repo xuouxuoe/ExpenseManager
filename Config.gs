@@ -21,7 +21,14 @@ var Config = {
     // LINE Messaging API: ใช้ตอบกลับข้อความ (เจ้าของตั้งผ่าน editor หรือหน้าเว็บ)
     LINE_CHANNEL_ACCESS_TOKEN: 'LINE_CHANNEL_ACCESS_TOKEN',
     // ผลล่าสุดของ LINE webhook (เวลา + รหัสผล) สำหรับแสดงในหน้าเว็บ
-    LINE_LAST_WEBHOOK: 'LINE_LAST_WEBHOOK'
+    LINE_LAST_WEBHOOK: 'LINE_LAST_WEBHOOK',
+    // Telegram Bot API: bot token จาก @BotFather, ชื่อบอท และผลล่าสุดของ webhook
+    TELEGRAM_BOT_TOKEN: 'TELEGRAM_BOT_TOKEN',
+    TELEGRAM_BOT_USERNAME: 'TELEGRAM_BOT_USERNAME',
+    TELEGRAM_LAST_WEBHOOK: 'TELEGRAM_LAST_WEBHOOK',
+    // AI_PROVIDER = CHATGPT_OAUTH: token ของบัญชี ChatGPT (ChatGptAuth.gs) และสถานะ device code ที่รอผู้ใช้กรอก
+    CHATGPT_OAUTH_TOKENS: 'CHATGPT_OAUTH_TOKENS',
+    CHATGPT_DEVICE_AUTH: 'CHATGPT_DEVICE_AUTH'
   },
 
   LOCK_TIMEOUT_MS: 30000,
@@ -106,7 +113,7 @@ var Config = {
     AUDIT_RESULT: ['SUCCESS', 'FAILED'],
     API_SCOPE: ['READ', 'WRITE'],
     DRAFT_STATUS: ['PENDING', 'CONFIRMED', 'CANCELLED', 'EXPIRED', 'FAILED'],
-    AI_PROVIDER: ['OPENAI', 'OPENAI_COMPATIBLE', 'ANTHROPIC', 'GEMINI']
+    AI_PROVIDER: ['OPENAI', 'OPENAI_COMPATIBLE', 'ANTHROPIC', 'GEMINI', 'CHATGPT_OAUTH']
   },
 
   /** ความยาวสูงสุดของข้อความ (docs/database-schema.md §1.3) */
