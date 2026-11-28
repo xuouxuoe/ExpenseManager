@@ -31,7 +31,30 @@ function setup() {
   return { ctx, dad, bank, ktc, appliance, apiKey, post, draft, rows, ym };
 }
 
-test('draft.create แผนผ่อน: ค่าเริ่มต้นเริ่มชำระเดือนหน้า เก็บเงินเดือนนี้; สรุปแสดงงวด; ยังไม่สร้างแผน', () => {
+test('ไม่ระบุว่าเดือนเก็บต่างจากเดือนชำระ → ใช้เดือนเดียวกัน', () => {
+  const s = setup();
+  const onlyPay = s.draft({ first_payment_month: 202703 }).data.plan;
+  assert.deepEqual([onlyPay.first_saving_month, onlyPay.first_payment_month], [202703, 202703]);
+  const onlySave = s.draft({ first_saving_month: 202702 }).data.plan;
+  assert.deepEqual([onlySave.first_saving_month, onlySave.first_payment_month], [202702, 202702]);
+  const both = s.draft({ first_saving_month: 202701, first_payment_month: 202703 }).data.plan;
+  assert.deepEqual([both.first_saving_month, both.first_payment_month], [202701, 202703]);
+});
+
+test('AI: ดอกเบี้ยแบบอัตรา (ต่อเดือน/ต่อปี) แปลงเป็นยอดดอกเบี้ยรวม; ยอดดอกเบี้ยที่ระบุใช้ตามนั้น', () => {
+  const s = setup();
+  const base = { intent: 'PLAN', amount: 12000, installment_count: 10, item_name: 'ทีวี', category: s.appliance.category_id };
+  const norm = (extra) => plain(s.ctx.AiParser.normalize({ ...base, ...extra }, 'x')).params;
+  assert.equal(norm({ interest_rate: 0.8, interest_rate_period: 'MONTH' }).interest_amount, 960);
+  assert.equal(norm({ interest_rate: 12, interest_rate_period: 'YEAR' }).interest_amount, 1200);
+  assert.equal(norm({ interest_amount: 500, interest_rate: 0.8, interest_rate_period: 'MONTH' }).interest_amount, 500);
+  assert.equal(norm({}).interest_amount, undefined);
+  const d = s.draft({ interest_amount: 960 }).data;
+  assert.equal(d.plan.total_amount, 12960);
+  assert.match(d.summary_text, /เงินต้น 12,000\.00 \+ ดอกเบี้ย 960\.00/);
+});
+
+test('draft.create แผนผ่อน: ค่าเริ่มต้นเริ่มชำระและเก็บเงินเดือนหน้า; สรุปแสดงงวด; ยังไม่สร้างแผน', () => {
   const s = setup();
   const res = s.draft({});
   assert.equal(res.ok, true, JSON.stringify(res));
@@ -40,7 +63,7 @@ test('draft.create แผนผ่อน: ค่าเริ่มต้นเ�
   assert.equal(d.plan.installment_count, 10);
   assert.equal(d.plan.first_amount, 1200);
   assert.equal(d.plan.first_payment_month, s.ym(1));
-  assert.equal(d.plan.first_saving_month, s.ym(0));
+  assert.equal(d.plan.first_saving_month, s.ym(1));
   assert.equal(d.plan.account_name, 'บัตร KTC');
   assert.match(d.summary_text, /แผนผ่อนชำระ — ทีวี/);
   assert.match(d.summary_text, /10 งวด งวดละ 1,200\.00 บาท/);

@@ -185,9 +185,10 @@ var ApiDrafts = (function () {
     if (!owner) throw invalid('REQUIRED', 'owner', 'กรุณาระบุ owner (เจ้าของ) หรือตั้งเจ้าของเริ่มต้นของการเชื่อมต่อ');
     var count = Validation.isBlank(src.installment_count) ? 1 : src.installment_count;
     var type = Validation.isBlank(src.plan_type) ? (Number(count) > 1 ? 'INSTALLMENT' : 'ONE_TIME') : src.plan_type;
-    var payment = Validation.isBlank(src.first_payment_month) ? Validation.addMonths(thisMonth(), 1) : src.first_payment_month;
-    var saving = Validation.isBlank(src.first_saving_month)
-      ? Math.min(thisMonth(), Validation.requireYearMonth(payment, 'first_payment_month')) : src.first_saving_month;
+    // ไม่ระบุว่าเดือนเก็บกับเดือนชำระต่างกัน → ใช้เดือนเดียวกัน (ไม่ระบุทั้งคู่ = เดือนหน้า)
+    var payment = Validation.isBlank(src.first_payment_month)
+      ? (Validation.isBlank(src.first_saving_month) ? Validation.addMonths(thisMonth(), 1) : src.first_saving_month) : src.first_payment_month;
+    var saving = Validation.isBlank(src.first_saving_month) ? payment : src.first_saving_month;
     return {
       kind: PLAN,
       plan_type: type,

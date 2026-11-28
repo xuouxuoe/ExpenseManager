@@ -52,10 +52,12 @@ var AiParser = (function () {
       intent: { type: 'string', enum: ['TRANSACTION', 'PLAN', 'OTHER'], description: 'TRANSACTION when the text records income/expense/transfer/card purchase that already happened; PLAN when it creates a payment plan (installments ผ่อน, a future one-time payment, or a recurring bill); otherwise OTHER' },
       plan_type: nullable('string', { enum: ['INSTALLMENT', 'ONE_TIME', 'RECURRING', null], description: 'PLAN only' }),
       installment_count: nullable('integer', { description: 'PLAN only: number of installments/months (1 for ONE_TIME)' }),
-      interest_amount: nullable('number', { description: 'PLAN only: total interest in THB if stated' }),
+      interest_amount: nullable('number', { description: 'PLAN only: TOTAL interest in THB over the whole plan when stated as an amount (or derivable from installment amount × count − price)' }),
+      interest_rate: nullable('number', { description: 'PLAN only: flat interest rate in percent when stated as a rate (e.g. "ดอกเบี้ย 0.8% ต่อเดือน" → 0.8)' }),
+      interest_rate_period: nullable('string', { enum: ['MONTH', 'YEAR', null], description: 'PLAN only: period of interest_rate (ต่อเดือน = MONTH, ต่อปี = YEAR)' }),
       fee_amount: nullable('number', { description: 'PLAN only: total fees in THB if stated' }),
-      first_payment_month: nullable('integer', { description: 'PLAN only: YYYYMM of the first payment; null = next month' }),
-      first_saving_month: nullable('integer', { description: 'PLAN only: YYYYMM to start saving; null = this month' }),
+      first_payment_month: nullable('integer', { description: 'PLAN only: YYYYMM of the first payment when stated; null otherwise' }),
+      first_saving_month: nullable('integer', { description: 'PLAN only: YYYYMM to start saving only when stated separately; null otherwise (the app uses the payment month)' }),
       due_day: nullable('integer', { description: 'PLAN only: due day of month 1-31 if stated' }),
       transaction_type: nullable('string', { enum: ApiDrafts.TYPES.concat([null]) }),
       transaction_date: nullable('string', { description: 'YYYY-MM-DD (Gregorian). null = today' }),
@@ -102,7 +104,8 @@ var AiParser = (function () {
       'Budgets are for spending only (EXPENSE or CREDIT_PURCHASE). If the chosen budget has an owner_id, use that owner_id as owner.',
       'PLAN: for installment purchases ("ผ่อน ... 10 เดือน/งวด"), a future bill to pay once ("ค่าประกัน 8500 จ่ายเดือนมีนาคม") or a recurring bill for a fixed number of months, use intent PLAN.',
       'For PLAN: amount = TOTAL principal (if the user gives a per-installment amount, multiply by installment_count); from_account = the card/account used for the plan; category = closest EXPENSE category (required); transaction_date = purchase date (null = today).',
-      'For PLAN: first_payment_month / first_saving_month as YYYYMM integers only when stated (e.g. "เริ่มจ่ายเดือนหน้า" → null is fine); due_day only when stated. transaction_type, to_account and budget are null for PLAN.',
+      'For PLAN: first_payment_month / first_saving_month as YYYYMM integers only when stated (e.g. "เริ่มจ่ายเดือนหน้า" → null is fine); a single stated month ("จ่ายเดือนมีนาคม") is first_payment_month and first_saving_month stays null; due_day only when stated. transaction_type, to_account and budget are null for PLAN.',
+      'For PLAN interest (ดอกเบี้ย): amount stays the principal WITHOUT interest. A stated interest amount → interest_amount (total over all installments; "ดอกเบี้ยเดือนละ 50" × 10 งวด = 500). A stated rate → interest_rate + interest_rate_period and interest_amount null. If both a price and a per-installment amount that includes interest are given, interest_amount = per-installment × count − price. If interest is mentioned without any amount or rate, set intent OTHER and ask in Thai for the interest amount or rate.',
       'Return only the JSON object.',
       '',
       'Accounts (account_id | name | type):',
@@ -234,6 +237,16 @@ var AiParser = (function () {
     return String(value).trim().slice(0, 1000);
   }
 
+  /** ดอกเบี้ยแบบ flat rate รวมทั้งแผน (บาท 2 ตำแหน่ง) = เงินต้น × อัตรา% × จำนวนเดือน (อัตราต่อปีหาร 12); ข้อมูลไม่ครบคืน '' */
+  function flatInterest(principal, rate, period, count) {
+    var p = Number(principal);
+    var r = Number(rate);
+    var n = Number(count) || 1;
+    if (rate === null || rate === undefined || rate === '' || !isFinite(p) || !isFinite(r) || p <= 0 || r <= 0) return '';
+    var months = period === 'YEAR' ? n / 12 : n;
+    return Math.round(p * r * months) / 100;
+  }
+
   /** ผลจาก AI → { intent, params (สำหรับ draft.create), message } */
   function normalize(out, text) {
     var message = clean(out.message);
@@ -246,6 +259,10 @@ var AiParser = (function () {
         var v = clean(out[pair[0]]);
         if (v !== '') plan[pair[1]] = v;
       });
+      if (plan.interest_amount === undefined) {
+        var interest = flatInterest(plan.principal_amount, out.interest_rate, out.interest_rate_period, plan.installment_count);
+        if (interest !== '') plan.interest_amount = interest;
+      }
       plan.source_text = text;
       return { intent: 'PLAN', params: plan, message: message };
     }
@@ -314,7 +331,8 @@ var AiParser = (function () {
     config: config,
     parse: parse,
     buildRequest: buildRequest,
-    outputSchema: outputSchema
+    outputSchema: outputSchema,
+    normalize: normalize
   };
 })();
 

@@ -185,11 +185,11 @@ LINE postback ──> doPost ──> Drafts.confirm → Transactions.create (ide
 ### 0.14 สร้างแผนชำระผ่าน LINE / API (ผู้ใช้ขอ 2026-11-28)
 
 - [x] `draft.create` รับ `params.kind = PAYMENT_PLAN`: `item_name`, `principal_amount`, `installment_count`, `account`, `category` (ID หรือชื่อ) และไม่บังคับ `plan_type`, `owner`, `interest_amount`, `fee_amount`, `purchase_date`, `first_payment_month`, `first_saving_month`, `due_day`, `description`, `note`
-  - ค่าเริ่มต้น: plan_type = INSTALLMENT ถ้ามากกว่า 1 งวด ไม่งั้น ONE_TIME; ชำระงวดแรก = เดือนหน้า; เริ่มเก็บ = เดือนนี้ (ไม่เกินเดือนชำระ); วันที่ซื้อ = วันนี้; บัญชี/เจ้าของ = ค่าเริ่มต้นของการเชื่อมต่อ
+  - ค่าเริ่มต้น: plan_type = INSTALLMENT ถ้ามากกว่า 1 งวด ไม่งั้น ONE_TIME; ไม่ระบุว่าเดือนเก็บต่างจากเดือนชำระ → ใช้เดือนเดียวกัน (ระบุเดือนเดียวใช้เดือนนั้นทั้งคู่; ไม่ระบุทั้งคู่ = เดือนหน้า) (ผู้ใช้ขอ 2026-11-28 หลังทดสอบ); วันที่ซื้อ = วันนี้; บัญชี/เจ้าของ = ค่าเริ่มต้นของการเชื่อมต่อ
   - ตรวจด้วย `PaymentPlanner.preview` (กฎเดียวกับหน้าเว็บ) ทั้งตอนสร้างร่างและตอนยืนยัน; draft_json เก็บ input ที่มีเฉพาะ ID
   - **ไม่เชื่อมรายการซื้อด้วยบัตร** (purchase_link = NONE) เพื่อไม่ให้ซ้ำกับรายการที่บันทึกไว้แล้ว — เชื่อมได้ที่หน้าเว็บ; สรุปร่างแจ้งไว้
   - ยืนยัน: `PaymentPlanner.create` ด้วย idempotency key `api-draft-plan-<draft_id>` (operation ของตัวเอง) แล้วจึงปิดร่างเป็น CONFIRMED — ค้างระหว่างสองขั้นแล้วยืนยันซ้ำได้แผนเดิม ไม่สร้างซ้ำ
-- [x] AI: intent `PLAN` + ฟิลด์ `plan_type`, `installment_count`, `interest_amount`, `fee_amount`, `first_payment_month`, `first_saving_month`, `due_day`; amount = เงินต้นรวม (ยอดต่องวด × จำนวนงวด); หมวดบังคับเลือก (ใช้หมวดทั่วไปเป็นตัวกันพลาด)
+- [x] AI: intent `PLAN` + ฟิลด์ `plan_type`, `installment_count`, `interest_amount`, `fee_amount`, `first_payment_month`, `first_saving_month`, `due_day`; amount = เงินต้นรวม (ยอดต่องวด × จำนวนงวด) ไม่รวมดอกเบี้ย; ดอกเบี้ยเป็นยอดเงิน → `interest_amount` รวมทั้งแผน, เป็นอัตรา → `interest_rate` + `interest_rate_period` (MONTH/YEAR) แล้ว Backend คำนวณแบบ flat = เงินต้น × อัตรา% × จำนวนเดือน; บอกว่ามีดอกเบี้ยแต่ไม่ให้ยอด/อัตรา → บอทถามกลับ (แก้ 2026-11-28 หลังผู้ใช้พบว่าดอกเบี้ยไม่ถูกเพิ่ม); หมวดบังคับเลือก (ใช้หมวดทั่วไปเป็นตัวกันพลาด)
 - [x] LINE: ข้อความผ่อน/รอชำระ → Flex สรุปแผน (ยอดรวม จำนวนงวด ยอดต่องวด เดือนชำระ เริ่มเก็บ บัญชี หมวด เจ้าของ) → ยืนยันจึงสร้างแผน; วิธีใช้มีตัวอย่าง
 - [x] `tests/plan-draft.test.js` 4 กรณี; `npm test` ผ่าน
 - [x] clasp push ขึ้น Apps Script HEAD แล้ว (2026-11-28, commit 47aa40f; clone กลับมาเทียบ 33 ไฟล์ตรงกัน)
