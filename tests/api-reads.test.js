@@ -143,9 +143,9 @@ test('action อ่านข้อมูลต้องมีสิทธิ์ 
   const writeOnly = newApiKey();
   assert.equal(s.ctx.api_createApiClient({ client_name: 'W', scopes: ['WRITE'], api_key: writeOnly }, key()).ok, true);
   const call = (action) => plain(s.ctx.IntegrationApi.dispatch({ postData: { contents: JSON.stringify({ api_key: writeOnly, action }) } }));
-  ['summary.month', 'balances', 'transactions.recent', 'budget.remaining'].forEach((a) => assert.equal(call(a).code, 'FORBIDDEN_SCOPE', a));
+  ['summary.month', 'balances', 'transactions.recent', 'budget.remaining', 'debts'].forEach((a) => assert.equal(call(a).code, 'FORBIDDEN_SCOPE', a));
   const before = JSON.stringify(s.ctx.__ss.sheets.map((sh) => sh.data));
-  ['summary.month', 'balances', 'transactions.recent', 'budget.remaining'].forEach((a) => assert.equal(s.post(a).ok, true, a));
+  ['summary.month', 'balances', 'transactions.recent', 'budget.remaining', 'debts'].forEach((a) => assert.equal(s.post(a).ok, true, a));
   assert.equal(JSON.stringify(s.ctx.__ss.sheets.map((sh) => sh.data)), before);
 });
 
@@ -218,6 +218,10 @@ test('คำสั่ง หนี้: ยอดหนี้บัตรหล�
   assert.match(text, /^หนี้บัตร 11,500\.50/);
   assert.match(text, /• KTC 10,000\.50 \(วงเงินเหลือ 39,999\.50, ครบกำหนดวันที่ 25\)/);
   assert.match(text, /สินเชื่อ 100,000\.00\n• กู้บ้าน 100,000\.00/);
+
+  const api = s.post('debts');
+  assert.equal(api.ok, true, JSON.stringify(api));
+  assert.deepEqual(api.data, d, 'action debts คืนข้อมูลเดียวกับคำสั่งแชต');
 
   const cmd = s.ctx.ChatCommands.find('หนี้');
   assert.equal(cmd.result, 'debts');

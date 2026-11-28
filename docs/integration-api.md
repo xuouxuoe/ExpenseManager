@@ -300,6 +300,7 @@ LINE "ยอดเดือนนี้" ──> Make ──(5) summary.month / 
 | `summary.month` | read | รายรับ รายจ่าย สุทธิ ของเดือน `YYYYMM` + หมวดที่ใช้มากสุด | `FinanceReports.dashboard` |
 | `balances` | read | ยอดบัญชี เงินกันไว้ เงินที่ใช้ได้จริง | `Transactions.accountBalances` |
 | `budget.remaining` | read | งบคงเหลือเดือน/สัปดาห์ | `Budgets.list` |
+| `debts` | read | หนี้บัตร/สินเชื่อรายบัญชี วงเงินคงเหลือ วันครบกำหนด ยอดต้องจ่ายเดือนนี้ + ค้างจากเดือนก่อน (ผู้ใช้ขอ 2026-11-28) | `ApiReads.debts` (`Ledger.balances` + `PaymentSchedules.remaining_to_pay`) |
 
 - ไม่มี action บันทึกตรงโดยไม่ผ่านร่าง — ทุกการเขียนต้อง `draft.create` → `draft.confirm`
 - คำตอบมี `summary_text` ภาษาไทยที่ Make ส่งต่อ LINE ได้เลย ลด logic ฝั่ง Make

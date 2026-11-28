@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added — action `debts` ใน Integration API (2026-11-28)
+
+- `{"action":"debts"}` (สิทธิ์ READ, ไม่มี params) คืน `{ month, totals: { cards, loans, due_this_month, overdue }, cards[], loans[] }` แต่ละบัญชีมี balance, credit_limit, available_credit, due_day, due_this_month, overdue — ข้อมูลเดียวกับคำสั่งแชต "หนี้"
+- คู่มือ API (ตาราง actions) และ docs/integration-api.md อัปเดต; test ตรวจสิทธิ์ READ / ไม่เขียนชีต / ผลตรงกับคำสั่งแชต
+
 ### Added — ยอดต้องจ่ายเดือนนี้ในคำสั่ง "หนี้" (2026-11-28)
 
 - คำสั่ง `หนี้` แสดงยอดต้องจ่ายเดือนนี้ตามแผนชำระ รวมทุกบัตรและรายบัตร/สินเชื่อ แยกยอดงวดค้างจากเดือนก่อน (ไม่นับงวดอนาคตและงวดยกเลิก) — หลักเดียวกับการ์ดงานเดือนนี้บน Dashboard (ใช้ `remaining_to_pay` ของงวด)

@@ -260,6 +260,12 @@ var IntegrationApi = (function () {
       scope: 'READ',
       channel: 'optional',
       run: function (params) { return ApiReads.budgetRemaining(params); }
+    },
+    // หนี้บัตร/สินเชื่อ + ยอดต้องจ่ายเดือนนี้ตามแผน (ข้อมูลเดียวกับคำสั่งแชต "หนี้")
+    debts: {
+      scope: 'READ',
+      channel: 'optional',
+      run: function () { return ApiReads.debts(); }
     }
   };
 

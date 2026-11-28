@@ -90,6 +90,7 @@
           <tr data-apig-action="summary.month" data-apig-status="available"><td class="py-2 pr-3 font-mono">summary.month</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">รายรับ รายจ่าย สุทธิ หมวดรายจ่ายสูงสุด และยอดตามแผนของเดือน (<code>params.month</code> YYYYMM, <code>params.owner_id</code>)</td></tr>
           <tr data-apig-action="balances" data-apig-status="available"><td class="py-2 pr-3 font-mono">balances</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">ยอดบัญชี เงินกันไว้ เงินที่ใช้ได้จริง และหนี้สิน (ยอดรวมเท่าการ์ดบนภาพรวม)</td></tr>
           <tr data-apig-action="budget.remaining" data-apig-status="available"><td class="py-2 pr-3 font-mono">budget.remaining</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">งบคงเหลือของเดือนและสัปดาห์นี้ (<code>params.month</code> YYYYMM)</td></tr>
+          <tr data-apig-action="debts" data-apig-status="available"><td class="py-2 pr-3 font-mono">debts</td><td class="py-2 pr-3">READ</td><td class="py-2 pr-3"><span class="whitespace-nowrap rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">ใช้ได้</span></td><td class="py-2">หนี้บัตรเครดิต/บัตรกดเงินสดรายบัตร วงเงินคงเหลือ วันครบกำหนด ยอดต้องจ่ายเดือนนี้และงวดค้างตามแผนชำระ + สินเชื่อแยก (ไม่มี params)</td></tr>
         </tbody>
       </table>
     </div>
@@ -184,7 +185,7 @@
       </div>
     </div>
     <p class="mt-1 text-xs text-slate-500">ค่าใช้จ่ายของ AI คิดตามผู้ให้บริการ · ส่งให้ AI เฉพาะข้อความ วันที่ และชื่อ+ID ของบัญชี/หมวด/เจ้าของ ไม่ส่งยอดเงินหรือประวัติรายการ</p>
-    <h3 class="mt-5 text-sm font-semibold">อ่านข้อมูล — <code>summary.month</code> / <code>balances</code> / <code>transactions.recent</code> / <code>budget.remaining</code></h3>
+    <h3 class="mt-5 text-sm font-semibold">อ่านข้อมูล — <code>summary.month</code> / <code>balances</code> / <code>transactions.recent</code> / <code>budget.remaining</code> / <code>debts</code></h3>
     <p class="text-sm text-slate-700">ต้องมีสิทธิ์ READ ไม่เขียนข้อมูลและไม่เรียก AI · ตัวเลขคำนวณแบบเดียวกับหน้าภาพรวมและหน้างบ · ไม่ระบุ <code>month</code> = เดือนปัจจุบัน (Asia/Bangkok)</p>
     <div class="mt-1 grid gap-3 md:grid-cols-2">
       <div>
