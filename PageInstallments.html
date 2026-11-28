@@ -725,6 +725,18 @@
       return actions;
     }
 
+    /** วันที่ทำรายการ + เวลาที่บันทึกแผนในระบบ (Asia/Bangkok) เช่น "ทำรายการ 28 พ.ย. 2569 · บันทึก 28 พ.ย. 01:57 น." */
+    function recordedText(plan) {
+      var parts = plan.purchase_date ? ['ทำรายการ ' + App.formatDateTh(plan.purchase_date)] : [];
+      var t = plan.created_at ? new Date(plan.created_at) : null;
+      if (t && !isNaN(t.getTime())) {
+        var opts = { timeZone: 'Asia/Bangkok' };
+        parts.push('บันทึก ' + t.toLocaleDateString('th-TH', Object.assign({ day: 'numeric', month: 'short' }, opts)) + ' ' +
+          t.toLocaleTimeString('th-TH', Object.assign({ hour: '2-digit', minute: '2-digit' }, opts)) + ' น.');
+      }
+      return parts.join(' · ');
+    }
+
     function planCard(record) {
       var plan = record.plan;
       var totals = planTotals(record);
@@ -754,7 +766,8 @@
               record.purchase ? badge(['💳 ซื้อ ' + App.formatDateTh(record.purchase.transaction_date), 'bg-violet-50 text-violet-700']) : null),
             el('div', { class: 'mt-1.5 flex items-center gap-2' },
               el('h3', { class: 'break-words text-base font-semibold', text: plan.item_name }), noBadge(plan.plan_id), starButton(record)),
-            el('p', { class: 'text-xs text-slate-500', text: [plan.account_name, plan.sub_account_name, plan.owner_name, plan.category_name].filter(Boolean).join(' · ') })),
+            el('p', { class: 'text-xs text-slate-500', text: [plan.account_name, plan.sub_account_name, plan.owner_name, plan.category_name].filter(Boolean).join(' · ') }),
+            recordedText(plan) ? el('p', { class: 'text-[0.7rem] leading-snug text-slate-400', text: recordedText(plan) }) : null),
           el('div', { class: 'text-right' },
             el('p', { class: 'text-lg font-bold', text: baht(plan.total_amount) }),
             el('p', { class: 'text-xs text-slate-500', text: 'ชำระแล้ว ' + paidCount + '/' + active.length + ' งวด' }))),
@@ -834,7 +847,8 @@
           el('th', { scope: 'row', class: 'pp-table-name' },
             el('div', { class: 'flex items-center gap-2' }, el('span', { class: 'font-semibold', text: plan.item_name }), noBadge(plan.plan_id), starButton(record)),
             el('p', { class: 'text-xs text-slate-600', text: [plan.account_name, plan.sub_account_name].filter(Boolean).join(' · ') }),
-            el('p', { class: 'mt-1 text-xs text-slate-500', text: [PLAN_TYPES[plan.plan_type], plan.owner_name].filter(Boolean).join(' · ') })),
+            el('p', { class: 'mt-1 text-xs text-slate-500', text: [PLAN_TYPES[plan.plan_type], plan.owner_name].filter(Boolean).join(' · ') }),
+            recordedText(plan) ? el('p', { class: 'text-[0.7rem] leading-snug text-slate-400', text: recordedText(plan) }) : null),
           el('td', {}, badge(PLAN_STATUS[plan.plan_status] || PLAN_STATUS.ACTIVE)),
           el('td', { class: 'pp-table-money', text: baht(plan.total_amount) }),
           el('td', { class: 'pp-table-money', text: baht(totals.paid / 100) }),
